@@ -2,7 +2,7 @@
 use crate::sbi::console_putchar;
 use core::fmt::{self, Write};
 
-struct Stdout;      //类单元结构体
+struct Stdout;      //类单元结构体，用于格式化输出
 
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
