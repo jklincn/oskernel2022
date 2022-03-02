@@ -33,13 +33,13 @@ SECTIONS
     edata = .;
     .bss : {
         *(.bss.stack)
-        sbss = .;
+        sbss = .;           /*start bss*/
         *(.bss .bss.*)
         *(.sbss .sbss.*)
     }
 
     . = ALIGN(4K);
-    ebss = .;
+    ebss = .;               /*end bss*/
     ekernel = .;
 
     /DISCARD/ : {
