@@ -1,14 +1,19 @@
-// user/src/main.rs
-use crate::sbi::console_putchar;
+/// # 控制台模块
+/// `user/src/main.rs`
+//
+
+use super::write;
 use core::fmt::{self, Write};
 
-struct Stdout;      //类单元结构体，用于格式化输出
+/// 类单元结构体，用于格式化输出
+struct Stdout;      
+
+/// 传入参数1代表标准输出，输出到屏幕
+const STDOUT: usize = 1;    
 
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        for c in s.chars() {
-            console_putchar(c as usize);
-        }
+        write(STDOUT, s.as_bytes());
         Ok(())
     }
 }
