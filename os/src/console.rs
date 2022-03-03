@@ -1,4 +1,14 @@
-// os/src/main.rs
+/// # 控制台模块
+/// `os/src/main.rs`
+/// ## 功能
+/// - 提供基于Stdout结构体的标准输出宏
+/// ```
+/// pub fn print(args: fmt::Arguments)
+/// macro_rules! print
+/// macro_rules! println
+/// ```
+//
+
 use crate::sbi::console_putchar;
 use core::fmt::{self, Write};
 
@@ -13,6 +23,7 @@ impl Write for Stdout {
     }
 }
 
+/// 采用Stdout结构体的方式向终端输出
 pub fn print(args: fmt::Arguments) {
     Stdout.write_fmt(args).unwrap();
 }
