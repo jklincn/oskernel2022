@@ -19,10 +19,10 @@ SECTIONS
         *(.sdata .sdata.*)
     }
     .bss : {
-        start_bss = .;
+        start_bss = .;  /*提供给lib.rs::clear_bss*/
         *(.bss.stack)
         *(.bss .bss.*)
-        end_bss = .;
+        end_bss = .;    /*提供给lib.rs::clear_bss*/
     }
     /DISCARD/ : {
         *(.eh_frame)
