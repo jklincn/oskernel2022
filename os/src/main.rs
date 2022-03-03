@@ -1,3 +1,5 @@
+// os/src/main.rs
+
 #![no_std]  // 告诉 Rust 编译器不使用 Rust 标准库 std 转而使用核心库 core（core库不需要操作系统的支持）
 #![no_main] // 不使用main函数，而使用汇编代码指定的入口
 #![feature(panic_info_message)] // 让panic函数能通过 PanicInfo::message 获取报错信息

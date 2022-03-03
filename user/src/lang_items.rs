@@ -1,4 +1,4 @@
-// os/src/lang_items.rs
+// user/src/lang_items.rs
 use crate::sbi::shutdown;
 use core::panic::PanicInfo;
 
