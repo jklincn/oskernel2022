@@ -1,6 +1,13 @@
 /// # 简单的批处理系统
 /// `os/src/batch.rs`
 /// ## 实现功能
+/// - 用户栈 `UserStack` 和 内核栈 `KernelStack`
+/// - 应用程序管理器 `AppManager`
+/// ```
+/// AppManager::init()
+/// AppManager::print_app_info()
+/// AppManager::run_next_app()
+/// ```
 //
 
 use crate::sync::UPSafeCell;
@@ -32,6 +39,7 @@ static USER_STACK: UserStack = UserStack {
 };
 
 impl KernelStack {
+    /// 获取栈顶地址
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + KERNEL_STACK_SIZE
     }
@@ -45,6 +53,7 @@ impl KernelStack {
 }
 
 impl UserStack {
+    /// 获取栈顶地址
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
@@ -78,13 +87,13 @@ impl AppManager {
         }
     }
 
+    /// 这个方法负责将参数 `app_id` 对应的应用程序的二进制镜像加载到物理内存以 `0x80400000` 起始的位置
     unsafe fn load_app(&self, app_id: usize) {
         if app_id >= self.num_app {
             panic!("All applications completed!");
         }
         println!("[kernel] Loading app_{}", app_id);
-        // 清理 i-cache 的
-        asm!("fence.i");
+        asm!("fence.i");    // 清理 指令缓存(i-cache)
         // 将一块内存清空
         core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, APP_SIZE_LIMIT).fill(0);
         let app_src = core::slice::from_raw_parts(
@@ -130,14 +139,18 @@ lazy_static! {
     };
 }
 
+/// 初始化App_Manager
 pub fn init() {
+    //在调用 print_app_info 的时候第一次用到了全局变量 APP_MANAGER ，它也是在这个时候完成初始化
     print_app_info();
 }
 
+/// 打印当前程序信息
 pub fn print_app_info() {
     APP_MANAGER.exclusive_access().print_app_info();
 }
 
+/// 加载并运行下一个应用程序
 pub fn run_next_app() -> ! {
     let mut app_manager = APP_MANAGER.exclusive_access();
     let current_app = app_manager.get_current_app();
