@@ -15,6 +15,7 @@ mod process;    // 进程控制模块
 use fs::*;
 use process::*;
 
+/// 系统调用函数
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     match syscall_id {
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
