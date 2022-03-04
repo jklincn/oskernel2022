@@ -22,7 +22,7 @@ use riscv::register::{
 // 分别用外部符号 __alltraps 和 __restore 标记为函数，
 // 并通过 global_asm! 宏将 trap.S 这段汇编代码插入进来。
 global_asm!(include_str!("trap.S"));
-// Trap 处理的总体流程如下：首先通过 __alltraps 将 Trap 上下文保存在内核栈上，
+// Trap 处理的总体流程如下：首先通过 __alltraps 将 Trap 上下文（不是那个结构体）保存在内核栈上，
 // 然后跳转到使用 Rust 编写的 trap_handler 函数完成 Trap 分发及处理。
 // 当 trap_handler 返回之后，使用 __restore 从保存在内核栈上的 Trap 上下文恢复寄存器。
 // 最后通过一条 sret 指令回到应用程序执行。
@@ -33,7 +33,7 @@ pub fn init() {
     }
     unsafe {
         // stvec:控制 Trap 处理代码的入口地址
-        // 将 stvec 设置为 Direct 模式, 指向它的地址
+        // 将 stvec 设置为 Direct 模式, 指向代码入口地址
         stvec::write(__alltraps as usize, TrapMode::Direct);
     }
 }

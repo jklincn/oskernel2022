@@ -4,12 +4,14 @@
 /// 提供 `Trap`上下文结构体
 /// ```
 /// pub struct TrapContext
+/// TrapContext::set_sp()
+/// TrapContext::app_init_context(entry: usize, sp: usize) -> Self()
 /// ```
 //
 
 use riscv::register::sstatus::{self, Sstatus, SPP};
 
-/// ### `Trap` 上下文
+/// ### `Trap` 上下文的拷贝
 /// 保存以下数据
 /// - 通用寄存器`x[0]~x[31]`
 /// - `sstatus`
@@ -35,6 +37,8 @@ impl TrapContext {
     pub fn set_sp(&mut self, sp: usize) {
         self.x[2] = sp;
     }
+
+    /// 初始化上下文 
     pub fn app_init_context(entry: usize, sp: usize) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);

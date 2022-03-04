@@ -43,12 +43,12 @@ impl KernelStack {
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + KERNEL_STACK_SIZE
     }
+    /// 将上下文推入栈
     pub fn push_context(&self, cx: TrapContext) -> &'static mut TrapContext {
+        // 寻找放置上下文的最低地址，从栈顶指针减去所需空间（RISC-V栈空间分配规则）
         let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
-        unsafe {
-            *cx_ptr = cx;
-        }
-        unsafe { cx_ptr.as_mut().unwrap() }
+        unsafe { *cx_ptr = cx; }    // 写入上下文到栈中
+        unsafe { cx_ptr.as_mut().unwrap() } // 暂未了解
     }
 }
 
@@ -158,12 +158,12 @@ pub fn run_next_app() -> ! {
         app_manager.load_app(current_app);
     }
     app_manager.move_to_next_app();
-    drop(app_manager);
-    // before this we have to drop local variables related to resources manually
-    // and release the resources
+    drop(app_manager);  // 释放app_manager
+    // 在此之前，我们必须手动删除与资源相关的局部变量并释放资源
     extern "C" {
         fn __restore(cx_addr: usize);
     }
+    // 恢复上下文
     unsafe {
         __restore(KERNEL_STACK.push_context(TrapContext::app_init_context(
             APP_BASE_ADDRESS,

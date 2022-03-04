@@ -28,6 +28,7 @@ pub fn print(args: fmt::Arguments) {
     Stdout.write_fmt(args).unwrap();
 }
 
+/// 输出到终端的宏打印，采用Stdout结构体
 #[macro_export]
 macro_rules! print {
     ($fmt: literal $(, $($arg: tt)+)?) => {
@@ -35,6 +36,7 @@ macro_rules! print {
     }
 }
 
+/// 输出到终端的宏打印(待换行符)，采用Stdout结构体
 #[macro_export]
 macro_rules! println {
     ($fmt: literal $(, $($arg: tt)+)?) => {

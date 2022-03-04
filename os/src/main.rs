@@ -5,13 +5,13 @@
 #![feature(panic_info_message)] // 让panic函数能通过 PanicInfo::message 获取报错信息
 
 #[macro_use]
-mod console; 
-mod batch;
-mod lang_items;
-mod sbi;    // 实现了RustSBI 通信的相关功能
+mod console;// 控制台模块
+mod batch;  // 简单的批处理系统
+mod lang_items; // 
+mod sbi;    // 实现了 RustSBI 通信的相关功能
 mod sync;   // 允许在单核处理器上将引用做全局变量使用
-mod syscall;
-mod trap;
+mod syscall;// 系统调用模块
+mod trap;   // 提供 Trap 管理
 
 
 use core::arch::global_asm;
