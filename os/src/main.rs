@@ -7,7 +7,7 @@
 #[macro_use]
 mod console;// 控制台模块
 mod batch;  // 简单的批处理系统
-mod lang_items; // 
+mod lang_items; // Rust语言相关参数
 mod sbi;    // 实现了 RustSBI 通信的相关功能
 mod sync;   // 允许在单核处理器上将引用做全局变量使用
 mod syscall;// 系统调用模块
