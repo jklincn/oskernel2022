@@ -40,12 +40,20 @@ fn sbi_call(whitch: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
     ret
 }
 
+pub fn set_timer(timer: usize) {
+    sbi_call(SBI_SET_TIMER, timer, 0, 0);
+}
+
 /// ### 向终端输出一个字符
 /// - 采用`sbi_call()`实现
 /// - 参数
 ///     - `c`: 待输出的字符
 pub fn console_putchar(c: usize) {
     sbi_call(SBI_CONSOLE_PUTCHAR, c, 0, 0);
+}
+
+pub fn console_getchar() -> usize {
+    sbi_call(SBI_CONSOLE_GETCHAR, 0, 0, 0)
 }
 
 /// ### 调用SBI_Call关机
