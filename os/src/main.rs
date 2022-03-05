@@ -4,13 +4,22 @@
 #![no_main] // 不使用main函数，而使用汇编代码指定的入口
 #![feature(panic_info_message)] // 让panic函数能通过 PanicInfo::message 获取报错信息
 
+#[cfg(feature = "board_k210")]
+#[path = "boards/k210.rs"]
+mod board;
+#[cfg(not(any(feature = "board_k210")))]
+#[path = "boards/qemu.rs"]
+mod board;
 #[macro_use]
 mod console;// 控制台模块
-mod batch;  // 简单的批处理系统
+mod config; // 参数库
 mod lang_items; // Rust语言相关参数
+mod loader;
 mod sbi;    // 实现了 RustSBI 通信的相关功能
 mod sync;   // 允许在单核处理器上将引用做全局变量使用
 mod syscall;// 系统调用模块
+mod task;
+mod timer;
 mod trap;   // 提供 Trap 管理
 
 
@@ -25,8 +34,11 @@ pub fn rust_main() -> ! {
     clear_bss();
     println!("[kernel] Hello, world!");
     trap::init();
-    batch::init();
-    batch::run_next_app();
+    loader::load_apps();
+    trap::enable_timer_interrupt();
+    timer::set_next_trigger();
+    task::run_first_task();
+    panic!("Unreachable in rust_main!");
 }
 
 /// 初始化内存.bbs区域
