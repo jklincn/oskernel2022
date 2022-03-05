@@ -1,4 +1,9 @@
-// os/src/lang_items.rs
+/// # Rust语言相关参数
+/// `os/src/lang_items.rs`
+/// ## 实践功能
+/// - 用于对接panic!宏的panic函数
+//
+
 use crate::sbi::shutdown;
 use core::panic::PanicInfo;
 
