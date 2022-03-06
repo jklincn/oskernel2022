@@ -14,7 +14,7 @@
 mod context;// 任务上下文模块
 mod switch; // 任务上下文切换模块
 #[allow(clippy::module_inception)]
-mod task;   // 
+mod task;   // 任务控制块
 
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
