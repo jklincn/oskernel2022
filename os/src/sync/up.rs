@@ -10,7 +10,7 @@ use core::cell::{RefCell, RefMut};
 ///
 /// 要获取内部数据的可变引用，请按规则调用 `exclusive_access`.
 /// 
-/// ### 规则：访问之前调用 exclusive_access ，访问之后销毁借用标记再进行下一次访问
+/// ### 规则：访问之前调用 `exclusive_access()` ，访问之后销毁`drop()`借用标记再进行下一次访问
 pub struct UPSafeCell<T> {
     /// 内部数据
     inner: RefCell<T>,
