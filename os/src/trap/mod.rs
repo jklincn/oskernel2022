@@ -61,7 +61,7 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         }
         // 处理应用程序出现访存错误
         Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
-           println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
+            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
             exit_current_and_run_next();
         }
         // 处理应用程序出现非法指令错误

@@ -2,6 +2,7 @@
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
 BASE_ADDRESS = 0x80400000;  /*不同于os的基地址*/
+/*使用build.py脚本编译用户程序时会改变这一值*/
 
 SECTIONS
 {

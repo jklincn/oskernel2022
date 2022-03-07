@@ -1,6 +1,13 @@
 /// # 程序加载模块
 /// `os/src/loader.rs`
 /// ## 实现功能
+/// ```
+/// static KERNEL_STACK: [KernelStack; MAX_APP_NUM]
+/// static USER_STACK: [UserStack; MAX_APP_NUM]
+/// pub fn get_num_app() -> usize
+/// pub fn load_apps()
+/// pub fn init_app_cx(app_id: usize) -> usize
+/// ```
 //
 
 use crate::config::*;
@@ -61,7 +68,7 @@ pub fn get_num_app() -> usize {
     unsafe { (_num_app as usize as *const usize).read_volatile() }
 }
 
-/// 从内核数据区 `.data` 加载应用程序到起始地址 `BASE_ADDRESS`(由 `user/linker.ld` 定义)
+/// 从内核数据区 `.data` 加载应用程序到起始地址 `BASE_ADDRESS`(由 `user/src/linker.ld` 定义)
 pub fn load_apps() {
     extern "C" {
         fn _num_app();
