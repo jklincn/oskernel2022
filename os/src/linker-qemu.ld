@@ -1,4 +1,3 @@
-/* os/src/linker.ld*/
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
 BASE_ADDRESS = 0x80200000;
@@ -34,13 +33,13 @@ SECTIONS
     edata = .;
     .bss : {
         *(.bss.stack)
-        sbss = .;           /*start bss*/
+        sbss = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
     }
 
     . = ALIGN(4K);
-    ebss = .;               /*end bss*/
+    ebss = .;
     ekernel = .;
 
     /DISCARD/ : {

@@ -47,7 +47,7 @@ impl UserStack {
     }
 }
 
-/// 获取第 `app_id` 个应用的起始地址
+/// 获取第 `app_id` 个应用的起始地址 `BASE_ADDRESS`
 fn get_base_i(app_id: usize) -> usize {
     APP_BASE_ADDRESS + app_id * APP_SIZE_LIMIT
 }
@@ -61,7 +61,7 @@ pub fn get_num_app() -> usize {
     unsafe { (_num_app as usize as *const usize).read_volatile() }
 }
 
-/// 加载应用程序到内存
+/// 从内核数据区 `.data` 加载应用程序到起始地址 `BASE_ADDRESS`(由 `user/linker.ld` 定义)
 pub fn load_apps() {
     extern "C" {
         fn _num_app();
@@ -87,6 +87,7 @@ pub fn load_apps() {
     }
 }
 
+/// 初始化第 `app_id` 个应用程序的 Trap 上下文
 pub fn init_app_cx(app_id: usize) -> usize {
     KERNEL_STACK[app_id].push_context(TrapContext::app_init_context(
         get_base_i(app_id),

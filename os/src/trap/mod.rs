@@ -39,8 +39,10 @@ pub fn init() {
     }
 }
 
+/// 启用 S 特权级时钟中断
 pub fn enable_timer_interrupt() {
     unsafe {
+        // 启用 S 特权级时钟中断
         sie::set_stimer();
     }
 }
@@ -67,6 +69,7 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
             exit_current_and_run_next();
         }
+        // 时间片到中断
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
             suspend_current_and_run_next();

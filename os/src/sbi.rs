@@ -40,6 +40,10 @@ fn sbi_call(whitch: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
     ret
 }
 
+/// ### 设置 `mtimecmp` 的值
+/// - 由 SEE 提供的标准 SBI 接口函数
+/// - `mtimecmp`:一旦计数器 `mtime` 的值超过了 `mtimecmp`，就会触发一次时钟中断
+/// - `mtime`: 统计处理器自上电以来经过了多少个内置时钟的时钟周期,64bit
 pub fn set_timer(timer: usize) {
     sbi_call(SBI_SET_TIMER, timer, 0, 0);
 }

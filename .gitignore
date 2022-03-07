@@ -1,3 +1,4 @@
 Cargo.lock
 target
-*.S
+link_app.S
+os/last-*

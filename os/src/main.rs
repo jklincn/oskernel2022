@@ -6,20 +6,20 @@
 
 #[cfg(feature = "board_k210")]
 #[path = "boards/k210.rs"]
-mod board;
+mod board;  // 与硬件板相关的参数
 #[cfg(not(any(feature = "board_k210")))]
 #[path = "boards/qemu.rs"]
-mod board;
+mod board;  // 与虚拟机相关的参数
 #[macro_use]
 mod console;// 控制台模块
 mod config; // 参数库
 mod lang_items; // Rust语言相关参数
-mod loader;
+mod loader; // 程序加载模块
 mod sbi;    // 实现了 RustSBI 通信的相关功能
 mod sync;   // 允许在单核处理器上将引用做全局变量使用
 mod syscall;// 系统调用模块
-mod task;
-mod timer;
+mod task;   // 任务管理模块
+mod timer;  // 时间片模块
 mod trap;   // 提供 Trap 管理
 
 
