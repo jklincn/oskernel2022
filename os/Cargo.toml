@@ -9,3 +9,8 @@ edition = "2018"
 [dependencies]
 riscv = { git = "https://jeremymo.top:66/GitLab/Jeremy/riscv", features = ["inline-asm"] }
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+cfg-if = { version = "1.0.0" }
+
+[features]
+board_qemu = []
+board_k210 = []
