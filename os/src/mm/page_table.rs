@@ -1,8 +1,16 @@
+/// # 页表
+/// `os/src/mm/page_table.rs`
+/// ## 实现功能
+/// ```
+/// ```
+//
+
 use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
 
+// 可以将一个 u8 封装成一个标志位的集合类型，支持一些常见的集合运算
 bitflags! {
     pub struct PTEFlags: u8 {
         const V = 1 << 0;
@@ -16,36 +24,54 @@ bitflags! {
     }
 }
 
-#[derive(Copy, Clone)]
+/// ### 页表项
+/// ```
+/// PageTableEntry::new(ppn: PhysPageNum, flags: PTEFlags) -> Self
+/// PageTableEntry::empty() -> Self
+/// PageTableEntry::ppn(&self) -> PhysPageNum
+/// PageTableEntry::flags(&self) -> PTEFlags
+/// PageTableEntry::is_valid(&self) -> bool
+/// PageTableEntry::readable(&self) -> bool
+/// PageTableEntry::writable(&self) -> bool
+/// PageTableEntry::executable(&self) -> bool
+/// ```
+#[derive(Copy, Clone)]  // 让编译器自动为 PageTableEntry 实现 Copy/Clone Trait，来让这个类型以值语义赋值/传参的时候不会发生所有权转移，而是拷贝一份新的副本
 #[repr(C)]
 pub struct PageTableEntry {
     pub bits: usize,
 }
 
 impl PageTableEntry {
+    /// 从一个物理页号 `PhysPageNum` 和一个页表项标志位 `PTEFlags` 生成一个页表项 `PageTableEntry` 实例
     pub fn new(ppn: PhysPageNum, flags: PTEFlags) -> Self {
         PageTableEntry {
             bits: ppn.0 << 10 | flags.bits as usize,
         }
     }
+    /// 将页表项清零
     pub fn empty() -> Self {
         PageTableEntry { bits: 0 }
     }
+    /// 从页表项读取物理页号
     pub fn ppn(&self) -> PhysPageNum {
         (self.bits >> 10 & ((1usize << 44) - 1)).into()
     }
     pub fn flags(&self) -> PTEFlags {
         PTEFlags::from_bits(self.bits as u8).unwrap()
     }
+    /// 验证页表项是否合法（V标志位是否为1）
     pub fn is_valid(&self) -> bool {
         (self.flags() & PTEFlags::V) != PTEFlags::empty()
     }
+    /// 验证页表项是否可读（R标志位是否为1）
     pub fn readable(&self) -> bool {
         (self.flags() & PTEFlags::R) != PTEFlags::empty()
     }
+    /// 验证页表项是否可写（W标志位是否为1）
     pub fn writable(&self) -> bool {
         (self.flags() & PTEFlags::W) != PTEFlags::empty()
     }
+    /// 验证页表项是否可执行（X标志位是否为1）
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
