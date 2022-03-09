@@ -2,6 +2,16 @@
 /// `os/src/mm/page_table.rs`
 /// ## 实现功能
 /// ```
+/// pub struct PTEFlags: u8
+/// pub struct PageTableEntry
+/// PageTableEntry::new(ppn: PhysPageNum, flags: PTEFlags) -> Self
+/// PageTableEntry::empty() -> Self
+/// PageTableEntry::ppn(&self) -> PhysPageNum
+/// PageTableEntry::flags(&self) -> PTEFlags
+/// PageTableEntry::is_valid(&self) -> bool
+/// PageTableEntry::readable(&self) -> bool
+/// PageTableEntry::writable(&self) -> bool
+/// PageTableEntry::executable(&self) -> bool
 /// ```
 //
 
@@ -12,6 +22,15 @@ use bitflags::*;
 
 // 可以将一个 u8 封装成一个标志位的集合类型，支持一些常见的集合运算
 bitflags! {
+    /// ### 页表项标志位
+    /// |标志位|描述|
+    /// |--|--|
+    /// |`V(Valid)`|仅当位 V 为 1 时，页表项才是合法的；
+    /// |`R(Read)` `W(Write)` `X(eXecute)`|分别控制索引到这个页表项的对应虚拟页面是否允许读/写/执行；
+    /// |`U(User)`|控制索引到这个页表项的对应虚拟页面是否在 CPU 处于 U 特权级的情况下是否被允许访问；
+    /// |`G`|暂且不理会；
+    /// |`A(Accessed)`|处理器记录自从页表项上的这一位被清零之后，页表项的对应虚拟页面是否被访问过；
+    /// |`D(Dirty)`|处理器记录自从页表项上的这一位被清零之后，页表项的对应虚拟页面是否被修改过
     pub struct PTEFlags: u8 {
         const V = 1 << 0;
         const R = 1 << 1;
