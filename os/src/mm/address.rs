@@ -114,15 +114,19 @@ impl From<VirtPageNum> for usize {
 }
 
 impl VirtAddr {
+    /// 从物理地址计算虚拟页号（下取整）
     pub fn floor(&self) -> VirtPageNum {
         VirtPageNum(self.0 / PAGE_SIZE)
     }
+    /// 从物理地址计算虚拟页号（下取整）
     pub fn ceil(&self) -> VirtPageNum {
         VirtPageNum((self.0 - 1 + PAGE_SIZE) / PAGE_SIZE)
     }
+    /// 从物理地址获取页内偏移（物理地址的低12位）
     pub fn page_offset(&self) -> usize {
         self.0 & (PAGE_SIZE - 1)
     }
+    /// 判断物理地址是否与页面大小对齐
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
@@ -172,26 +176,35 @@ impl From<PhysPageNum> for PhysAddr {
 }
 
 impl VirtPageNum {
+    /// 取出虚拟页号的三级页索引，并按照从高到低的顺序返回
     pub fn indexes(&self) -> [usize; 3] {
         let mut vpn = self.0;
         let mut idx = [0usize; 3];
         for i in (0..3).rev() {
-            idx[i] = vpn & 511;
+            idx[i] = vpn & 511; // 取出低9位
             vpn >>= 9;
         }
         idx
     }
 }
 
+// 在实现方面，都是先把物理页号转为物理地址 PhysAddr ，然后再转成 usize 形式的物理地址。
+// 接着，我们直接将它转为裸指针用来访问物理地址指向的物理内存。
+// 在返回值类型上附加了静态生命周期泛型 'static ，这是为了绕过 Rust 编译器的借用检查，
+// 实质上可以将返回的类型也看成一个裸指针，因为它也只是标识数据存放的位置以及类型。
+// 但与裸指针不同的是，无需通过 unsafe 的解引用访问它指向的数据，而是可以像一个正常的可变引用一样直接访问
 impl PhysPageNum {
+    /// 根据自己的PPN取出当前节点的页表项数组
     pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
         let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
     }
+    /// 返回一个字节数组的可变引用，可以以字节为粒度对物理页帧上的数据进行访问
     pub fn get_bytes_array(&self) -> &'static mut [u8] {
         let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut u8, 4096) }
     }
+    /// 获取一个恰好放在一个物理页帧开头的类型为 T 的数据的可变引用
     pub fn get_mut<T>(&self) -> &'static mut T {
         let pa: PhysAddr = (*self).into();
         unsafe { (pa.0 as *mut T).as_mut().unwrap() }

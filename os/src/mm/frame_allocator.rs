@@ -8,6 +8,8 @@
 /// pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl>
 /// pub fn init_frame_allocator()
 /// pub fn frame_alloc() -> Option<FrameTracker>
+/// // 回收工作在FrameTracker生命周期结束时由编译器发起，故为私有
+/// fn frame_dealloc(ppn: PhysPageNum)
 /// pub fn frame_allocator_test()
 /// ```
 //
