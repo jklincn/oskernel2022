@@ -1,26 +1,45 @@
+/// # 地址空间
+/// `os/src/mm/address.rs`
+/// ## 实现功能
+/// ```
+/// pub struct PhysAddr(pub usize);
+/// pub struct PhysPageNum(pub usize);
+/// PhysAddr::floor(&self) -> PhysPageNum
+/// PhysAddr::page_offset(&self) -> usize
+/// PhysAddr::aligned(&self) -> bool
+/// pub struct VirtAddr(pub usize);
+/// pub struct VirtPageNum(pub usize);
+/// ```
+//
+
 use super::PageTableEntry;
 use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
 use core::fmt::{self, Debug, Formatter};
 
+/// 物理地址宽度：56bit
 const PA_WIDTH_SV39: usize = 56;
+/// 虚拟地址宽度：39bit
 const VA_WIDTH_SV39: usize = 39;
+/// 物理页号宽度：44bit
 const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;
+/// 虚拟页号宽度：27bit
 const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
 
-/// Definitions
+/// 物理地址 56bit
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysAddr(pub usize);
 
+/// 虚拟地址 39bit
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtAddr(pub usize);
 
+/// 物理页号 44bit
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysPageNum(pub usize);
 
+/// 虚拟页号 27bit
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtPageNum(pub usize);
-
-/// Debugging
 
 impl Debug for VirtAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -46,23 +65,29 @@ impl Debug for PhysPageNum {
 /// T: {PhysAddr, VirtAddr, PhysPageNum, VirtPageNum}
 /// T -> usize: T.0
 /// usize -> T: usize.into()
+/// 当我们为类型 U 实现了 From<T> Trait 之后，可以使用 U::from(_: T) 来从一个 T 类型的实例来构造一个 U 类型的实例
+/// 当我们为类型 U 实现了 Into<T> Trait 之后，对于一个 U 类型的实例 u ，可以使用 u.into() 来将其转化为一个类型为 T 的实例
 
 impl From<usize> for PhysAddr {
+    /// 取 `usize` 的低56位作为物理地址
     fn from(v: usize) -> Self {
         Self(v & ((1 << PA_WIDTH_SV39) - 1))
     }
 }
 impl From<usize> for PhysPageNum {
+    /// 取 `usize` 的低44位作为物理页号
     fn from(v: usize) -> Self {
         Self(v & ((1 << PPN_WIDTH_SV39) - 1))
     }
 }
 impl From<usize> for VirtAddr {
+    /// 取 `usize` 的低39位作为虚拟地址
     fn from(v: usize) -> Self {
         Self(v & ((1 << VA_WIDTH_SV39) - 1))
     }
 }
 impl From<usize> for VirtPageNum {
+    /// 取 `usize` 的低27位作为虚拟页号
     fn from(v: usize) -> Self {
         Self(v & ((1 << VPN_WIDTH_SV39) - 1))
     }
@@ -114,25 +139,32 @@ impl From<VirtPageNum> for VirtAddr {
     }
 }
 impl PhysAddr {
+    /// 从物理地址计算物理页号（下取整）
     pub fn floor(&self) -> PhysPageNum {
         PhysPageNum(self.0 / PAGE_SIZE)
     }
+    /// 从物理地址计算物理页号（上取整）
     pub fn ceil(&self) -> PhysPageNum {
         PhysPageNum((self.0 - 1 + PAGE_SIZE) / PAGE_SIZE)
     }
+    /// 从物理地址获取页内偏移（物理地址的低12位）
     pub fn page_offset(&self) -> usize {
         self.0 & (PAGE_SIZE - 1)
     }
+    /// 判断物理地址是否与页面大小对齐
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
 }
 impl From<PhysAddr> for PhysPageNum {
     fn from(v: PhysAddr) -> Self {
+        // 对于物理地址与页面大小不对其的情况不能使用类型转换，panic
         assert_eq!(v.page_offset(), 0);
         v.floor()
     }
 }
+
+// 从物理页号转换到物理地址只需左移 PAGE_SIZE_BITS 大小
 impl From<PhysPageNum> for PhysAddr {
     fn from(v: PhysPageNum) -> Self {
         Self(v.0 << PAGE_SIZE_BITS)
