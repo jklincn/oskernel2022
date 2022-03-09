@@ -10,6 +10,10 @@ SECTIONS
     stext = .;
     .text : {
         *(.text.entry)
+        . = ALIGN(4K);
+        strampoline = .;
+        *(.text.trampoline);
+        . = ALIGN(4K);
         *(.text .text.*)
     }
 
@@ -31,6 +35,7 @@ SECTIONS
 
     . = ALIGN(4K);
     edata = .;
+    sbss_with_stack = .;
     .bss : {
         *(.bss.stack)
         sbss = .;
@@ -40,7 +45,7 @@ SECTIONS
 
     . = ALIGN(4K);
     ebss = .;
-    ekernel = .;
+    ekernel = .;    /*内核空间结束标记，以下空间均作为空闲内存以多级页表的方式管理*/
 
     /DISCARD/ : {
         *(.eh_frame)
