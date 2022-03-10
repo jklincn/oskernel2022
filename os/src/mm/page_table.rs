@@ -106,7 +106,7 @@ impl PageTableEntry {
 /// - `root_ppn`:根节点的物理页号,作为页表唯一的区分标志
 /// - `frames`:以 FrameTracker 的形式保存了页表所有的节点（包括根节点）所在的物理页帧
 /// 
-/// 一个逻辑段对应一个页表
+/// 一个地址空间对应一个页表
 pub struct PageTable {
     /// 根节点的物理页号,作为页表唯一的区分标志
     root_ppn: PhysPageNum,
@@ -177,7 +177,7 @@ impl PageTable {
         result
     }
     /// ### 建立一个虚拟页号到页表项的映射
-    /// 根据VPN找到第三级页表中的对应项，将PPN和flags写入到页表项
+    /// 根据VPN找到第三级页表中的对应项，将 `PPN` 和 `flags` 写入到页表项
     #[allow(unused)]
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_create(vpn).unwrap();
@@ -195,11 +195,12 @@ impl PageTable {
         *pte = PageTableEntry::empty();
     }
 
+    /// ### 根据 vpn 查找页表项
     /// 调用 `find_pte` 来实现，如果能够找到页表项，那么它会将页表项拷贝一份并返回，否则就返回一个 `None`
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.find_pte(vpn).map(|pte| *pte)
     }
-    
+
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
