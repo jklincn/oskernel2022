@@ -3,9 +3,12 @@
 /// ## 实现功能
 /// ```
 /// pub struct FrameTracker
+/// FrameTracker::new(ppn: PhysPageNum) -> Self
+/// 
 /// pub struct StackFrameAllocator
 /// type FrameAllocatorImpl = StackFrameAllocator
 /// pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl>
+/// 
 /// pub fn init_frame_allocator()
 /// pub fn frame_alloc() -> Option<FrameTracker>
 /// // 回收工作在FrameTracker生命周期结束时由编译器发起，故为私有
@@ -122,10 +125,12 @@ impl FrameAllocator for StackFrameAllocator {
     }
 }
 
+/// 物理页帧管理器实例类型
 type FrameAllocatorImpl = StackFrameAllocator;
 
 lazy_static! {
-    // 初始化了一个全局变量 FRAME_ALLOCATOR 用作物理页帧管理器
+    /// ### 物理页帧管理器实例
+    /// - 全局变量，管理除内核空间外的内存空间
     pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> =
         unsafe { UPSafeCell::new(FrameAllocatorImpl::new()) };
 }
