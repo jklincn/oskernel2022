@@ -171,20 +171,27 @@ impl MemorySet {
         memory_set
     }
 
-    ///  ### 从 ELF 格式可执行文件解析出各数据段并对应生成应用的地址空间
-    /// Include sections in elf and trampoline and TrapContext and user stack,
-    /// also returns user_sp and entry point.
+    /// ### 从 ELF 格式可执行文件解析出各数据段并对应生成应用的地址空间
+    /// - 返回值
+    ///     - Self
+    ///     - 用户栈顶地址
+    ///     - 程序入口地址
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = Self::new_bare();
-        // map trampoline
+        // 将跳板插入到应用地址空间
         memory_set.map_trampoline();
         // map program headers of elf, with U flag
+        // 使用外部 crate xmas_elf 来解析传入的应用 ELF 数据并可以轻松取出各个部分
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
+        // 取出 ELF 的魔数来判断它是不是一个合法的 ELF
         let magic = elf_header.pt1.magic;
         assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
+        // 获取 program header 的数目
         let ph_count = elf_header.pt2.ph_count();
+        // 记录目前涉及到的最大的虚拟页号
         let mut max_end_vpn = VirtPageNum(0);
+        // 遍历所有的 program header 并对每个 program header 生成一个逻辑段
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
             if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
@@ -203,18 +210,19 @@ impl MemorySet {
                 }
                 let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
                 max_end_vpn = map_area.vpn_range.get_end();
-                memory_set.push(
+                memory_set.push(    // 将生成的逻辑段加入到程序地址空间
                     map_area,
                     Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
                 );
             }
         }
-        // map user stack with U flags
+        // 分配用户栈
         let max_end_va: VirtAddr = max_end_vpn.into();
         let mut user_stack_bottom: usize = max_end_va.into();
-        // guard page
-        user_stack_bottom += PAGE_SIZE;
-        let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
+        // 在已用最大虚拟页之上放置一个保护页
+        user_stack_bottom += PAGE_SIZE; // 栈底
+        let user_stack_top = user_stack_bottom + USER_STACK_SIZE;   // 栈顶地址
+        // 将用户栈加入到程序地址空间
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
@@ -224,7 +232,7 @@ impl MemorySet {
             ),
             None,
         );
-        // map TrapContext
+        // 在应用地址空间中映射次高页面来存放 Trap 上下文
         memory_set.push(
             MapArea::new(
                 TRAP_CONTEXT.into(),
@@ -249,6 +257,7 @@ impl MemorySet {
         }
     }
 
+    /// ### 根据多级页表和 vpn 查找页表项
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
@@ -312,6 +321,7 @@ impl MapArea {
             }
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+        // 在多级页表中建立映射
         page_table.map(vpn, ppn, pte_flags);
     }
 
