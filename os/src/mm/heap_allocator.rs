@@ -1,7 +1,10 @@
 /// # 堆空间内存动态分配模块
 /// `os/src/mm/heap_allocator.rs`
 /// ## 实现功能
+/// - 在内核空间 .bss 段中开辟了一段空间，用作堆空间，使用伙伴系统堆这块内存进行分配
+/// - 实现堆数据结构后才能使用 `alloc` 提供的堆上数据结构
 /// ```
+/// static HEAP_ALLOCATOR: LockedHeap
 /// pub fn init_heap()
 /// pub fn handle_alloc_error(layout: core::alloc::Layout) -> !
 /// ```
