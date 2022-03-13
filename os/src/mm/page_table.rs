@@ -3,6 +3,7 @@
 /// ## 实现功能
 /// ```
 /// pub struct PTEFlags: u8
+/// 
 /// pub struct PageTableEntry
 /// PageTableEntry::new(ppn: PhysPageNum, flags: PTEFlags) -> Self
 /// PageTableEntry::empty() -> Self
@@ -13,7 +14,10 @@
 /// PageTableEntry::writable(&self) -> bool
 /// PageTableEntry::executable(&self) -> bool
 /// 
-/// pub struct PageTable
+/// pub struct PageTable{
+///     root_ppn: PhysPageNum,
+///     frames: Vec<FrameTracker>,
+/// }
 /// PageTable::map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags)
 /// PageTable::unmap(&mut self, vpn: VirtPageNum)
 /// PageTable::translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry>
@@ -176,7 +180,7 @@ impl PageTable {
         }
         result
     }
-    /// ### 建立一个虚拟页号到页表项的映射
+    /// ### 建立一个虚拟页号到物理页号的映射
     /// 根据VPN找到第三级页表中的对应项，将 `PPN` 和 `flags` 写入到页表项
     #[allow(unused)]
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
@@ -186,7 +190,7 @@ impl PageTable {
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
     }
 
-    /// ### 删除一个虚拟页号到页表项的映射
+    /// ### 删除一个虚拟页号到物理页号的映射
     /// 只需根据虚拟页号找到页表项，然后修改或者直接清空其内容即可
     #[allow(unused)]
     pub fn unmap(&mut self, vpn: VirtPageNum) {
@@ -201,6 +205,7 @@ impl PageTable {
         self.find_pte(vpn).map(|pte| *pte)
     }
 
+    /// 按照 satp CSR 格式要求 构造一个无符号 64 位无符号整数，使得其分页模式为 SV39 ，且将当前多级页表的根节点所在的物理页号填充进去
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }

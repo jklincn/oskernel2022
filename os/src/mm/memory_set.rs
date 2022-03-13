@@ -2,6 +2,9 @@
 /// `os/src/mm/memory_set.rs`
 /// ## 实现功能
 /// ```
+/// pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>>
+/// pub struct MemorySet
+/// pub struct MapArea
 /// ```
 //
 
@@ -96,7 +99,7 @@ impl MemorySet {
         self.areas.push(map_area);  // 将生成的数据段压入 areas 使其生命周期由areas控制
     }
     
-    /// Mention that trampoline is not collected by areas.
+    /// 映射跳板的虚拟地址和物理地址
     fn map_trampoline(&mut self) {
         self.page_table.map(
             VirtAddr::from(TRAMPOLINE).into(),
@@ -253,7 +256,7 @@ impl MemorySet {
         let satp = self.page_table.token();
         unsafe {
             satp::write(satp);
-            asm!("sfence.vma");
+            asm!("sfence.vma"); // 将快表清空
         }
     }
 

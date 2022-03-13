@@ -1,14 +1,26 @@
-/// # 地址空间
+/// # 地址数据类型
 /// `os/src/mm/address.rs`
 /// ## 实现功能
 /// ```
-/// pub struct PhysAddr(pub usize);
-/// pub struct PhysPageNum(pub usize);
+/// pub struct PhysAddr(pub usize);     // 物理地址 56bit
 /// PhysAddr::floor(&self) -> PhysPageNum
+/// PhysAddr::ceil(&self) -> PhysPageNum
 /// PhysAddr::page_offset(&self) -> usize
 /// PhysAddr::aligned(&self) -> bool
-/// pub struct VirtAddr(pub usize);
-/// pub struct VirtPageNum(pub usize);
+/// 
+/// pub struct PhysPageNum(pub usize);  // 物理页号 44bit
+/// PhysPageNum::get_pte_array(&self) -> &'static mut [PageTableEntry]
+/// PhysPageNum::get_bytes_array(&self) -> &'static mut [u8]
+/// PhysPageNum::get_mut<T>(&self) -> &'static mut T
+/// 
+/// pub struct VirtAddr(pub usize);     // 虚拟地址 39bit
+/// VirtAddr::floor(&self) -> PhysPageNum
+/// VirtAddr::ceil(&self) -> PhysPageNum
+/// VirtAddr::page_offset(&self) -> usize
+/// VirtAddr::aligned(&self) -> bool
+/// 
+/// pub struct VirtPageNum(pub usize);  // 虚拟页号 27bit
+/// VirtPageNum::indexes(&self) -> [usize; 3]
 /// ```
 //
 
@@ -114,19 +126,19 @@ impl From<VirtPageNum> for usize {
 }
 
 impl VirtAddr {
-    /// 从物理地址计算虚拟页号（下取整）
+    /// 从虚拟地址计算虚拟页号（下取整）
     pub fn floor(&self) -> VirtPageNum {
         VirtPageNum(self.0 / PAGE_SIZE)
     }
-    /// 从物理地址计算虚拟页号（下取整）
+    /// 从虚拟地址计算虚拟页号（下取整）
     pub fn ceil(&self) -> VirtPageNum {
         VirtPageNum((self.0 - 1 + PAGE_SIZE) / PAGE_SIZE)
     }
-    /// 从物理地址获取页内偏移（物理地址的低12位）
+    /// 从虚拟地址获取页内偏移（物理地址的低12位）
     pub fn page_offset(&self) -> usize {
         self.0 & (PAGE_SIZE - 1)
     }
-    /// 判断物理地址是否与页面大小对齐
+    /// 判断虚拟地址是否与页面大小对齐
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
