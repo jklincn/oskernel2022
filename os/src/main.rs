@@ -3,6 +3,12 @@
 #![no_std]  // 告诉 Rust 编译器不使用 Rust 标准库 std 转而使用核心库 core（core库不需要操作系统的支持）
 #![no_main] // 不使用main函数，而使用汇编代码指定的入口
 #![feature(panic_info_message)] // 让panic函数能通过 PanicInfo::message 获取报错信息
+#![feature(alloc_error_handler)]// 用于处理动态内存分配失败的情形
+
+extern crate alloc;
+
+#[macro_use]
+extern crate bitflags;
 
 #[cfg(feature = "board_k210")]
 #[path = "boards/k210.rs"]
@@ -15,6 +21,7 @@ mod console;// 控制台模块
 mod config; // 参数库
 mod lang_items; // Rust语言相关参数
 mod loader; // 程序加载模块
+mod mm;     // 内存空间模块
 mod sbi;    // 实现了 RustSBI 通信的相关功能
 mod sync;   // 允许在单核处理器上将引用做全局变量使用
 mod syscall;// 系统调用模块
@@ -33,8 +40,11 @@ global_asm!(include_str!("link_app.S"));// 用于将应用程序的二进制镜�
 pub fn rust_main() -> ! {
     clear_bss();
     println!("[kernel] Hello, world!");
+    mm::init();
+    println!("[kernel] back to world!");
+    mm::remap_test();
     trap::init();
-    loader::load_apps();
+    //trap::enable_interrupt();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
     task::run_first_task();

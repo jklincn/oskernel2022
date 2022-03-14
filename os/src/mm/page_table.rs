@@ -22,6 +22,8 @@
 /// PageTable::unmap(&mut self, vpn: VirtPageNum)
 /// PageTable::translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry>
 /// PageTable::token(&self) -> usize
+/// 
+/// pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]>
 /// ```
 //
 
@@ -132,6 +134,7 @@ impl PageTable {
     /// Temporarily used to get arguments from user space.
     pub fn from_token(satp: usize) -> Self {
         Self {
+            // 取satp的前44位作为物理页号
             root_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
             frames: Vec::new(),
         }
@@ -211,6 +214,12 @@ impl PageTable {
     }
 }
 
+/// ### 以向量的形式返回一组可以在内核空间中直接访问的字节数组切片
+/// |参数|描述|
+/// |--|--|
+/// |`token`|某个应用地址空间的 token|
+/// |`ptr`|应用地址空间中的一段缓冲区的起始地址
+/// |`len`|应用地址空间中的一段缓冲区的长度
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;

@@ -2,6 +2,7 @@
 /// `os/src/mm/mod.rs`
 /// ## 实现功能
 /// ```
+/// pub fn init()
 /// ```
 
 mod address;        // 地址数据类型

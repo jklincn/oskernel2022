@@ -70,6 +70,7 @@ impl MemorySet {
         }
     }
 
+    /// 获取当前页表的 token (符合 satp CSR 格式要求的多级页表的根节点所在的物理页号)
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
