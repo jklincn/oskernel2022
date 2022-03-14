@@ -108,16 +108,17 @@ impl TaskManager {
         // 一般情况下 inner 会在函数退出之后会被自动释放
     }
 
+    /// ### 获取当前程序的虚拟地址空间的 token (符合 satp CSR 格式要求的多级页表的根节点所在的物理页号)
     fn get_current_token(&self) -> usize {
         let inner = self.inner.exclusive_access();
         inner.tasks[inner.current_task].get_user_token()
     }
-
+    
+    /// ### 获取当前程序的 TrapContext 的可变引用
     fn get_current_trap_cx(&self) -> &'static mut TrapContext {
         let inner = self.inner.exclusive_access();
         inner.tasks[inner.current_task].get_trap_cx()
     }
-
 
     fn run_next_task(&self) {
         if let Some(next) = self.find_next_task() {
@@ -173,10 +174,12 @@ pub fn exit_current_and_run_next() {
     run_next_task();
 }
 
+/// ### 获得当前正在执行的应用的地址空间的 token 
 pub fn current_user_token() -> usize {
     TASK_MANAGER.get_current_token()
 }
 
+/// ### 获得当前正在执行的应用的 Trap 上下文的可变引用
 pub fn current_trap_cx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_cx()
 }

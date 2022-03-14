@@ -29,6 +29,9 @@ impl TaskContext {
             s: [0; 12],
         }
     }
+    /// 当每个应用第一次获得 CPU 使用权即将进入用户态执行的时候，它的内核栈顶放置着我们在
+    /// 内核加载应用的时候构造的一个任务上下文,在 `__switch` 切换到该应用的任务上下文的时候，
+    /// 内核将会跳转到 `trap_return` 并返回用户态开始该应用的启动执行
     pub fn goto_trap_return(kstack_ptr: usize) -> Self {
         Self {
             ra: trap_return as usize,
