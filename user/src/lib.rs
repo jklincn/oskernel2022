@@ -12,7 +12,6 @@ mod lang_items;
 #[no_mangle]
 #[link_section = ".text.entry"]
 pub extern "C" fn _start() -> ! {
-    clear_bss();
     // 调用main函数得到一个类型为i32的返回值
     // 最后调用用户库提供的 exit 接口退出应用程序
     // 并将 main 函数的返回值告知批处理系统
@@ -30,18 +29,6 @@ pub extern "C" fn _start() -> ! {
 #[no_mangle]
 fn main() -> i32 {
     panic!("Cannot find main!");
-}
-
-/// ### 清空用户内存空间的bss段
-/// 范围: start_bss-end_bss
-fn clear_bss() {
-    extern "C" {
-        fn start_bss(); // 由linker.ld定义
-        fn end_bss();
-    }
-    (start_bss as usize..end_bss as usize).for_each(|addr| unsafe {
-        (addr as *mut u8).write_volatile(0);
-    });
 }
 
 mod syscall;
