@@ -16,9 +16,10 @@ mod switch; // 任务上下文切换模块
 #[allow(clippy::module_inception)]
 mod task;   // 任务控制块
 
-use crate::config::MAX_APP_NUM;
-use crate::loader::{get_num_app, init_app_cx};
+use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
+use crate::trap::TrapContext;
+use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
@@ -38,8 +39,7 @@ pub struct TaskManager {
 
 /// ### 任务管理器内部需要全局访问的数据
 struct TaskManagerInner {
-    /// 任务控制块数组
-    tasks: [TaskControlBlock; MAX_APP_NUM],
+    tasks: Vec<TaskControlBlock>,
     /// CPU 正在执行的应用编号
     current_task: usize,
 }
@@ -47,19 +47,13 @@ struct TaskManagerInner {
 // 初始化`TASK_MAMADER`的全局实例
 lazy_static! {
     pub static ref TASK_MANAGER: TaskManager = {
+        println!("init TASK_MANAGER");
         let num_app = get_num_app();
-        // 将任务上下文中的寄存器初始化为0
-        // 将任务状态初始化为为初始化的状态
-        let mut tasks = [TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
-            task_status: TaskStatus::UnInit,
-        }; MAX_APP_NUM];
-        // 依次对每个任务控制块进行初始化
-        for (i, task) in tasks.iter_mut().enumerate() {
-            task.task_cx = TaskContext::goto_restore(init_app_cx(i));
-            task.task_status = TaskStatus::Ready;
+        println!("num_app = {}", num_app);
+        let mut tasks: Vec<TaskControlBlock> = Vec::new();
+        for i in 0..num_app {
+            tasks.push(TaskControlBlock::new(get_app_data(i), i));
         }
-        // 创建 TaskManager 实例并返回
         TaskManager {
             num_app,
             inner: unsafe {
@@ -76,9 +70,9 @@ impl TaskManager {
     /// 运行第一个程序
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
-        let task0 = &mut inner.tasks[0];
-        task0.task_status = TaskStatus::Running;
-        let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
+        let next_task = &mut inner.tasks[0];
+        next_task.task_status = TaskStatus::Running;
+        let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // 在此之前，我们应该删除必须手动删除的局部变量 inner
@@ -113,6 +107,17 @@ impl TaskManager {
             // 通过编译器参数实现了比较
         // 一般情况下 inner 会在函数退出之后会被自动释放
     }
+
+    fn get_current_token(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_user_token()
+    }
+
+    fn get_current_trap_cx(&self) -> &'static mut TrapContext {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_trap_cx()
+    }
+
 
     fn run_next_task(&self) {
         if let Some(next) = self.find_next_task() {
@@ -166,4 +171,12 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+pub fn current_user_token() -> usize {
+    TASK_MANAGER.get_current_token()
+}
+
+pub fn current_trap_cx() -> &'static mut TrapContext {
+    TASK_MANAGER.get_current_trap_cx()
 }
