@@ -35,12 +35,19 @@ pub fn init() {
     set_kernel_trap_entry();
 }
 
+/// ### 设置内核态下的 Trap 入口
+/// 一旦进入内核后再次触发到 S态 Trap，则硬件在设置一些 CSR 寄存器之后，会跳过对通用寄存器的保存过程，
+/// 直接跳转到 trap_from_kernel 函数，在这里直接 panic 退出
 fn set_kernel_trap_entry() {
     unsafe {
         stvec::write(trap_from_kernel as usize, TrapMode::Direct);
     }
 }
 
+/// ### 设置用户态下的 Trap 入口
+/// 我们把 stvec 设置为内核和应用地址空间共享的跳板页面的起始地址 TRAMPOLINE 
+/// 而不是编译器在链接时看到的 __alltraps 的地址。这是因为启用分页模式之后，
+/// 内核只能通过跳板页面上的虚拟地址来实际取得 __alltraps 和 __restore 的汇编代码
 fn set_user_trap_entry() {
     unsafe {
         stvec::write(TRAMPOLINE as usize, TrapMode::Direct);
@@ -59,6 +66,7 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 pub fn trap_handler() -> ! {
     set_kernel_trap_entry();
+    // 由于应用的 Trap 上下文不在内核地址空间，因此我们调用 current_trap_cx 来获取当前应用的 Trap 上下文的可变引用
     let cx = current_trap_cx();
     let scause = scause::read();    // 用于描述 Trap 的原因
     let stval = stval::read();       // 给出 Trap 附加信息
@@ -95,6 +103,7 @@ pub fn trap_handler() -> ! {
     trap_return();
 }
 
+/// 通过在Rust语言中加入宏命令调用 `__restore` 汇编函数
 #[no_mangle]
 pub fn trap_return() -> ! {
     set_user_trap_entry();
@@ -108,7 +117,7 @@ pub fn trap_return() -> ! {
     let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
     unsafe {
         asm!(
-            "fence.i",
+            "fence.i",              // 指令清空指令缓存 i-cache
             "jr {restore_va}",
             restore_va = in(reg) restore_va,
             in("a0") trap_cx_ptr,   // Trap 上下文在应用地址空间中的位置
@@ -118,6 +127,7 @@ pub fn trap_return() -> ! {
     }
 }
 
+/// 在内核触发Trap后会转到这里引发Panic
 #[no_mangle]
 pub fn trap_from_kernel() -> ! {
     panic!("a trap from kernel!");
