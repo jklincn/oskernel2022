@@ -3,16 +3,19 @@
 /// ## 实现功能
 /// ```
 /// pub fn init()
-/// pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext
+/// pub fn trap_handler() -> ! 
 /// ```
 //
 
 mod context;
 
+use crate::config::{TRAMPOLINE, TRAP_CONTEXT};
 use crate::syscall::syscall;
-use crate::task::{exit_current_and_run_next, suspend_current_and_run_next};
+use crate::task::{
+    current_trap_cx, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,
+};
 use crate::timer::set_next_trigger;
-use core::arch::global_asm;
+use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
@@ -29,13 +32,18 @@ global_asm!(include_str!("trap.S"));
 // 最后通过一条 sret 指令回到应用程序执行。
 
 pub fn init() {
-    extern "C" {
-        fn __alltraps();
-    }
+    set_kernel_trap_entry();
+}
+
+fn set_kernel_trap_entry() {
     unsafe {
-        // stvec:控制 Trap 处理代码的入口地址
-        // 将 stvec 设置为 Direct 模式, 指向代码入口地址
-        stvec::write(__alltraps as usize, TrapMode::Direct);
+        stvec::write(trap_from_kernel as usize, TrapMode::Direct);
+    }
+}
+
+fn set_user_trap_entry() {
+    unsafe {
+        stvec::write(TRAMPOLINE as usize, TrapMode::Direct);
     }
 }
 
@@ -49,7 +57,9 @@ pub fn enable_timer_interrupt() {
 
 /// ### `trap` 处理函数
 #[no_mangle]
-pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
+pub fn trap_handler() -> ! {
+    set_kernel_trap_entry();
+    let cx = current_trap_cx();
     let scause = scause::read();    // 用于描述 Trap 的原因
     let stval = stval::read();       // 给出 Trap 附加信息
     match scause.cause() {
@@ -82,7 +92,35 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
-    cx
+    trap_return();
+}
+
+#[no_mangle]
+pub fn trap_return() -> ! {
+    set_user_trap_entry();
+    let trap_cx_ptr = TRAP_CONTEXT;
+    let user_satp = current_user_token();
+    extern "C" {
+        fn __alltraps();
+        fn __restore();
+    }
+    // __restore 在虚拟地址空间的地址
+    let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
+    unsafe {
+        asm!(
+            "fence.i",
+            "jr {restore_va}",
+            restore_va = in(reg) restore_va,
+            in("a0") trap_cx_ptr,   // Trap 上下文在应用地址空间中的位置
+            in("a1") user_satp,     // 即将回到的应用的地址空间的 token
+            options(noreturn)
+        );
+    }
+}
+
+#[no_mangle]
+pub fn trap_from_kernel() -> ! {
+    panic!("a trap from kernel!");
 }
 
 pub use context::TrapContext;

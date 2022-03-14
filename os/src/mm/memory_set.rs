@@ -99,7 +99,7 @@ impl MemorySet {
         self.areas.push(map_area);  // 将生成的数据段压入 areas 使其生命周期由areas控制
     }
     
-    /// 映射跳板的虚拟地址和物理地址
+    /// 映射跳板的虚拟页号和物理物理页号
     fn map_trampoline(&mut self) {
         self.page_table.map(
             VirtAddr::from(TRAMPOLINE).into(),
