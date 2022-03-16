@@ -2,6 +2,9 @@
 /// `os/src/timer.rs`
 /// ## 实现功能
 /// ```
+/// pub fn get_time() -> usize
+/// pub fn get_time_ms() -> usize
+/// pub fn set_next_trigger()
 /// ```
 //
 

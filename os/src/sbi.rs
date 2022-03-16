@@ -3,6 +3,7 @@
 /// ## 实现功能
 /// ```
 /// pub fn console_putchar(c: usize)
+/// pub fn console_getchar() -> usize
 /// pub fn shutdown()
 /// ```
 //

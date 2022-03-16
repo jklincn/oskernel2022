@@ -3,17 +3,17 @@
 /// ```
 /// pub struct TaskContext
 /// TaskContext::zero_init() -> Self
-/// TaskContext::goto_restore(kstack_ptr: usize) -> Self
+/// TaskContext::goto_trap_return(kstack_ptr: usize) -> Self
 /// ```
 //
 
-#[derive(Copy, Clone)]
-#[repr(C)]
+use crate::trap::trap_return;
 
 /// ### 任务上下文
-/// - `ra`:
-/// - `sp`:
+/// - `ra`:返回后PC的位置
+/// - `sp`:栈顶指针
 /// - `s`:`s[0]~s[11]`
+#[repr(C)]
 pub struct TaskContext {
     ra: usize,
     sp: usize,
@@ -29,15 +29,12 @@ impl TaskContext {
             s: [0; 12],
         }
     }
-    /// 构造任务保存在任务控制块中的任务上下文
-    pub fn goto_restore(kstack_ptr: usize) -> Self {
-        extern "C" {
-            fn __restore();
-        }
+    /// 当每个应用第一次获得 CPU 使用权即将进入用户态执行的时候，它的内核栈顶放置着我们在
+    /// 内核加载应用的时候构造的一个任务上下文,在 `__switch` 切换到该应用的任务上下文的时候，
+    /// 内核将会跳转到 `trap_return` 并返回用户态开始该应用的启动执行
+    pub fn goto_trap_return(kstack_ptr: usize) -> Self {
         Self {
-            // 设置任务上下文中的内核栈指针将任务上下文的 ra 寄存器设置为 __restore 的入口地址
-            // 这样，在 __switch 从它上面恢复并返回之后就会直接跳转到 __restore
-            ra: __restore as usize,
+            ra: trap_return as usize,
             sp: kstack_ptr,
             s: [0; 12],
         }

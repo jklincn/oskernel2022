@@ -6,6 +6,9 @@
 /// ```
 //
 
+use crate::mm::translated_byte_buffer;
+use crate::task::current_user_token;
+
 const FD_STDOUT: usize = 1;
 
 /// ### 写文件函数
@@ -16,9 +19,10 @@ const FD_STDOUT: usize = 1;
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     match fd {
         FD_STDOUT => {
-            let slice = unsafe { core::slice::from_raw_parts(buf, len) };
-            let str = core::str::from_utf8(slice).unwrap();
-            print!("{}", str);  // 这里我们并没有检查传入参数的安全性，即使会在出错严重的时候 panic，还是会存在安全隐患
+            let buffers = translated_byte_buffer(current_user_token(), buf, len);
+            for buffer in buffers {
+                print!("{}", core::str::from_utf8(buffer).unwrap());
+            }
             len as isize
         }
         _ => {
