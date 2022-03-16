@@ -60,7 +60,7 @@ impl TrapContext {
         let mut cx = Self {
             x: [0; 32],
             sstatus,
-            sepc: entry,
+            sepc: entry,    // Trap 返回后到程序入口
             kernel_satp,
             kernel_sp,
             trap_handler,

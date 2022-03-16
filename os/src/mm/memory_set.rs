@@ -253,6 +253,8 @@ impl MemorySet {
         )
     }
     
+    /// ### 激活当前虚拟地址空间
+    /// 将多级页表的token（格式化后的root_ppn）写入satp
     pub fn activate(&self) {
         let satp = self.page_table.token();
         unsafe {
