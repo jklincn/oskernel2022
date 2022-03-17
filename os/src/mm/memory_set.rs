@@ -88,6 +88,18 @@ impl MemorySet {
         );
     }
 
+    pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
+        if let Some((idx, area)) = self
+            .areas
+            .iter_mut()
+            .enumerate()
+            .find(|(_, area)| area.vpn_range.get_start() == start_vpn)
+        {
+            area.unmap(&mut self.page_table);
+            self.areas.remove(idx);
+        }
+    }
+    
     /// ### 在当前地址空间插入一个新的逻辑段
     /// 如果是以 Framed 方式映射到物理内存,
     /// 还可以可选地在那些被映射到的物理页帧上写入一些初始化数据
