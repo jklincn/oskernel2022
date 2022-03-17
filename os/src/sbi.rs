@@ -57,6 +57,10 @@ pub fn console_putchar(c: usize) {
     sbi_call(SBI_CONSOLE_PUTCHAR, c, 0, 0);
 }
 
+/// ### 从终端读取一个字符
+/// - 采用`sbi_call()`实现
+/// - 无参数
+/// - 返回一个字符或者 0 ，表示没读到
 pub fn console_getchar() -> usize {
     sbi_call(SBI_CONSOLE_GETCHAR, 0, 0, 0)
 }
