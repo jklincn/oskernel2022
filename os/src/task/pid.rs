@@ -3,21 +3,12 @@
 /// ## 实现功能
 /// ```
 /// struct PidAllocator
-/// PidAllocator::new() -> Self
-/// PidAllocator::alloc(&mut self) -> PidHandle
-/// PidAllocator::dealloc(&mut self, pid: usize)
-/// 
 /// static ref PID_ALLOCATOR: UPSafeCell<PidAllocator>
-/// 
 /// pub struct PidHandle(pub usize)
+/// pub struct KernelStack
 /// 
 /// pub fn pid_alloc() -> PidHandle
 /// pub fn kernel_stack_position(app_id: usize) -> (usize, usize)
-/// 
-/// pub struct KernelStack
-/// KernelStack::new(pid_handle: &PidHandle) -> Self
-/// KernelStack::push_on_top<T>(&self, value: T) -> *mut T
-/// KernelStack::get_top(&self) -> usize
 /// ```
 //
 
@@ -27,7 +18,16 @@ use crate::sync::UPSafeCell;
 use alloc::vec::Vec;
 use lazy_static::*;
 
-/// 栈式进程标识符分配器
+/// ### 栈式进程标识符分配器
+/// |成员变量|描述|
+/// |--|--|
+/// |`current`|当前可用的最小PID|
+/// |`recycled`|以栈的形式存放着已经回收的PID|
+/// ```
+/// PidAllocator::new() -> Self
+/// PidAllocator::alloc(&mut self) -> PidHandle
+/// PidAllocator::dealloc(&mut self, pid: usize)
+/// ```
 struct PidAllocator {
     current: usize,
     recycled: Vec<usize>,
@@ -90,7 +90,13 @@ pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
     (bottom, top)
 }
 
-/// 应用内核栈
+/// ### 应用内核栈
+/// - 成员变量：pid
+/// ```
+/// KernelStack::new(pid_handle: &PidHandle) -> Self
+/// KernelStack::push_on_top<T>(&self, value: T) -> *mut T
+/// KernelStack::get_top(&self) -> usize
+/// ```
 pub struct KernelStack {
     pid: usize,
 }
