@@ -75,7 +75,7 @@ impl MemorySet {
         self.page_table.token()
     }
 
-    /// ### 在当前地址空间插入一个 `Framed` 方式映射到物理内存的逻辑段
+    /// 在当前地址空间插入一个 `Framed` 方式映射到物理内存的逻辑段
     pub fn insert_framed_area(
         &mut self,
         start_va: VirtAddr,
@@ -265,6 +265,27 @@ impl MemorySet {
         )
     }
     
+    /// 复制一个完全相同的地址空间
+    pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
+        let mut memory_set = Self::new_bare();
+        // 映射跳板
+        memory_set.map_trampoline();
+        // 循环拷贝每一个逻辑段到新的地址空间
+        for area in user_space.areas.iter() {
+            let new_area = MapArea::from_another(area);
+            memory_set.push(new_area, None);
+            // 按物理页帧拷贝数据
+            for vpn in area.vpn_range {
+                let src_ppn = user_space.translate(vpn).unwrap().ppn();
+                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
+                dst_ppn
+                    .get_bytes_array()
+                    .copy_from_slice(src_ppn.get_bytes_array());
+            }
+        }
+        memory_set
+    }
+
     /// ### 激活当前虚拟地址空间
     /// 将多级页表的token（格式化后的root_ppn）写入satp
     pub fn activate(&self) {
@@ -322,6 +343,17 @@ impl MapArea {
             map_perm,
         }
     }
+    
+    /// ### 从一个逻辑段复制得到一个虚拟地址区间、映射方式和权限控制均相同的逻辑段
+    /// 不同的是由于它还没有真正被映射到物理页帧上，所以 data_frames 字段为空
+    pub fn from_another(another: &MapArea) -> Self {
+        Self {
+            vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
+            data_frames: BTreeMap::new(),
+            map_type: another.map_type,
+            map_perm: another.map_perm,
+        }
+    }
 
     /// 在多级页表中根据vpn分配空间
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
@@ -352,7 +384,7 @@ impl MapArea {
         page_table.unmap(vpn);
     }
 
-    /// ### 在多级页表中为逻辑块分配空间
+    /// 在多级页表中为逻辑块分配空间
     pub fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.map_one(page_table, vpn);
@@ -394,8 +426,10 @@ impl MapArea {
 }
 
 /// ### 虚拟页面映射到物理页帧的方式
-/// - `Identical`: 恒等映射，一般用在内核空间（空间已分配）
-/// - `Framed`: 新分配一个物理页帧
+/// |内容|描述|
+/// |--|--|
+/// |`Identical`|恒等映射，一般用在内核空间（空间已分配）|
+/// |`Framed`|新分配一个物理页帧|
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum MapType {
     /// 恒等映射，一般用在内核空间（空间已分配）
