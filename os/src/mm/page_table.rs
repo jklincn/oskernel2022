@@ -3,31 +3,15 @@
 /// ## 实现功能
 /// ```
 /// pub struct PTEFlags: u8
-/// 
 /// pub struct PageTableEntry
-/// PageTableEntry::new(ppn: PhysPageNum, flags: PTEFlags) -> Self
-/// PageTableEntry::empty() -> Self
-/// PageTableEntry::ppn(&self) -> PhysPageNum
-/// PageTableEntry::flags(&self) -> PTEFlags
-/// PageTableEntry::is_valid(&self) -> bool
-/// PageTableEntry::readable(&self) -> bool
-/// PageTableEntry::writable(&self) -> bool
-/// PageTableEntry::executable(&self) -> bool
-/// 
-/// pub struct PageTable{
-///     root_ppn: PhysPageNum,
-///     frames: Vec<FrameTracker>,
-/// }
-/// PageTable::map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags)
-/// PageTable::unmap(&mut self, vpn: VirtPageNum)
-/// PageTable::translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry>
-/// PageTable::token(&self) -> usize
+/// pub struct PageTable
 /// 
 /// pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]>
 /// ```
 //
 
-use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
@@ -56,6 +40,7 @@ bitflags! {
 }
 
 /// ### 页表项
+/// - `bits` 
 /// ```
 /// PageTableEntry::new(ppn: PhysPageNum, flags: PTEFlags) -> Self
 /// PageTableEntry::empty() -> Self
@@ -113,6 +98,13 @@ impl PageTableEntry {
 /// - `frames`:以 FrameTracker 的形式保存了页表所有的节点（包括根节点）所在的物理页帧
 /// 
 /// 一个地址空间对应一个页表
+/// 
+/// ```
+/// PageTable::map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags)
+/// PageTable::unmap(&mut self, vpn: VirtPageNum)
+/// PageTable::translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry>
+/// PageTable::token(&self) -> usize
+/// ```
 pub struct PageTable {
     /// 根节点的物理页号,作为页表唯一的区分标志
     root_ppn: PhysPageNum,
@@ -131,14 +123,17 @@ impl PageTable {
             frames: vec![frame],// 将新获取到的物理页帧存入向量
         }
     }
-    /// Temporarily used to get arguments from user space.
+    
+    /// 临时通过 `satp` 获取对应的多级页表
     pub fn from_token(satp: usize) -> Self {
         Self {
             // 取satp的前44位作为物理页号
             root_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
+            // 不需要重新生成节点，节点已经在原始多级页表中存在，同时存在在内存中
             frames: Vec::new(),
         }
     }
+    
     /// 根据vpn查找对应页表项，如果在查找过程中发现无效页表则新建页表
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
@@ -165,6 +160,7 @@ impl PageTable {
         }
         result
     }
+    
     /// 根据vpn查找对应页表项，如果在查找过程中发现无效页表则直接返回 None 即查找失败
     fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
@@ -183,6 +179,7 @@ impl PageTable {
         }
         result
     }
+    
     /// ### 建立一个虚拟页号到物理页号的映射
     /// 根据VPN找到第三级页表中的对应项，将 `PPN` 和 `flags` 写入到页表项
     #[allow(unused)]
@@ -208,13 +205,25 @@ impl PageTable {
         self.find_pte(vpn).map(|pte| *pte)
     }
 
+    /// 在当前多级页表中将虚拟地址转换为物理地址
+    pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        self.find_pte(va.clone().floor()).map(|pte| {
+            //println!("translate_va:va = {:?}", va);
+            let aligned_pa: PhysAddr = pte.ppn().into();
+            //println!("translate_va:pa_align = {:?}", aligned_pa);
+            let offset = va.page_offset();
+            let aligned_pa_usize: usize = aligned_pa.into();
+            (aligned_pa_usize + offset).into()
+        })
+    }
+
     /// 按照 satp CSR 格式要求 构造一个无符号 64 位无符号整数，使得其分页模式为 SV39 ，且将当前多级页表的根节点所在的物理页号填充进去
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
 }
 
-/// ### 以向量的形式返回一组可以在内核空间中直接访问的字节数组切片
+/// ### 以向量的形式返回一组可以在内存空间中直接访问的字节数组切片
 /// |参数|描述|
 /// |--|--|
 /// |`token`|某个应用地址空间的 token|
@@ -240,4 +249,37 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+/// ### 从内核地址空间之外的某个应用的用户态地址空间中拿到一个字符串
+/// 针对应用的字符串中字符的用户态虚拟地址，查页表，找到对应的内核虚拟地址，逐字节地构造字符串，直到发现一个 \0 为止
+pub fn translated_str(token: usize, ptr: *const u8) -> String {
+    let page_table = PageTable::from_token(token);
+    let mut string = String::new();
+    let mut va = ptr as usize;
+    loop {
+        let ch: u8 = *(page_table
+            .translate_va(VirtAddr::from(va))
+            .unwrap()
+            .get_mut());
+        if ch == 0 {
+            break;
+        } else {
+            string.push(ch as char);
+            va += 1;
+        }
+    }
+    string
+}
+
+/// 根据 多级页表token (satp) 和 虚拟地址 获取大小为 T 的空间的切片
+pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
+    //println!("into translated_refmut!");
+    let page_table = PageTable::from_token(token);
+    let va = ptr as usize;
+    //println!("translated_refmut: before translate_va");
+    page_table
+        .translate_va(VirtAddr::from(va))
+        .unwrap()
+        .get_mut()
 }

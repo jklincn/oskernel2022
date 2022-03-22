@@ -1,19 +1,30 @@
 /// # 系统调用模块
 /// ## 可用实现函数
 /// ```
+/// pub fn sys_read(fd: usize, buffer: &mut [u8]) -> isize
 /// pub fn sys_write(fd: usize, buffer: &[u8]) -> isize
 /// pub fn sys_exit(exit_code: i32) -> isize
 /// pub fn sys_yield() -> isize
 /// pub fn sys_get_time() -> isize
+/// pub fn sys_getpid() -> isize
+/// pub fn sys_fork() -> isize
+/// pub fn sys_exec(path: &str) -> isize
+/// pub fn sys_waitpid(pid: isize, exit_code: *mut i32) -> isize
 /// ```
 //
 
 use core::arch::asm;
 
+
+const SYSCALL_READ:     usize = 63;
 const SYSCALL_WRITE:    usize = 64;
 const SYSCALL_EXIT:     usize = 93;
 const SYSCALL_YIELD:    usize = 124;
 const SYSCALL_GET_TIME: usize = 169;
+const SYSCALL_GETPID:   usize = 172;
+const SYSCALL_FORK:     usize = 220;
+const SYSCALL_EXEC:     usize = 221;
+const SYSCALL_WAITPID:  usize = 260;
 
 /// ### 汇编完成的系统调用
 /// - id : 系统调用 ID
@@ -43,7 +54,20 @@ fn syscall(id: usize, args: [usize; 3]) -> isize {
     ret
 }
 
-/// - 功能：将内存中缓冲区中的数据写入**文件**。
+/// ### 从文件中读取一段内容到缓冲区
+/// - 参数
+///     - `fd` 表示待读取文件的文件描述符；
+///     - `buffer` 表示内存中缓冲区的起始地址；
+/// - 返回值：如果出现了错误则返回 -1，否则返回实际读到的字节数。
+/// - syscall ID：63
+pub fn sys_read(fd: usize, buffer: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_READ,
+        [fd, buffer.as_mut_ptr() as usize, buffer.len()],
+    )
+}
+
+/// ### 将内存中缓冲区中的数据写入**文件**。
 /// - 参数：
 ///     - `fd` 表示待写入文件的文件描述符；
 ///     - `buf` 表示内存中缓冲区的起始地址；
@@ -56,7 +80,7 @@ pub fn sys_write(fd: usize, buffer: &[u8]) -> isize {
     syscall(SYSCALL_WRITE, [fd, buffer.as_ptr() as usize, buffer.len()])
 }
 
-/// - 功能：退出应用程序并将返回值告知批处理系统。
+/// ### 退出应用程序并将返回值告知批处理系统。
 /// - 参数：`xstate` 表示应用程序的返回值。
 /// - 返回值：该系统调用不应该返回。
 /// - syscall ID：93
@@ -64,7 +88,7 @@ pub fn sys_exit(exit_code: i32) -> isize {
     syscall(SYSCALL_EXIT, [exit_code as usize, 0, 0])
 }
 
-/// - 通过系统调用放弃CPU资源
+/// ### 通过系统调用放弃CPU资源
 /// - 无参数
 /// - 返回值总是0
 /// - syscall ID：124
@@ -72,10 +96,46 @@ pub fn sys_yield() -> isize {
     syscall(SYSCALL_YIELD, [0, 0, 0])
 }
 
-/// - 通过系统调用获取CPU上电时间
+/// ### 通过系统调用获取CPU上电时间
 /// - 无参数
 /// - 返回值：CPU上电时间
 /// - syscall ID：169
 pub fn sys_get_time() -> isize {
     syscall(SYSCALL_GET_TIME, [0, 0, 0])
+}
+
+/// ### 获取当前正在运行程序的 PID
+pub fn sys_getpid() -> isize {
+    syscall(SYSCALL_GETPID, [0, 0, 0])
+}
+
+/// ### 当前进程 fork 出来一个子进程。
+/// - 返回值：对于子进程返回 0，对于当前进程则返回子进程的 PID 。
+/// - syscall ID：220
+pub fn sys_fork() -> isize {
+    syscall(SYSCALL_FORK, [0, 0, 0])
+}
+
+/// ### 通过系统调用执行新的程序
+/// - 参数 `path` 给出了要加载的可执行文件的名字，必须在最后加 `\0`
+/// - 返回值：如果出错的话（如找不到名字相符的可执行文件）则返回 -1，否则不应该返回。
+/// - syscall ID：221
+pub fn sys_exec(path: &str) -> isize {
+    // path 作为 &str 类型是一个胖指针，既有起始地址又包含长度信息。
+    // 在实际进行系统调用的时候，我们只会将起始地址传给内核
+    // 这就需要应用负责在传入的字符串的末尾加上一个 \0 ，这样内核才能知道字符串的长度
+    syscall(SYSCALL_EXEC, [path.as_ptr() as usize, 0, 0])
+}
+
+/// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
+/// - 参数：
+///     - pid 表示要等待的子进程的进程 ID，如果为 -1 的话表示等待任意一个子进程；
+///     - exit_code 表示保存子进程返回值的地址，如果这个地址为 0 的话表示不必保存。
+/// - 返回值：
+///     - 如果要等待的子进程不存在则返回 -1；
+///     - 否则如果要等待的子进程均未结束则返回 -2；
+///     - 否则返回结束的子进程的进程 ID。
+/// - syscall ID：260
+pub fn sys_waitpid(pid: isize, exit_code: *mut i32) -> isize {
+    syscall(SYSCALL_WAITPID, [pid as usize, exit_code as usize, 0])
 }

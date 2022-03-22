@@ -1,7 +1,3 @@
-/// # 用于创建link_app.S文件用于将应用程序的二进制镜像文件作为内核的数据段链接到内核
-/// `os/build.rs`
-//
-
 use std::fs::{read_dir, File};
 use std::io::{Result, Write};
 
@@ -42,6 +38,16 @@ _num_app:
     }
     writeln!(f, r#"    .quad app_{}_end"#, apps.len() - 1)?;
 
+    writeln!(
+        f,
+        r#"
+    .global _app_names
+_app_names:"#
+    )?;
+    for app in apps.iter() {
+        writeln!(f, r#"    .string "{}""#, app)?;
+    }
+
     for (idx, app) in apps.iter().enumerate() {
         println!("app_{}: {}", idx, app);
         writeln!(
@@ -59,4 +65,3 @@ app_{0}_end:"#,
     }
     Ok(())
 }
-
