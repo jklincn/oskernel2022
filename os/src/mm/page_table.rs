@@ -272,6 +272,7 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
     string
 }
 
+/// 根据 多级页表token (satp) 和 虚拟地址 获取大小为 T 的空间的切片
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     //println!("into translated_refmut!");
     let page_table = PageTable::from_token(token);

@@ -300,6 +300,15 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+
+    /// ### 回收应用地址空间
+    /// 将地址空间中的逻辑段列表 areas 清空（即执行 Vec 向量清空），
+    /// 这将导致应用地址空间被回收（即进程的数据和代码对应的物理页帧都被回收），
+    /// 但用来存放页表的那些物理页帧此时还不会被回收（会由父进程最后回收子进程剩余的占用资源）
+    pub fn recycle_data_pages(&mut self) {
+        //*self = Self::new_bare();
+        self.areas.clear();
+    }
 }
 
 /// ### 逻辑段

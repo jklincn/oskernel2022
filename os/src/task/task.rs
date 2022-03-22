@@ -77,7 +77,7 @@ impl TaskControlBlockInner {
     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
         self.trap_cx_ppn.get_mut()
     }
-    /// ### 获取用户地址空间的 token (符合 satp CSR 格式要求的多级页表的根节点所在的物理页号)
+    /// 获取用户地址空间的 token (符合 satp CSR 格式要求的多级页表的根节点所在的物理页号)
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
     }
