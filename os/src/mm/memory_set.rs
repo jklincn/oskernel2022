@@ -296,7 +296,7 @@ impl MemorySet {
         }
     }
 
-    /// ### 根据多级页表和 vpn 查找页表项
+    /// 根据多级页表和 vpn 查找页表项
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }

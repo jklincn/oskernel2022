@@ -3,24 +3,9 @@
 /// ## 实现功能
 /// ```
 /// pub struct PhysAddr(pub usize);     // 物理地址 56bit
-/// PhysAddr::floor(&self) -> PhysPageNum
-/// PhysAddr::ceil(&self) -> PhysPageNum
-/// PhysAddr::page_offset(&self) -> usize
-/// PhysAddr::aligned(&self) -> bool
-/// 
 /// pub struct PhysPageNum(pub usize);  // 物理页号 44bit
-/// PhysPageNum::get_pte_array(&self) -> &'static mut [PageTableEntry]
-/// PhysPageNum::get_bytes_array(&self) -> &'static mut [u8]
-/// PhysPageNum::get_mut<T>(&self) -> &'static mut T
-/// 
 /// pub struct VirtAddr(pub usize);     // 虚拟地址 39bit
-/// VirtAddr::floor(&self) -> PhysPageNum
-/// VirtAddr::ceil(&self) -> PhysPageNum
-/// VirtAddr::page_offset(&self) -> usize
-/// VirtAddr::aligned(&self) -> bool
-/// 
 /// pub struct VirtPageNum(pub usize);  // 虚拟页号 27bit
-/// VirtPageNum::indexes(&self) -> [usize; 3]
 /// ```
 //
 
@@ -37,19 +22,40 @@ const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;
 /// 虚拟页号宽度：27bit
 const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
 
-/// 物理地址 56bit
+/// ### 物理地址 56bit
+/// ```
+/// PhysAddr::floor(&self) -> PhysPageNum
+/// PhysAddr::ceil(&self) -> PhysPageNum
+/// PhysAddr::page_offset(&self) -> usize
+/// PhysAddr::aligned(&self) -> bool
+/// PhysAddr::get_mut<T>(&self) -> &'static mut T
+/// ```
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysAddr(pub usize);
 
-/// 虚拟地址 39bit
+/// ### 虚拟地址 39bit
+/// ```
+/// VirtAddr::floor(&self) -> PhysPageNum
+/// VirtAddr::ceil(&self) -> PhysPageNum
+/// VirtAddr::page_offset(&self) -> usize
+/// VirtAddr::aligned(&self) -> bool
+/// ```
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtAddr(pub usize);
 
-/// 物理页号 44bit
+/// ### 物理页号 44bit
+/// ```
+/// PhysPageNum::get_pte_array(&self) -> &'static mut [PageTableEntry]
+/// PhysPageNum::get_bytes_array(&self) -> &'static mut [u8]
+/// PhysPageNum::get_mut<T>(&self) -> &'static mut T
+/// ```
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysPageNum(pub usize);
 
-/// 虚拟页号 27bit
+/// ### 虚拟页号 27bit
+/// ```
+/// VirtPageNum::indexes(&self) -> [usize; 3]
+/// ```
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtPageNum(pub usize);
 
@@ -170,6 +176,10 @@ impl PhysAddr {
     /// 判断物理地址是否与页面大小对齐
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
+    }
+    /// 获取一个大小为 T 的切片
+    pub fn get_mut<T>(&self) -> &'static mut T {
+        unsafe { (self.0 as *mut T).as_mut().unwrap() }
     }
 }
 impl From<PhysAddr> for PhysPageNum {
