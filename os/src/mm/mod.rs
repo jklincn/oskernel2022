@@ -4,6 +4,7 @@
 /// ```
 /// pub fn init()
 /// ```
+//
 
 mod address;        // 地址数据类型
 mod frame_allocator;// 物理页帧管理器
@@ -16,7 +17,7 @@ use address::{StepByOne, VPNRange};
 pub use frame_allocator::{frame_alloc, FrameTracker};
 pub use memory_set::remap_test;
 pub use memory_set::{MapPermission, MemorySet, KERNEL_SPACE};
-pub use page_table::{translated_byte_buffer, PageTableEntry};
+pub use page_table::{translated_byte_buffer, translated_refmut, translated_str, PageTableEntry};
 use page_table::{PTEFlags, PageTable};
 
 /// 内存管理子系统的初始化

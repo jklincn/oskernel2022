@@ -47,7 +47,7 @@ lazy_static! {
         unsafe { UPSafeCell::new(TaskManager::new()) };
 }
 
-/// 将一个任务加入到全局变量 `TASK_MANAGER` 就绪队列的队尾
+/// 将一个任务加入到全局 `FIFO 任务管理器` `TASK_MANAGER` 就绪队列的队尾
 pub fn add_task(task: Arc<TaskControlBlock>) {
     TASK_MANAGER.exclusive_access().add(task);
 }
