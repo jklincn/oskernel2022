@@ -10,6 +10,10 @@
 pub mod console;
 mod lang_items;
 
+extern crate alloc;
+#[macro_use]
+extern crate bitflags;
+
 use buddy_system_allocator::LockedHeap;
 
 const USER_HEAP_SIZE: usize = 16384;
@@ -50,9 +54,25 @@ fn main() -> i32 {
     panic!("Cannot find main!");
 }
 
+bitflags! {
+    pub struct OpenFlags: u32 {
+        const RDONLY = 0;
+        const WRONLY = 1 << 0;
+        const RDWR   = 1 << 1;
+        const CREATE = 1 << 9;
+        const TRUNC  = 1 << 10;
+    }
+}
+
 mod syscall;
 use syscall::*;
 
+pub fn open(path: &str, flags: OpenFlags) -> isize {
+    sys_open(path, flags.bits)
+}
+pub fn close(fd: usize) -> isize {
+    sys_close(fd)
+}
 /// ### 从文件描述符读取字符到缓冲区
 /// - `fd` : 文件描述符
 ///     - 0表示标准输入
@@ -105,7 +125,7 @@ pub fn wait(exit_code: &mut i32) -> isize {
         }
     }
 }
-/// ### 等待一个进程标识符的值为 `pid` 的子进程结束
+/// 等待一个进程标识符的值为 `pid` 的子进程结束
 pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
     loop {  // 循环检查，后期会修改为阻塞的
         match sys_waitpid(pid as isize, exit_code as *mut _) {
@@ -117,7 +137,7 @@ pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
         }
     }
 }
-/// ### 通过 `sys_yield` 放弃CPU一段时间
+/// 通过 `sys_yield` 放弃CPU一段时间
 pub fn sleep(period_ms: usize) {
     let start = sys_get_time();
     while sys_get_time() < start + period_ms as isize {
