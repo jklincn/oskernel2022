@@ -1,45 +1,25 @@
-use crate::config::KERNEL_HEAP_SIZE;
+use crate::config::KERNEL_HEAP_SIZE; // 0x30_0000 = 3MB
+
+// 使用一个已有的伙伴分配器实现
 use buddy_system_allocator::LockedHeap;
 
 #[global_allocator]
-static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
+static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty(); //初始化
 
+// 动态内存分配失败的情况
 #[alloc_error_handler]
 pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     panic!("Heap allocation error, layout = {:?}", layout);
 }
 
-static mut HEAP_SPACE: [u8; KERNEL_HEAP_SIZE] = [0; KERNEL_HEAP_SIZE];
+// 堆区域，位于内核的 .bss 段中
+static mut HEAP_SPACE: [u8; KERNEL_HEAP_SIZE] = [0u8; KERNEL_HEAP_SIZE];
 
+// 初始化堆分配器
 pub fn init_heap() {
+    // unsafe：访问可变静态变量，Rust 认为存在数据竞争风险
     unsafe {
-        HEAP_ALLOCATOR
-            .lock()
-            .init(HEAP_SPACE.as_ptr() as usize, KERNEL_HEAP_SIZE);
+        // 将空间首地址和空间大小告知分配器
+        HEAP_ALLOCATOR.lock().init(HEAP_SPACE.as_ptr() as usize, KERNEL_HEAP_SIZE);
     }
-}
-
-#[allow(unused)]
-pub fn heap_test() {
-    use alloc::boxed::Box;
-    use alloc::vec::Vec;
-    extern "C" {
-        fn sbss();
-        fn ebss();
-    }
-    let bss_range = sbss as usize..ebss as usize;
-    let a = Box::new(5);
-    assert_eq!(*a, 5);
-    assert!(bss_range.contains(&(a.as_ref() as *const _ as usize)));
-    drop(a);
-    let mut v: Vec<usize> = Vec::new();
-    for i in 0..500 {
-        v.push(i);
-    }
-    for (i, val) in v.iter().take(500).enumerate() {
-        assert_eq!(*val, i);
-    }
-    assert!(bss_range.contains(&(v.as_ptr() as usize)));
-    drop(v);
-    println!("heap_test passed!");
 }
