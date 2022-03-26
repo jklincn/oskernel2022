@@ -8,6 +8,12 @@
 
 use core::any::Any;
 
+/// ### 块设备抽象
+/// 需要手动实现以下抽象接口抽象方法
+/// ```
+/// fn read_block(&self, block_id: usize, buf: &mut [u8]);
+/// fn write_block(&self, block_id: usize, buf: &[u8]);
+/// ```
 pub trait BlockDevice: Send + Sync + Any {
     /// 块设备的抽象接口抽象方法，**将编号为 block_id 的块从磁盘读入内存中的缓冲区 buf**
     fn read_block(&self, block_id: usize, buf: &mut [u8]);
