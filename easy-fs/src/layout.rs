@@ -13,11 +13,12 @@ const INDIRECT1_BOUND: usize = DIRECT_BOUND + INODE_INDIRECT1_COUNT;
 #[allow(unused)]
 const INDIRECT2_BOUND: usize = INDIRECT1_BOUND + INODE_INDIRECT2_COUNT;
 
+/// 超级块结构体
 #[repr(C)]
 pub struct SuperBlock {
-    magic: u32,
-    pub total_blocks: u32,
-    pub inode_bitmap_blocks: u32,
+    magic: u32,                   // 用于文件系统合法性验证的魔数
+    pub total_blocks: u32,        // 文件系统的总块数
+    pub inode_bitmap_blocks: u32, // 索引节点位图占据的块数，下同
     pub inode_area_blocks: u32,
     pub data_bitmap_blocks: u32,
     pub data_area_blocks: u32,
@@ -36,6 +37,7 @@ impl Debug for SuperBlock {
 }
 
 impl SuperBlock {
+    /// 超级块初始化
     pub fn initialize(
         &mut self,
         total_blocks: u32,
@@ -67,17 +69,18 @@ pub enum DiskInodeType {
 type IndirectBlock = [u32; BLOCK_SZ / 4];
 type DataBlock = [u8; BLOCK_SZ];
 
+/// 索引节点结构体，大小为 128B，每个块正好容纳 4 个DiskInode
 #[repr(C)]
 pub struct DiskInode {
-    pub size: u32,
-    pub direct: [u32; INODE_DIRECT_COUNT],
-    pub indirect1: u32,
-    pub indirect2: u32,
-    type_: DiskInodeType,
+    pub size: u32,                         // 表示文件/目录内容的字节数
+    pub direct: [u32; INODE_DIRECT_COUNT], // 直接索引, 当 INODE_DIRECT_COUNT = 28 时，通过直接索引可以找到 14KiB 的内容
+    pub indirect1: u32, // 一级间接索引，指向一个一级索引块，最多能够索引 512/4=128 个数据块，对应 64KiB 的内容
+    pub indirect2: u32, // 二级间接索引，最多能够索引 128*64KiB=8MiB 的内容。
+    type_: DiskInodeType, // 表示索引节点的类型 DiskInodeType ，目前仅支持文件 File 和目录 Directory 两种类型
 }
 
 impl DiskInode {
-    /// indirect1 and indirect2 block are allocated only when they are needed.
+    /// 初始化一个 DiskInode 为一个文件或目录
     pub fn initialize(&mut self, type_: DiskInodeType) {
         self.size = 0;
         self.direct.iter_mut().for_each(|v| *v = 0);
@@ -85,9 +88,11 @@ impl DiskInode {
         self.indirect2 = 0;
         self.type_ = type_;
     }
+    /// 确认 DiskInode 的类型是否为目录
     pub fn is_dir(&self) -> bool {
         self.type_ == DiskInodeType::Directory
     }
+    /// 确认 DiskInode 的类型是否为文件
     #[allow(unused)]
     pub fn is_file(&self) -> bool {
         self.type_ == DiskInodeType::File
@@ -120,17 +125,22 @@ impl DiskInode {
         assert!(new_size >= self.size);
         Self::total_blocks(new_size) - Self::total_blocks(self.size)
     }
+
+    /// 数据块索引功能，从索引中查到它自身用于保存文件内容的第 block_id 个数据块的块编号
     pub fn get_block_id(&self, inner_id: u32, block_device: &Arc<dyn BlockDevice>) -> u32 {
         let inner_id = inner_id as usize;
         if inner_id < INODE_DIRECT_COUNT {
+            // 利用直接索引
             self.direct[inner_id]
         } else if inner_id < INDIRECT1_BOUND {
+            // 利用一级索引
             get_block_cache(self.indirect1 as usize, Arc::clone(block_device))
                 .lock()
                 .read(0, |indirect_block: &IndirectBlock| {
                     indirect_block[inner_id - INODE_DIRECT_COUNT]
                 })
         } else {
+            // 利用二级索引
             let last = inner_id - INDIRECT1_BOUND;
             let indirect1 = get_block_cache(self.indirect2 as usize, Arc::clone(block_device))
                 .lock()
