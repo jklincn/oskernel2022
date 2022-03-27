@@ -95,7 +95,9 @@ pub enum DiskInodeType {
     Directory,
 }
 
+/// 间接索引块  32bit * 128 = 4Kib
 type IndirectBlock = [u32; BLOCK_SZ / 4];
+/// 数据块 8bit * 512 = 4Kib
 type DataBlock = [u8; BLOCK_SZ];
 
 /// ### 磁盘上的索引节点
@@ -436,4 +438,55 @@ impl DiskInode {
     }
 }
 
+/// ### 目录项
+/// |成员变量|描述|
+/// |--|--|
+/// |`name`|文件/目录名|
+/// |`inode_number`||
+/// ```
+/// DirEntry::empty()
+/// DirEntry::new()
+/// DirEntry::as_bytes()
+/// DirEntry::as_bytes_mut()
+/// DirEntry::name()
+/// DirEntry::inode_number()
+/// ```
+#[repr(C)]
+pub struct DirEntry {
+    name: [u8; NAME_LENGTH_LIMIT + 1], 
+    inode_number: u32,
+}
 
+pub const DIRENT_SZ: usize = 32;
+
+impl DirEntry {
+    pub fn empty() -> Self {
+        Self {
+            name: [0u8; NAME_LENGTH_LIMIT + 1],
+            inode_number: 0,
+        }
+    }
+    pub fn new(name: &str, inode_number: u32) -> Self {
+        let mut bytes = [0u8; NAME_LENGTH_LIMIT + 1];
+        bytes[..name.len()].copy_from_slice(name.as_bytes());
+        Self {
+            name: bytes,
+            inode_number,
+        }
+    }
+    /// 将目录项转化为不可变切片
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, DIRENT_SZ) }
+    }
+    /// 将目录项转化为可变切片
+    pub fn as_bytes_mut(&mut self) -> &mut [u8] {
+        unsafe { core::slice::from_raw_parts_mut(self as *mut _ as usize as *mut u8, DIRENT_SZ) }
+    }
+    pub fn name(&self) -> &str {
+        let len = (0usize..).find(|i| self.name[*i] == 0).unwrap();
+        core::str::from_utf8(&self.name[..len]).unwrap()
+    }
+    pub fn inode_number(&self) -> u32 {
+        self.inode_number
+    }
+}
