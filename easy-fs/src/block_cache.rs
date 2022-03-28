@@ -129,8 +129,8 @@ impl BlockCacheManager {
     }
 }
 
-/// 定义块缓存全局管理器
 lazy_static! {
+    /// 定义块缓存全局管理器
     pub static ref BLOCK_CACHE_MANAGER: Mutex<BlockCacheManager> =
         Mutex::new(BlockCacheManager::new());
 }
