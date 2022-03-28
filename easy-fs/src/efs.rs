@@ -128,6 +128,7 @@ impl EasyFileSystem {
             })
     }
 
+    /// 获取根目录的 inode
     pub fn root_inode(efs: &Arc<Mutex<Self>>) -> Inode {
         let block_device = Arc::clone(&efs.lock().block_device);
         // acquire efs lock temporarily
@@ -136,6 +137,8 @@ impl EasyFileSystem {
         Inode::new(block_id, block_offset, Arc::clone(efs), block_device)
     }
 
+    /// ### 获取索引节点在磁盘块中的位置
+    /// 返回 `磁盘块号 u32` 和 `块内地址 usize`
     pub fn get_disk_inode_pos(&self, inode_id: u32) -> (u32, usize) {
         let inode_size = core::mem::size_of::<DiskInode>();
         // 每个块中能存放的索引节点数
