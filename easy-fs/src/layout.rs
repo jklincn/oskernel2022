@@ -5,13 +5,13 @@ use core::fmt::{Debug, Formatter, Result};
 
 const EFS_MAGIC: u32 = 0x3b800001;
 const INODE_DIRECT_COUNT: usize = 28;
-const NAME_LENGTH_LIMIT: usize = 27;
-const INODE_INDIRECT1_COUNT: usize = BLOCK_SZ / 4;
-const INODE_INDIRECT2_COUNT: usize = INODE_INDIRECT1_COUNT * INODE_INDIRECT1_COUNT;
-const DIRECT_BOUND: usize = INODE_DIRECT_COUNT;
-const INDIRECT1_BOUND: usize = DIRECT_BOUND + INODE_INDIRECT1_COUNT;
+const NAME_LENGTH_LIMIT: usize = 27; // 最大允许保存长度为 27 的文件/目录名
+const INODE_INDIRECT1_COUNT: usize = BLOCK_SZ / 4; // 一个一级索引块能够索引 128 个数据块
+const INODE_INDIRECT2_COUNT: usize = INODE_INDIRECT1_COUNT * INODE_INDIRECT1_COUNT; // 一个二级索引块能够索引 128 个一级索引块，即 128*128 个数据块
+const DIRECT_BOUND: usize = INODE_DIRECT_COUNT; // 直接索引支持的最大块数，28块，超出后需要使用一级间接索引
+const INDIRECT1_BOUND: usize = DIRECT_BOUND + INODE_INDIRECT1_COUNT; // 一级间接索引（包含直接索引）支持的最大块数，28+128=156 块，超出后需要使用二级间接索引
 #[allow(unused)]
-const INDIRECT2_BOUND: usize = INDIRECT1_BOUND + INODE_INDIRECT2_COUNT;
+const INDIRECT2_BOUND: usize = INDIRECT1_BOUND + INODE_INDIRECT2_COUNT; // 二级间接索引（包含直接索引、一级间接索引）支持的最大块数，28+128+128*128 块，超出后暂不支持，目前单个文件大小最多 8MiB 左右
 
 /// 超级块结构体
 #[repr(C)]
@@ -67,6 +67,8 @@ pub enum DiskInodeType {
 }
 
 type IndirectBlock = [u32; BLOCK_SZ / 4];
+
+/// 数据块内容，长度为 512 的字节数组
 type DataBlock = [u8; BLOCK_SZ];
 
 /// 索引节点结构体，大小为 128B，每个块正好容纳 4 个DiskInode
@@ -97,30 +99,35 @@ impl DiskInode {
     pub fn is_file(&self) -> bool {
         self.type_ == DiskInodeType::File
     }
-    /// Return block number correspond to size.
+    /// 计算为了容纳自身 size 字节的内容需要多少个数据块
     pub fn data_blocks(&self) -> u32 {
         Self::_data_blocks(self.size)
     }
+    /// data_blocks 的具体实现，用 size 除以每个块的大小 BLOCK_SZ 并向上取整
     fn _data_blocks(size: u32) -> u32 {
         (size + BLOCK_SZ as u32 - 1) / BLOCK_SZ as u32
     }
-    /// Return number of blocks needed include indirect1/2.
+    /// 计算所需的所有块数，包括存数据的数据块和存索引节点的索引块
     pub fn total_blocks(size: u32) -> u32 {
+        // 先计算总块数
         let data_blocks = Self::_data_blocks(size) as usize;
         let mut total = data_blocks as usize;
-        // indirect1
+        // 数据块数是否超过 28 块，即是否需要一级间接索引
         if data_blocks > INODE_DIRECT_COUNT {
             total += 1;
         }
-        // indirect2
+        // 数据块数是否超过 28+128=156 块，即是否需要二级间接索引
         if data_blocks > INDIRECT1_BOUND {
             total += 1;
-            // sub indirect1
+            // 求新增的一级索引块数量
+            // 数据块总数减去一级间接索引支持的最大块数除以一个一级索引块可以索引的数据块数量（即128）并向上取整
             total +=
                 (data_blocks - INDIRECT1_BOUND + INODE_INDIRECT1_COUNT - 1) / INODE_INDIRECT1_COUNT;
         }
         total as u32
     }
+
+    /// 计算将一个 DiskInode 的 size 扩容到 new_size 需要额外多少个数据和索引块
     pub fn blocks_num_needed(&self, new_size: u32) -> u32 {
         assert!(new_size >= self.size);
         Self::total_blocks(new_size) - Self::total_blocks(self.size)
@@ -136,11 +143,13 @@ impl DiskInode {
             // 利用一级索引
             get_block_cache(self.indirect1 as usize, Arc::clone(block_device))
                 .lock()
+                // 在对一个索引块进行操作的时候，将其解析为 IndirectBlock ，实质上是一个 u32 数组，每个都指向一个下一级索引块或者数据块
                 .read(0, |indirect_block: &IndirectBlock| {
                     indirect_block[inner_id - INODE_DIRECT_COUNT]
                 })
         } else {
             // 利用二级索引
+            // 先查二级索引块找到挂在它下面的一级索引块，再通过一级索引块找到数据块
             let last = inner_id - INDIRECT1_BOUND;
             let indirect1 = get_block_cache(self.indirect2 as usize, Arc::clone(block_device))
                 .lock()
@@ -154,22 +163,24 @@ impl DiskInode {
                 })
         }
     }
+
+    /// 扩充容量
     pub fn increase_size(
         &mut self,
-        new_size: u32,
-        new_blocks: Vec<u32>,
+        new_size: u32,        // 容量扩充之后的文件大小
+        new_blocks: Vec<u32>, // 保存了本次容量扩充所需块编号的向量
         block_device: &Arc<dyn BlockDevice>,
     ) {
         let mut current_blocks = self.data_blocks();
         self.size = new_size;
         let mut total_blocks = self.data_blocks();
         let mut new_blocks = new_blocks.into_iter();
-        // fill direct
+        // 填充直接索引
         while current_blocks < total_blocks.min(INODE_DIRECT_COUNT as u32) {
             self.direct[current_blocks as usize] = new_blocks.next().unwrap();
             current_blocks += 1;
         }
-        // alloc indirect1
+        // 填充一级间接索引
         if total_blocks > INODE_DIRECT_COUNT as u32 {
             if current_blocks == INODE_DIRECT_COUNT as u32 {
                 self.indirect1 = new_blocks.next().unwrap();
@@ -179,7 +190,7 @@ impl DiskInode {
         } else {
             return;
         }
-        // fill indirect1
+        // 填充二级间接索引
         get_block_cache(self.indirect1 as usize, Arc::clone(block_device))
             .lock()
             .modify(0, |indirect1: &mut IndirectBlock| {
@@ -301,6 +312,10 @@ impl DiskInode {
         self.indirect2 = 0;
         v
     }
+
+    /// 通过 DiskInode 来读取它索引的那些数据块中的数据
+    /// 将文件内容从 offset 字节开始的部分读到内存中的缓冲区 buf 中，并返回实际读到的字节数。
+    /// 如果文件剩下的内容还足够多，那么缓冲区会被填满；否则文件剩下的全部内容都会被读到缓冲区中
     pub fn read_at(
         &self,
         offset: usize,
@@ -309,11 +324,12 @@ impl DiskInode {
     ) -> usize {
         let mut start = offset;
         let end = (offset + buf.len()).min(self.size as usize);
+        // 边界判断：读取的内容是否超出了文件的范围
         if start >= end {
             return 0;
         }
-        let mut start_block = start / BLOCK_SZ;
-        let mut read_size = 0usize;
+        let mut start_block = start / BLOCK_SZ; // 计算起始块
+        let mut read_size = 0usize; // 目前已读取的字节数
         loop {
             // calculate end of current block
             let mut end_current_block = (start / BLOCK_SZ + 1) * BLOCK_SZ;
@@ -330,6 +346,7 @@ impl DiskInode {
                 let src = &data_block[start % BLOCK_SZ..start % BLOCK_SZ + block_read_size];
                 dst.copy_from_slice(src);
             });
+            // 增加已读取字节数
             read_size += block_read_size;
             // move to next block
             if end_current_block == end {
@@ -340,7 +357,7 @@ impl DiskInode {
         }
         read_size
     }
-    /// File size must be adjusted before.
+    /// 通过 DiskInode 来写入它索引的那些数据块中的数据，在调用之前需要提前调用 increase_size
     pub fn write_at(
         &mut self,
         offset: usize,
@@ -380,21 +397,25 @@ impl DiskInode {
     }
 }
 
+/// 目录项结构体
 #[repr(C)]
 pub struct DirEntry {
     name: [u8; NAME_LENGTH_LIMIT + 1],
     inode_number: u32,
 }
 
+/// 占据空间 28+4=32 字节，每个数据块可以存储 16 个目录项
 pub const DIRENT_SZ: usize = 32;
 
 impl DirEntry {
+    /// 生成一个空的目录项
     pub fn empty() -> Self {
         Self {
             name: [0u8; NAME_LENGTH_LIMIT + 1],
             inode_number: 0,
         }
     }
+    /// 生成一个合法的目录项
     pub fn new(name: &str, inode_number: u32) -> Self {
         let mut bytes = [0u8; NAME_LENGTH_LIMIT + 1];
         bytes[..name.len()].copy_from_slice(name.as_bytes());
@@ -403,16 +424,24 @@ impl DirEntry {
             inode_number,
         }
     }
+
+    /// 转换成不可变引用字节切片
     pub fn as_bytes(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, DIRENT_SZ) }
     }
+
+    /// 转换成可变引用字节切片
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         unsafe { core::slice::from_raw_parts_mut(self as *mut _ as usize as *mut u8, DIRENT_SZ) }
     }
+
+    /// 取出目录项名字
     pub fn name(&self) -> &str {
         let len = (0usize..).find(|i| self.name[*i] == 0).unwrap();
         core::str::from_utf8(&self.name[..len]).unwrap()
     }
+
+    /// 取出目录项对应的索引节点编号
     pub fn inode_number(&self) -> u32 {
         self.inode_number
     }
