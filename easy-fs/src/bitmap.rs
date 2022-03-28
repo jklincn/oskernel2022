@@ -11,7 +11,7 @@ use alloc::sync::Arc;
 /// 磁盘数据结构，它将位图区域中的一个磁盘块解释为长度为 64 的一个 `u64` 数组，4096 bits
 type BitmapBlock = [u64; 64];
 
-/// 4096 bits
+/// 块大小字节数 4096 bits
 const BLOCK_BITS: usize = BLOCK_SZ * 8;
 
 /// ### 位示图
@@ -24,8 +24,8 @@ const BLOCK_BITS: usize = BLOCK_SZ * 8;
 /// Bitmap::dealloc(&self, block_device: &Arc<dyn BlockDevice>, bit: usize)
 /// Bitmap::maximum(&self) -> usize
 /// ```
-pub struct Bitmap {
-    start_block_id: usize,
+pub struct Bitmap { /// 区域的起始块编号
+    start_block_id: usize,  /// 区域的长度
     blocks: usize,
 }
 
@@ -84,6 +84,7 @@ impl Bitmap {
             });
     }
 
+    /// 获取位置图能表示的最大空间 单位：bit
     pub fn maximum(&self) -> usize {
         self.blocks * BLOCK_BITS
     }
