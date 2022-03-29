@@ -107,7 +107,7 @@ impl DiskInode {
     fn _data_blocks(size: u32) -> u32 {
         (size + BLOCK_SZ as u32 - 1) / BLOCK_SZ as u32
     }
-    /// 计算所需的所有块数，包括存数据的数据块和存索引节点的索引块
+    /// 计算存放 size 字节所需的磁盘块数，包括存数据的数据块和存索引节点的索引块
     pub fn total_blocks(size: u32) -> u32 {
         // 先计算总块数
         let data_blocks = Self::_data_blocks(size) as usize;

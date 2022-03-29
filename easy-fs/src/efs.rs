@@ -104,6 +104,7 @@ impl EasyFileSystem {
             })
     }
 
+    /// 获取根目录的 inode
     pub fn root_inode(efs: &Arc<Mutex<Self>>) -> Inode {
         let block_device = Arc::clone(&efs.lock().block_device);
         // acquire efs lock temporarily
