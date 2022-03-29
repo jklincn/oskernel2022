@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 const BLOCK_SZ: usize = 512;
 
-struct BlockFile(Mutex<File>);
+struct BlockFile(Mutex<File>); // 用 Linux 上的一个文件模拟一个块设备，包装成 BlockFile 类型来模拟一块磁盘，为它实现 BlockDevice 接口
 
 impl BlockDevice for BlockFile {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
@@ -24,14 +24,22 @@ impl BlockDevice for BlockFile {
         assert_eq!(file.write(buf).unwrap(), BLOCK_SZ, "Not a complete block!");
     }
 
-    fn handle_irq(&self) { unimplemented!(); }
+    fn handle_irq(&self) {
+        unimplemented!();
+    }
 }
 
 fn main() {
     easy_fs_pack().expect("Error when packing easy-fs!");
 }
 
+/// 将应用打包为 easy-fs 镜像
 fn easy_fs_pack() -> std::io::Result<()> {
+    /*
+     * 进行命令行参数解析，需要通过 -s 和 -t 分别指定应用的源代码目录和保存应用 ELF 的目录，
+     * 而不是在 easy-fs-fuse 中硬编码。如果解析成功的话它们会分别被保存在变量 src_path 和 
+     * target_path 中
+     */
     let matches = App::new("EasyFileSystem packer")
         .arg(
             Arg::with_name("source")
@@ -51,7 +59,7 @@ fn easy_fs_pack() -> std::io::Result<()> {
     let src_path = matches.value_of("source").unwrap();
     let target_path = matches.value_of("target").unwrap();
     println!("src_path = {}\ntarget_path = {}", src_path, target_path);
-    let block_file = Arc::new(BlockFile(Mutex::new({
+    let block_file = Arc::new(BlockFile(Mutex::new({  // 创建 4MiB 的 easy-fs 镜像文件
         let f = OpenOptions::new()
             .read(true)
             .write(true)
@@ -61,8 +69,9 @@ fn easy_fs_pack() -> std::io::Result<()> {
         f
     })));
     // 16MiB, at most 4095 files
-    let efs = EasyFileSystem::create(block_file, 16 * 2048, 1);
-    let root_inode = Arc::new(EasyFileSystem::root_inode(&efs));
+    let efs = EasyFileSystem::create(block_file, 16 * 2048, 1);  // 进行 easy-fs 初始化
+    let root_inode = Arc::new(EasyFileSystem::root_inode(&efs)); // 获取根目录 inode
+    // 获取源码目录中的每个应用的源代码文件并去掉后缀名，收集到向量 apps 中
     let apps: Vec<_> = read_dir(src_path)
         .unwrap()
         .into_iter()
@@ -72,6 +81,12 @@ fn easy_fs_pack() -> std::io::Result<()> {
             name_with_ext
         })
         .collect();
+    
+    /*
+     * 枚举 apps 中的每个应用，从放置应用执行程序的目录中找到对应应用的 ELF 文件（这是一个 Linux 上的文件），
+     * 并将数据读入内存。接着需要在 easy-fs 中创建一个同名文件并将 ELF 数据写入到这个文件中。这个过程相当于将
+     * Linux 上的文件系统中的一个文件复制到 easy-fs 中
+     */
     for app in apps {
         // load app data from host file system
         let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
@@ -89,8 +104,10 @@ fn easy_fs_pack() -> std::io::Result<()> {
     Ok(())
 }
 
+// 使用 cargo test 运行用 #[test] 注解的函数
 #[test]
 fn efs_test() -> std::io::Result<()> {
+    // 新建一个虚拟块设备
     let block_file = Arc::new(BlockFile(Mutex::new({
         let f = OpenOptions::new()
             .read(true)
@@ -100,9 +117,10 @@ fn efs_test() -> std::io::Result<()> {
         f.set_len(8192 * 512).unwrap();
         f
     })));
-    EasyFileSystem::create(block_file.clone(), 4096, 1);
-    let efs = EasyFileSystem::open(block_file.clone());
-    let root_inode = EasyFileSystem::root_inode(&efs);
+    EasyFileSystem::create(block_file.clone(), 4096, 1); // 初始化 easy-fs 文件系统
+    let efs = EasyFileSystem::open(block_file.clone()); // 从块设备上打开文件系统
+    let root_inode = EasyFileSystem::root_inode(&efs); // 获取根目录的 Inode
+                                                       // 进行文件操作
     root_inode.create("filea");
     root_inode.create("fileb");
     for name in root_inode.ls() {
@@ -120,8 +138,8 @@ fn efs_test() -> std::io::Result<()> {
         filea.clear();
         assert_eq!(filea.read_at(0, &mut buffer), 0,);
         let mut str = String::new();
-        use rand;
-        // random digit
+        use rand; // 注意：不支持 no_std，因此只有在用户态才能更容易进行测试
+                  // random digit
         for _ in 0..len {
             str.push(char::from('0' as u8 + rand::random::<u8>() % 10));
         }
