@@ -8,14 +8,15 @@ use bitflags::*;
 use easy_fs::{EasyFileSystem, Inode};
 use lazy_static::*;
 
+/// 表示进程中一个被打开的常规文件或目录
 pub struct OSInode {
-    readable: bool,
-    writable: bool,
+    readable: bool, // 该文件是否允许通过 sys_read 进行读
+    writable: bool, // 该文件是否允许通过 sys_write 进行写
     inner: UPSafeCell<OSInodeInner>,
 }
 
 pub struct OSInodeInner {
-    offset: usize,
+    offset: usize,    // 偏移量
     inode: Arc<Inode>,
 }
 
@@ -45,8 +46,8 @@ impl OSInode {
 
 lazy_static! {
     pub static ref ROOT_INODE: Arc<Inode> = {
-        let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
-        Arc::new(EasyFileSystem::root_inode(&efs))
+        let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());  // 从块设备上打开文件系统
+        Arc::new(EasyFileSystem::root_inode(&efs)) // 从文件系统中获取根目录的 inode
     };
 }
 
@@ -58,6 +59,7 @@ pub fn list_apps() {
     println!("**************/")
 }
 
+// 定义一份打开文件的标志
 bitflags! {
     pub struct OpenFlags: u32 {
         const RDONLY = 0;
@@ -82,15 +84,16 @@ impl OpenFlags {
     }
 }
 
+/// 根据文件名打开一个根目录下的文件
 pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     let (readable, writable) = flags.read_write();
     if flags.contains(OpenFlags::CREATE) {
         if let Some(inode) = ROOT_INODE.find(name) {
-            // clear size
+            // 如果文件已经存在，则清空文件的内容
             inode.clear();
             Some(Arc::new(OSInode::new(readable, writable, inode)))
         } else {
-            // create file
+            // 创建文件
             ROOT_INODE
                 .create(name)
                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
@@ -105,6 +108,7 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     }
 }
 
+// 为 OSInode 实现 File Trait
 impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable

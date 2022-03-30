@@ -150,6 +150,7 @@ impl MemorySet {
             None,
         );
         println!("mapping memory-mapped registers");
+        // 映射 VirtIO 总线的 MMIO 地址区间
         for pair in MMIO {
             memory_set.push(
                 MapArea::new(

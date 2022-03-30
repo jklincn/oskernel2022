@@ -13,11 +13,13 @@ use alloc::vec::Vec;
 #[allow(unused)]
 const VIRTIO0: usize = 0x10001000;
 
+/// 将 virtio-drivers crate 提供的 VirtIO 块设备抽象 VirtIOBlk 包装为我们自己的 VirtIOBlock
 pub struct VirtIOBlock {
     virtio_blk: UPSafeCell<VirtIOBlk<'static>>,
     condvars: BTreeMap<u16, Condvar>,
 }
 
+// 在 VirtIO 架构下，需要在公共区域中放置一种叫做 VirtQueue 的环形队列，CPU 可以向此环形队列中向 VirtIO 设备提交请求，也可以从队列中取得请求的结果
 lazy_static! {
     static ref QUEUE_FRAMES: UPSafeCell<Vec<FrameTracker>> = unsafe { UPSafeCell::new(Vec::new()) };
 }
@@ -86,6 +88,12 @@ impl VirtIOBlock {
         }
     }
 }
+
+/**
+ * 对于 VirtQueue 的使用涉及到物理内存的分配和回收，但这并不在 VirtIO 驱
+ * 动 virtio-drivers 的职责范围之内，因此它声明了数个相关的接口，需要库的
+ * 使用者自己来实现
+ */
 
 #[no_mangle]
 pub extern "C" fn virtio_dma_alloc(pages: usize) -> PhysAddr {

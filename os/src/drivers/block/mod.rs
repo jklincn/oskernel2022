@@ -7,8 +7,11 @@ pub use sdcard::SDCardWrapper;
 use alloc::sync::Arc;
 use easy_fs::BlockDevice;
 use lazy_static::*;
-use crate::board::BlockDeviceImpl;
+use crate::board::BlockDeviceImpl; // qemu 是 VirtIOBlock ，board 是 SDCardWrapper
 
+
+
+// 全局实例化为 BLOCK_DEVICE
 lazy_static! {
     pub static ref BLOCK_DEVICE: Arc<dyn BlockDevice> = Arc::new(BlockDeviceImpl::new());
 }

@@ -66,7 +66,7 @@ pub fn sys_close(fd: usize) -> isize {
     if inner.fd_table[fd].is_none() {
         return -1;
     }
-    inner.fd_table[fd].take();
+    inner.fd_table[fd].take(); // 将进程控制块中的文件描述符表对应的一项改为 None 代表它已经空闲
     0
 }
 

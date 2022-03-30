@@ -224,6 +224,7 @@ impl IntoIterator for UserBuffer {
     }
 }
 
+// 作为一个迭代器可以逐字节进行读写
 pub struct UserBufferIterator {
     buffers: Vec<&'static mut [u8]>,
     current_buffer: usize,

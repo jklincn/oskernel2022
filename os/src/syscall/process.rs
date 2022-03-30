@@ -55,8 +55,9 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
             args = args.add(1);
         }
     }
+    // 首先调用 open_file 函数，以只读的方式在内核中打开应用文件并获取它对应的 OSInode
     if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
-        let all_data = app_inode.read_all();
+        let all_data = app_inode.read_all();  // 将该文件的数据全部读到一个向量 all_data 中
         let process = current_process();
         let argc = args_vec.len();
         process.exec(all_data.as_slice(), args_vec);

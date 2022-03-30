@@ -2,8 +2,10 @@ mod inode;
 mod pipe;
 mod stdio;
 
+/// UserBuffer 是我们在 mm 子模块中定义的应用地址空间中的一段缓冲区（即内存）的抽象
 use crate::mm::UserBuffer;
 
+/// 这个接口在内存和存储设备之间建立了数据交换的通道
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
     fn writable(&self) -> bool;
