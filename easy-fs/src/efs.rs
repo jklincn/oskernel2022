@@ -120,13 +120,8 @@ impl EasyFileSystem {
         let block_id = self.inode_area_start_block + inode_id / inodes_per_block;
         (
             block_id,
-            (inode_id % inodes_per_block) as usize * inode_size,  // 一个块中可以存 4 个索引节点，这个返回值代表第几个
+            (inode_id % inodes_per_block) as usize * inode_size,  // 块内偏移量
         )
-    }
-
-    /// 计算存储数据的磁盘块在磁盘上的实际位置
-    pub fn get_data_block_id(&self, data_block_id: u32) -> u32 {
-        self.data_area_start_block + data_block_id
     }
 
     /// inode 的分配
