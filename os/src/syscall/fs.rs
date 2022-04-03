@@ -74,17 +74,22 @@ pub fn sys_pipe(pipe: *mut usize) -> isize {
     let process = current_process();
     let token = current_user_token();
     let mut inner = process.inner_exclusive_access();
-    let (pipe_read, pipe_write) = make_pipe();
+    // 创建一个管道并获取其读端和写端
+    let (pipe_read, pipe_write) = make_pipe();  
+    // 分别为读端和写端分配文件描述符并将它们放置在文件描述符表中的相应位置中
     let read_fd = inner.alloc_fd();
     inner.fd_table[read_fd] = Some(pipe_read);
     let write_fd = inner.alloc_fd();
     inner.fd_table[write_fd] = Some(pipe_write);
+    // 将读端和写端的文件描述符写回到应用地址空间
     *translated_refmut(token, pipe) = read_fd;
     *translated_refmut(token, unsafe { pipe.add(1) }) = write_fd;
     0
 }
 
+/// 实现重定向功能
 pub fn sys_dup(fd: usize) -> isize {
+    // 首先检查传入 fd 的合法性。然后在文件描述符表中分配一个新的文件描述符，并保存 fd 指向的已打开文件的一份拷贝即可
     let process = current_process();
     let mut inner = process.inner_exclusive_access();
     if fd >= inner.fd_table.len() {

@@ -48,6 +48,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
     loop {
         let arg_str_ptr = *translated_ref(token, args);
         if arg_str_ptr == 0 {
+            // 没有更多参数
             break;
         }
         args_vec.push(translated_str(token, arg_str_ptr as *const u8));
@@ -57,9 +58,10 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
     }
     // 首先调用 open_file 函数，以只读的方式在内核中打开应用文件并获取它对应的 OSInode
     if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
-        let all_data = app_inode.read_all();  // 将该文件的数据全部读到一个向量 all_data 中
+        let all_data = app_inode.read_all(); // 将该文件的数据全部读到一个向量 all_data 中
         let process = current_process();
         let argc = args_vec.len();
+        // 将获取到的 args_vec 传入进去
         process.exec(all_data.as_slice(), args_vec);
         // return argc because cx.x[10] will be covered with it later
         argc as isize

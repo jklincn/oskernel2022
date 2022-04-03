@@ -3,9 +3,9 @@ use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
 
-pub struct Stdin;
+pub struct Stdin; // 只读文件
 
-pub struct Stdout;
+pub struct Stdout; // 只写文件
 
 impl File for Stdin {
     fn readable(&self) -> bool {

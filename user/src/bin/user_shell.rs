@@ -28,7 +28,9 @@ struct ProcessArguments {
 
 impl ProcessArguments {
     pub fn new(command: &str) -> Self {
+        // 用空格进行分割
         let args: Vec<_> = command.split(' ').collect();
+        // 手动加入'\0'
         let mut args_copy: Vec<String> = args
             .iter()
             .filter(|&arg| !arg.is_empty())
@@ -40,7 +42,9 @@ impl ProcessArguments {
             })
             .collect();
 
-        // redirect input
+        // 检查是否存在通过 < 或 > 进行输入输出重定向的情况
+        // 假设输入shell程序的命令一定合法：即 < 或 > 最多只会出现一次，且后面总是会有一个参数作为重定向到的文件
+        // 输入重定向
         let mut input = String::new();
         if let Some((idx, _)) = args_copy
             .iter()
@@ -50,8 +54,7 @@ impl ProcessArguments {
             input = args_copy[idx + 1].clone();
             args_copy.drain(idx..=idx + 1);
         }
-
-        // redirect output
+        // 输出重定向
         let mut output = String::new();
         if let Some((idx, _)) = args_copy
             .iter()
@@ -62,8 +65,9 @@ impl ProcessArguments {
             args_copy.drain(idx..=idx + 1);
         }
 
+        // 用 args_addr 来收集这些字符串的起始地址
         let mut args_addr: Vec<*const u8> = args_copy.iter().map(|arg| arg.as_ptr()).collect();
-        args_addr.push(core::ptr::null::<u8>());
+        args_addr.push(core::ptr::null::<u8>());  // 放入一个 null ，这样内核看到它的时候就能知道命令行参数已经获取完毕
 
         Self {
             input,
@@ -128,19 +132,23 @@ pub fn main() -> i32 {
                                 let output = &process_argument.output;
                                 let args_copy = &process_argument.args_copy;
                                 let args_addr = &process_argument.args_addr;
-                                // redirect input
+                                // 输入重定向
                                 if !input.is_empty() {
+                                    // 尝试打开输入文件 input 到 input_fd 中
                                     let input_fd = open(input.as_str(), OpenFlags::RDONLY);
                                     if input_fd == -1 {
                                         println!("Error when opening file {}", input);
                                         return -4;
                                     }
                                     let input_fd = input_fd as usize;
+                                    // 通过 close 关闭标准输入所在的文件描述符 0
                                     close(0);
+                                    // 用到了文件描述符分配的重要性质：即必定分配可用描述符中编号最小的一个
                                     assert_eq!(dup(input_fd), 0);
+                                    // 因为应用进程的后续执行不会用到输入文件原来的描述符 input_fd ，所以就将其关掉
                                     close(input_fd);
                                 }
-                                // redirect output
+                                // 输出重定向
                                 if !output.is_empty() {
                                     let output_fd = open(
                                         output.as_str(),

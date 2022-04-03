@@ -26,7 +26,7 @@ pub struct ProcessControlBlockInner {
     pub parent: Option<Weak<ProcessControlBlock>>,
     pub children: Vec<Arc<ProcessControlBlock>>,
     pub exit_code: i32,
-    pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,  // 文件描述符表
+    pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, // 文件描述符表
     pub signals: SignalFlags,
     pub tasks: Vec<Option<Arc<TaskControlBlock>>>,
     pub task_res_allocator: RecycleAllocator,
@@ -41,6 +41,9 @@ impl ProcessControlBlockInner {
         self.memory_set.token()
     }
 
+    /// 分配一个最小的空闲文件描述符来访问一个新打开的文件
+    /// 它先从小到大遍历所有曾经被分配过的文件描述符尝试找到一个空闲的，
+    /// 如果没有的话就需要拓展文件描述符表的长度并新分配一个
     pub fn alloc_fd(&mut self) -> usize {
         if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
             fd
@@ -87,6 +90,7 @@ impl ProcessControlBlock {
                     children: Vec::new(),
                     exit_code: 0,
                     fd_table: vec![
+                        // 默认为其打开三个缺省就存在的文件
                         // 0 -> stdin
                         Some(Arc::new(Stdin)),
                         // 1 -> stdout
@@ -147,7 +151,7 @@ impl ProcessControlBlock {
         task_inner.res.as_mut().unwrap().ustack_base = ustack_base;
         task_inner.res.as_mut().unwrap().alloc_user_res();
         task_inner.trap_cx_ppn = task_inner.res.as_mut().unwrap().trap_cx_ppn();
-        // push arguments on user stack
+        // 将命令行参数字符串压入到用户栈上
         let mut user_sp = task_inner.res.as_mut().unwrap().ustack_top();
         user_sp -= (args.len() + 1) * core::mem::size_of::<usize>();
         let argv_base = user_sp;
@@ -165,12 +169,15 @@ impl ProcessControlBlock {
             *argv[i] = user_sp;
             let mut p = user_sp;
             for c in args[i].as_bytes() {
+                // 逐字节进行复制
                 *translated_refmut(new_token, p as *mut u8) = *c;
                 p += 1;
             }
+            // 为了应用能知道每个字符串的长度，我们需要手动在末尾加入 \0
             *translated_refmut(new_token, p as *mut u8) = 0;
         }
         // make the user_sp aligned to 8B for k210 platform
+        // 将 user_sp 以 8 字节对齐
         user_sp -= user_sp % core::mem::size_of::<usize>();
         // initialize trap_cx
         let mut trap_cx = TrapContext::app_init_context(
@@ -180,6 +187,7 @@ impl ProcessControlBlock {
             task.kstack.get_top(),
             trap_handler as usize,
         );
+        // 让 a0 表示命令行参数的个数，而 a1 则表示参数起始地址
         trap_cx.x[10] = args.len();
         trap_cx.x[11] = argv_base;
         *task_inner.get_trap_cx() = trap_cx;
@@ -193,7 +201,7 @@ impl ProcessControlBlock {
         let memory_set = MemorySet::from_existed_user(&parent.memory_set);
         // alloc a pid
         let pid = pid_alloc();
-        // copy fd table
+        // 继承父进程的文件描述符表
         let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
         for fd in parent.fd_table.iter() {
             if let Some(file) = fd {

@@ -35,6 +35,11 @@ pub extern "C" fn _start(argc: usize, argv: usize) -> ! {
         HEAP.lock()
             .init(HEAP_SPACE.as_ptr() as usize, USER_HEAP_SIZE);
     }
+    // 从用户栈上还原命令行参数
+    // 分别取出 argc 个字符串的起始地址（基于字符串数组的 base 地址 argv ），
+    // 从它向后找到第一个 \0 就可以得到一个完整的 &str 格式的命令行参数字符串
+    // 并加入到向量 v 中。最后通过 v.as_slice 就得到了我们在 main 主函数中看
+    // 到的 &[&str]
     let mut v: Vec<&'static str> = Vec::new();
     for i in 0..argc {
         let str_start =
