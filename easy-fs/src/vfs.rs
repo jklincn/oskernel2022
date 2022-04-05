@@ -16,6 +16,7 @@ use spin::{Mutex, MutexGuard};
 
 /// ### 索引节点
 /// |成员变量|注释|
+/// |--|--|
 /// |`block_id`|记录该 Inode 对应的 DiskInode 保存在磁盘上的磁盘块号|
 /// |`block_offset`|记录该 Inode 对应的 DiskInode 保存在磁盘块上的偏移量|
 /// |`fs`|指向 `EasyFileSystem` 的一个指针|
