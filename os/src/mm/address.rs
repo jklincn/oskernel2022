@@ -245,6 +245,11 @@ impl StepByOne for VirtPageNum {
         self.0 += 1;
     }
 }
+impl StepByOne for PhysPageNum {
+    fn step(&mut self) {
+        self.0 += 1;
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct SimpleRange<T>
