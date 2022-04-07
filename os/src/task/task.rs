@@ -10,10 +10,12 @@
 use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT;
+use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
+use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
 
@@ -49,6 +51,7 @@ pub struct TaskControlBlock {
 /// |`parent`|指向当前进程的父进程（如果存在的话）|
 /// |`children`|当前进程的所有子进程的任务控制块向量|
 /// |`exit_code`|退出码|
+/// |`fd_table`|文件描述符表|
 /// 
 /// 注意我们在维护父子进程关系的时候大量用到了引用计数 `Arc/Weak` 。进程控制块的本体是被放到内核堆上面的，
 /// 对于它的一切访问都是通过智能指针 `Arc/Weak` 来进行的，这样是便于建立父子进程的双向链接关系（避免仅基于 `Arc` 形成环状链接关系）。
@@ -70,7 +73,8 @@ pub struct TaskControlBlockInner {
     pub memory_set: MemorySet,      /// 指向当前进程的父进程（如果存在的话）
     pub parent: Option<Weak<TaskControlBlock>>, /// 当前进程的所有子进程的任务控制块向量
     pub children: Vec<Arc<TaskControlBlock>>,   /// 退出码
-    pub exit_code: i32,
+    pub exit_code: i32,             /// 文件描述符表
+    pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
 }
 
 impl TaskControlBlockInner {
@@ -86,6 +90,14 @@ impl TaskControlBlockInner {
     }
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
+    }
+    pub fn alloc_fd(&mut self) -> usize {
+        if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
+            fd
+        } else {
+            self.fd_table.push(None);
+            self.fd_table.len() - 1
+        }
     }
 }
 
@@ -121,6 +133,14 @@ impl TaskControlBlock {
                     parent: None,
                     children: Vec::new(),
                     exit_code: 0,
+                    fd_table: vec![
+                        // 0 -> stdin
+                        Some(Arc::new(Stdin)),
+                        // 1 -> stdout
+                        Some(Arc::new(Stdout)),
+                        // 2 -> stderr
+                        Some(Arc::new(Stdout)),
+                    ],
                 })
             },
         };
@@ -175,6 +195,16 @@ impl TaskControlBlock {
         let kernel_stack = KernelStack::new(&pid_handle);
         let kernel_stack_top = kernel_stack.get_top();
 
+        // copy fd table
+        let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
+        for fd in parent_inner.fd_table.iter() {
+            if let Some(file) = fd {
+                new_fd_table.push(Some(file.clone()));
+            } else {
+                new_fd_table.push(None);
+            }
+        }
+
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
@@ -188,6 +218,7 @@ impl TaskControlBlock {
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
                     exit_code: 0,
+                    fd_table: new_fd_table,
                 })
             },
         });
