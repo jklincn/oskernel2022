@@ -71,6 +71,7 @@ impl OSInode {
 
 lazy_static! {
     /// - 全局 `根目录索引节点` 变量
+    /// - 创建过程中先打开文件系统，然后获取根目录索引节点
     pub static ref ROOT_INODE: Arc<Inode> = {
         let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
         Arc::new(EasyFileSystem::root_inode(&efs))
@@ -97,8 +98,9 @@ bitflags! {
 }
 
 impl OpenFlags {
-    /// Do not check validity for simplicity
-    /// Return (readable, writable)
+    /// ### 根据标志的情况返回要打开的文件是否允许读写
+    /// - 简单起见，这里假设标志自身一定合法
+    /// - 返回 (readable, writable) 二元组
     pub fn read_write(&self) -> (bool, bool) {
         if self.is_empty() {
             (true, false)
@@ -110,20 +112,21 @@ impl OpenFlags {
     }
 }
 
+/// 通过文件名和文件读写标志从 `ROOT_INODE` 对应文件系统中打开一个文件
 pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     let (readable, writable) = flags.read_write();
-    if flags.contains(OpenFlags::CREATE) {
+    if flags.contains(OpenFlags::CREATE) {  // 权限中包含 CREATE，才能创建文件
         if let Some(inode) = ROOT_INODE.find(name) {
-            // clear size
+            // clear size       // 文件存在，直接清空
             inode.clear();
             Some(Arc::new(OSInode::new(readable, writable, inode)))
         } else {
-            // create file
+            // create file      // 文件不存在，创建
             ROOT_INODE
                 .create(name)
                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
         }
-    } else {
+    } else {    // 权限中不包含 CREATE
         ROOT_INODE.find(name).map(|inode| {
             if flags.contains(OpenFlags::TRUNC) {
                 inode.clear();
