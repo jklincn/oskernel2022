@@ -62,3 +62,41 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         -1
     }
 }
+
+/// ### 打开文件函数
+/// - `path`：文件路径
+/// - `flags`：打开文件权限标志
+/// - 返回值
+///     - 成功打开，返回文件标识符
+///     - 打开失败，返回 -1
+pub fn sys_open(path: *const u8, flags: u32) -> isize {
+    let task = current_task().unwrap();
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    if let Some(inode) = open_file(path.as_str(), OpenFlags::from_bits(flags).unwrap()) {
+        let mut inner = task.inner_exclusive_access();
+        let fd = inner.alloc_fd();
+        inner.fd_table[fd] = Some(inode);
+        fd as isize
+    } else {
+        -1
+    }
+}
+
+/// ### 关闭文件函数
+/// - `fd`：文件描述符
+/// - 返回值
+///     - 成功关闭：0
+///     - 失败：-1
+pub fn sys_close(fd: usize) -> isize {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    if fd >= inner.fd_table.len() {
+        return -1;
+    }
+    if inner.fd_table[fd].is_none() {
+        return -1;
+    }
+    inner.fd_table[fd].take();
+    0
+}
