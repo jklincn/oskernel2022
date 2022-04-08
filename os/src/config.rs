@@ -17,11 +17,5 @@ pub const PAGE_SIZE_BITS:       usize = 0xc;
 pub const TRAMPOLINE:           usize = usize::MAX - PAGE_SIZE + 1;
 /// Trap 上下文在应用地址空间中的位置
 pub const TRAP_CONTEXT:         usize = TRAMPOLINE - PAGE_SIZE;
-/// 返回应用的内核栈的**虚拟地址**空间范围
-pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
-    let top = TRAMPOLINE - app_id * (KERNEL_STACK_SIZE + PAGE_SIZE);
-    let bottom = top - KERNEL_STACK_SIZE;
-    (bottom, top)
-}
 
-pub use crate::board::CLOCK_FREQ;
+pub use crate::board::{CLOCK_FREQ, MMIO};

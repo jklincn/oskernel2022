@@ -15,7 +15,8 @@
 
 use core::arch::asm;
 
-
+const SYSCALL_OPEN:     usize = 56;
+const SYSCALL_CLOSE:    usize = 57;
 const SYSCALL_READ:     usize = 63;
 const SYSCALL_WRITE:    usize = 64;
 const SYSCALL_EXIT:     usize = 93;
@@ -25,6 +26,26 @@ const SYSCALL_GETPID:   usize = 172;
 const SYSCALL_FORK:     usize = 220;
 const SYSCALL_EXEC:     usize = 221;
 const SYSCALL_WAITPID:  usize = 260;
+
+/// ### 打开一个常规文件，并返回可以访问它的文件描述符。
+/// |参数|描述|
+/// |--|--|
+/// |`path`|描述要打开的文件的文件名|
+/// |`flags`|描述打开文件的标志|
+/// 
+/// 返回值：如果出现了错误则返回 -1，否则返回打开常规文件的文件描述符。可能的错误原因是：文件不存在。
+/// syscall ID：56
+pub fn sys_open(path: &str, flags: u32) -> isize {
+    syscall(SYSCALL_OPEN, [path.as_ptr() as usize, flags as usize, 0])
+}
+
+/// ### 当前进程关闭一个文件。
+/// - fd：要关闭的文件的文件描述符。
+/// - 返回值：如果成功关闭则返回 0 ，否则返回 -1 。
+///     - 可能的出错原因：传入的文件描述符并不对应一个打开的文件。
+pub fn sys_close(fd: usize) -> isize {
+    syscall(SYSCALL_CLOSE, [fd, 0, 0])
+}
 
 /// ### 汇编完成的系统调用
 /// - id : 系统调用 ID
@@ -104,7 +125,7 @@ pub fn sys_get_time() -> isize {
     syscall(SYSCALL_GET_TIME, [0, 0, 0])
 }
 
-/// ### 获取当前正在运行程序的 PID
+/// 获取当前正在运行程序的 PID
 pub fn sys_getpid() -> isize {
     syscall(SYSCALL_GETPID, [0, 0, 0])
 }

@@ -19,8 +19,9 @@ mod board;  // 与虚拟机相关的参数
 #[macro_use]
 mod console;// 控制台模块
 mod config; // 参数库
+mod drivers;// 设备驱动层
+mod fs;     // 内核文件系统接口
 mod lang_items; // Rust语言相关参数
-mod loader; // 程序加载模块
 mod mm;     // 内存空间模块
 mod sbi;    // 实现了 RustSBI 通信的相关功能
 mod sync;   // 允许在单核处理器上将引用做全局变量使用
@@ -32,7 +33,6 @@ mod trap;   // 提供 Trap 管理
 
 use core::arch::global_asm;
 global_asm!(include_str!("entry.asm")); // 代码的第一条语句，执行指定的汇编文件，汇编程序再调用Rust实现的内核
-global_asm!(include_str!("link_app.S"));// 用于将应用程序的二进制镜像文件作为内核的数据段链接到内核，根据build.rs自动生成
 
 // 通过宏将 rust_main 标记为 #[no_mangle] 以避免编译器对它的名字进行混淆，不然在链接的时候，
 // entry.asm 将找不到 main.rs 提供的外部符号 rust_main 从而导致链接失败
@@ -42,12 +42,12 @@ pub fn rust_main() -> ! {
     println!("[kernel] Hello, world!");
     mm::init();
     mm::remap_test();
-    task::add_initproc();
-    println!("[kernel] add initproc!");
     trap::init();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
-    loader::list_apps();
+    fs::list_apps();
+    task::add_initproc();
+    println!("[kernel] add initproc!");
     task::run_tasks();
     panic!("Unreachable in rust_main!");
 }

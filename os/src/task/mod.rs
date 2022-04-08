@@ -16,7 +16,7 @@ mod switch; // 任务上下文切换模块
 #[allow(clippy::module_inception)]
 mod task;   // 进程控制块
 
-use crate::loader::get_app_data_by_name;
+use crate::fs::{open_file, OpenFlags};
 use alloc::sync::Arc;
 use lazy_static::*;
 use manager::fetch_task;
@@ -76,9 +76,11 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 lazy_static! {
     /// ### 初始进程的进程控制块
     /// - 引用计数类型，数据存放在内核堆中
-    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new(TaskControlBlock::new(
-        get_app_data_by_name("initproc").unwrap()
-    ));
+    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
+        let inode = open_file("initproc", OpenFlags::RDONLY).unwrap();
+        let v = inode.read_all();
+        TaskControlBlock::new(v.as_slice())
+    });
 }
 
 /// 将初始进程 `initproc` 加入任务管理器
