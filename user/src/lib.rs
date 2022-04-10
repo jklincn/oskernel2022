@@ -73,16 +73,22 @@ pub fn open(path: &str, flags: OpenFlags) -> isize {
 pub fn close(fd: usize) -> isize {
     sys_close(fd)
 }
-/// ### 从文件描述符读取字符到缓冲区
-/// - `fd` : 文件描述符
-///     - 0表示标准输入
+/// ### 创建一个管道
+/// - `pipe_fd`：管道读/写端的文件米描述符数组(大小为2)的起始地址
+pub fn pipe(pipe_fd: &mut [usize]) -> isize {
+    sys_pipe(pipe_fd)
+}
+/// ### 从文件读取数据到缓冲区
+/// - `fd` : 文件描述符(aka.文件描述符表下标)
+///     - `0`：stdin
 /// - `buf`: 缓冲区起始地址
 pub fn read(fd: usize, buf: &mut [u8]) -> isize {
     sys_read(fd, buf)
 }
-/// ### 打印输出
-/// - `fd` : 文件描述符
-///     - 1表示标准输出
+/// ### 将缓冲区数据写到文件
+/// - `fd` : 文件描述符(aka.文件描述符表下标)
+///     - `1`：stdout
+///     - `2`：stderr
 /// - `buf`: 缓冲区起始地址
 pub fn write(fd: usize, buf: &[u8]) -> isize {
     sys_write(fd, buf)
