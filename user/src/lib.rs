@@ -164,6 +164,10 @@ pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
         }
     }
 }
+/// 判断一个进程是否退出
+pub fn waitpid_nb(pid: usize, exit_code: &mut i32) -> isize {
+    sys_waitpid(pid as isize, exit_code as *mut _)
+}
 /// 通过 `sys_yield` 放弃CPU一段时间
 pub fn sleep(period_ms: usize) {
     let start = sys_get_time();
