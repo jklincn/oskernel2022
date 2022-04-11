@@ -111,9 +111,10 @@ pub fn fork() -> isize {
     sys_fork()
 }
 /// ### 系统调用 `sys_exec` 的封装
-/// - 参数 path 必须在最后加 \0
-pub fn exec(path: &str) -> isize {
-    sys_exec(path)
+/// - `path`：程序路径，必须在最后加 \0
+/// - `args`：参数数组，数组中的每个元素都是一个命令行参数字符串的起始地址
+pub fn exec(path: &str, args: &[*const u8]) -> isize {
+    sys_exec(path, args)
 }
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值
 /// - 返回值：

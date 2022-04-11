@@ -1,6 +1,10 @@
 /// # 系统调用模块
+/// `user/src/syscall.rs`
 /// ## 可用实现函数
 /// ```
+/// pub fn sys_open(path: &str, flags: u32) -> isize
+/// pub fn sys_close(fd: usize) -> isize
+/// pub fn sys_pipe(pipe: &mut [usize]) -> isize
 /// pub fn sys_read(fd: usize, buffer: &mut [u8]) -> isize
 /// pub fn sys_write(fd: usize, buffer: &[u8]) -> isize
 /// pub fn sys_exit(exit_code: i32) -> isize
@@ -147,14 +151,16 @@ pub fn sys_fork() -> isize {
 }
 
 /// ### 通过系统调用执行新的程序
-/// - 参数 `path` 给出了要加载的可执行文件的名字，必须在最后加 `\0`
+/// - 参数 
+///     - `path` 给出了要加载的可执行文件的名字，必须在最后加 `\0`
+///     - `args` 数组中的每个元素都是一个命令行参数字符串的起始地址
 /// - 返回值：如果出错的话（如找不到名字相符的可执行文件）则返回 -1，否则不应该返回。
 /// - syscall ID：221
-pub fn sys_exec(path: &str) -> isize {
+pub fn sys_exec(path: &str, args: &[*const u8]) -> isize {
     // path 作为 &str 类型是一个胖指针，既有起始地址又包含长度信息。
     // 在实际进行系统调用的时候，我们只会将起始地址传给内核
     // 这就需要应用负责在传入的字符串的末尾加上一个 \0 ，这样内核才能知道字符串的长度
-    syscall(SYSCALL_EXEC, [path.as_ptr() as usize, 0, 0])
+    syscall(SYSCALL_EXEC, [path.as_ptr() as usize, args.as_ptr() as usize, 0])
 }
 
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
