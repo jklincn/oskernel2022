@@ -38,7 +38,7 @@ pub struct OSInode {
 
 /// ### 内核索引节点内部可变部分
 /// - `offset`：读写偏移量
-/// - `inode:：文件系统索引节点
+/// - `inode`：文件系统索引节点
 pub struct OSInodeInner {   /// 读写偏移量
     offset: usize,      /// 文件系统索引节点
     inode: Arc<Inode>,
