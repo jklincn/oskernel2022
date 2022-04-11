@@ -30,6 +30,7 @@ const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
 /// PhysAddr::aligned(&self) -> bool
 /// PhysAddr::get_mut<T>(&self) -> &'static mut T
 /// ```
+#[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysAddr(pub usize);
 
@@ -40,6 +41,7 @@ pub struct PhysAddr(pub usize);
 /// VirtAddr::page_offset(&self) -> usize
 /// VirtAddr::aligned(&self) -> bool
 /// ```
+#[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtAddr(pub usize);
 
@@ -49,6 +51,7 @@ pub struct VirtAddr(pub usize);
 /// PhysPageNum::get_bytes_array(&self) -> &'static mut [u8]
 /// PhysPageNum::get_mut<T>(&self) -> &'static mut T
 /// ```
+#[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysPageNum(pub usize);
 
@@ -56,6 +59,7 @@ pub struct PhysPageNum(pub usize);
 /// ```
 /// VirtPageNum::indexes(&self) -> [usize; 3]
 /// ```
+#[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtPageNum(pub usize);
 
