@@ -8,16 +8,16 @@ use crate::sbi::shutdown;
 use core::panic::PanicInfo;
 
 #[panic_handler]    //通知编译器用panic函数来对接 panic! 宏
-fn panic(info:&PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
         println!(
-            "Panicked at {}:{} {}",
+            "[kernel] Panicked at {}:{} {}",
             location.file(),
             location.line(),
             info.message().unwrap()
         );
     } else {
-        println!("Panicked: {}", info.message().unwrap());
+        println!("[kernel] Panicked: {}", info.message().unwrap());
     }
     shutdown()
 }
