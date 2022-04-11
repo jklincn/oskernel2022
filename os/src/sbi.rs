@@ -11,14 +11,18 @@
 use core::arch::asm;
 
 //定义 RustSBI 支持的服务类型常量
-#[allow(unused)]
 const SBI_SET_TIMER:                usize = 0;
 const SBI_CONSOLE_PUTCHAR:          usize = 1;
 const SBI_CONSOLE_GETCHAR:          usize = 2;
+#[allow(unused)]
 const SBI_CLEAR_IPI:                usize = 3;
+#[allow(unused)]
 const SBI_SEND_IPI:                 usize = 4;
+#[allow(unused)]
 const SBI_REMOTE_FENCE_I:           usize = 5;
+#[allow(unused)]
 const SBI_REMOTE_SFENCE_VMA:        usize = 6;
+#[allow(unused)]
 const SBI_REMOTE_SFENCE_VMA_ASID:   usize = 7;
 const SBI_SHUTDOWN:                 usize = 8;
 
@@ -70,5 +74,5 @@ pub fn console_getchar() -> usize {
 /// - 若关机失败则引发异常
 pub fn shutdown() -> ! {
     sbi_call(SBI_SHUTDOWN,0 ,0 ,0);
-    panic!("It shuld shudtdown!");
+    panic!("It should shutdown!");
 }
