@@ -3,8 +3,10 @@
 /// ## 实现功能
 /// ```
 /// pub fn suspend_current_and_run_next()
-/// pub fn exit_current_and_run_next(exit_code: i32)
+/// pub fn exit_current_and_run_next()
 /// pub fn add_initproc()
+/// pub fn check_signals_of_current()
+/// pub fn current_add_signal()
 /// ```
 //
 
@@ -12,7 +14,7 @@ mod context;// 任务上下文模块
 mod manager;// 进程管理器
 mod pid;    // 进程标识符模块
 mod processor;  // 处理器管理模块
-mod signal;
+mod signal; // 进程状态标志
 mod switch; // 任务上下文切换模块
 #[allow(clippy::module_inception)]
 mod task;   // 进程控制块
@@ -90,4 +92,16 @@ lazy_static! {
 /// 将初始进程 `initproc` 加入任务管理器
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+
+pub fn check_signals_of_current() -> Option<(i32, &'static str)> {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_exclusive_access();
+    task_inner.signals.check_error()
+}
+
+pub fn current_add_signal(signal: SignalFlags) {
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_exclusive_access();
+    task_inner.signals |= signal;
 }
