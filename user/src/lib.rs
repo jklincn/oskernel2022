@@ -14,6 +14,7 @@ extern crate alloc;
 #[macro_use]
 extern crate bitflags;
 
+use alloc::vec::Vec;
 use buddy_system_allocator::LockedHeap;
 
 const USER_HEAP_SIZE: usize = 16384;
@@ -30,15 +31,30 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
 
 #[no_mangle]
 #[link_section = ".text.entry"]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(argc: usize, argv: usize) -> ! {
     unsafe {    // 初始化一个由伙伴系统控制的堆空间
         HEAP.lock()
             .init(HEAP_SPACE.as_ptr() as usize, USER_HEAP_SIZE);
     }
+    // 将起始地址转换为对应地址下的参数向量
+    let mut v: Vec<&'static str> = Vec::new();
+    for i in 0..argc {
+        let str_start =
+            unsafe { ((argv + i * core::mem::size_of::<usize>()) as *const usize).read_volatile() };
+        let len = (0usize..)
+            .find(|i| unsafe { ((str_start + *i) as *const u8).read_volatile() == 0 })
+            .unwrap();
+        v.push(
+            core::str::from_utf8(unsafe {
+                core::slice::from_raw_parts(str_start as *const u8, len)
+            })
+            .unwrap(),
+        );
+    }
     // 调用main函数得到一个类型为i32的返回值
     // 最后调用用户库提供的 exit 接口退出应用程序
     // 并将 main 函数的返回值告知批处理系统
-    exit(main());   
+    exit(main(argc, v.as_slice()));   
     panic!("unreachable after sys_exit!");
 }
 
@@ -50,7 +66,7 @@ pub extern "C" fn _start() -> ! {
 // 那么编译也能够通过，但会在运行时报错。
 #[linkage = "weak"]
 #[no_mangle]
-fn main() -> i32 {
+fn main(_argc: usize, _argv: &[&str]) -> i32 {
     panic!("Cannot find main!");
 }
 
