@@ -12,6 +12,7 @@ mod context;// 任务上下文模块
 mod manager;// 进程管理器
 mod pid;    // 进程标识符模块
 mod processor;  // 处理器管理模块
+mod signal;
 mod switch; // 任务上下文切换模块
 #[allow(clippy::module_inception)]
 mod task;   // 进程控制块
@@ -20,15 +21,17 @@ use crate::fs::{open_file, OpenFlags};
 use alloc::sync::Arc;
 use lazy_static::*;
 use manager::fetch_task;
+use manager::remove_from_pid2task;
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
-pub use manager::add_task;
+pub use manager::{add_task, pid2task};
 pub use pid::{pid_alloc, KernelStack, PidHandle};
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
 };
+pub use signal::SignalFlags;
 
 /// 将当前任务置为就绪态，放回到进程管理器中的就绪队列中，重新选择一个进程运行
 pub fn suspend_current_and_run_next() {
@@ -49,6 +52,7 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next(exit_code: i32) {
     // 获取访问权限，修改进程状态
     let task = take_current_task().unwrap();
+    remove_from_pid2task(task.getpid());
     let mut inner = task.inner_exclusive_access();
     inner.task_status = TaskStatus::Zombie; // 后续才能被父进程在 waitpid 系统调用的时候回收
     // 记录退出码，后续父进程在 waitpid 的时候可以收集
