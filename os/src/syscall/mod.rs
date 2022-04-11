@@ -2,6 +2,7 @@
 /// `os/src/syscall/mod.rs`
 /// ## 实现功能
 /// ```
+/// const SYSCALL_DUP:      usize = 24;
 /// const SYSCALL_OPEN:     usize = 56;
 /// const SYSCALL_CLOSE:    usize = 57;
 /// const SYSCALL_PIPE:     usize = 59;
@@ -18,6 +19,7 @@
 /// ```
 //
 
+const SYSCALL_DUP:      usize = 24;
 const SYSCALL_OPEN:     usize = 56;
 const SYSCALL_CLOSE:    usize = 57;
 const SYSCALL_PIPE:     usize = 59;
@@ -40,6 +42,7 @@ use process::*;
 /// 系统调用分发函数
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     match syscall_id {
+        SYSCALL_DUP =>      sys_dup(args[0]),
         SYSCALL_OPEN =>     sys_open(args[0] as *const u8, args[1] as u32),
         SYSCALL_CLOSE =>    sys_close(args[0]),
         SYSCALL_PIPE =>     sys_pipe(args[0] as *mut usize),

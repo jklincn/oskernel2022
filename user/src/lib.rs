@@ -83,6 +83,10 @@ bitflags! {
 mod syscall;
 use syscall::*;
 
+
+pub fn dup(fd: usize) -> isize {
+    sys_dup(fd)
+}
 pub fn open(path: &str, flags: OpenFlags) -> isize {
     sys_open(path, flags.bits)
 }
