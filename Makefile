@@ -8,4 +8,4 @@ build_docker:
 	docker build -t ${DOCKER_NAME} .
 
 all:
-	cd codes/os && make build
+	cd os && make run BOARD=k210
