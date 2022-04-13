@@ -6,3 +6,6 @@ docker:
 
 build_docker: 
 	docker build -t ${DOCKER_NAME} .
+
+all:
+	cd codes/os && make build
