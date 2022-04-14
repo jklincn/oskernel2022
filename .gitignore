@@ -15,3 +15,5 @@ easy-fs-fuse/Cargo.lock
 easy-fs-fuse/target/*
 tools/
 pushall.sh
+user_c/bin/*
+.vscode
