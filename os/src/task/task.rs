@@ -8,12 +8,13 @@
 //
 
 use super::TaskContext;
-use super::{pid_alloc, KernelStack, PidHandle};
+use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::TRAP_CONTEXT;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{translated_refmut, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
+use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -75,6 +76,7 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,   /// 退出码
     pub exit_code: i32,             /// 文件描述符表
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+    pub signals: SignalFlags,
 }
 
 impl TaskControlBlockInner {
@@ -91,6 +93,8 @@ impl TaskControlBlockInner {
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
     }
+    /// ### 分配文件描述符
+    /// 从文件描述符表中 **由低到高** 查找空位，返回向量下标，没有空位则在最后插入一个空位
     pub fn alloc_fd(&mut self) -> usize {
         if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
             fd
@@ -141,6 +145,7 @@ impl TaskControlBlock {
                         // 2 -> stderr
                         Some(Arc::new(Stdout)),
                     ],
+                    signals: SignalFlags::empty(),
                 })
             },
         };
@@ -158,13 +163,43 @@ impl TaskControlBlock {
     }
 
     /// 用来实现 exec 系统调用，即当前进程加载并执行另一个 ELF 格式可执行文件
-    pub fn exec(&self, elf_data: &[u8]) {
+    pub fn exec(&self, elf_data: &[u8], args: Vec<String>) {
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let (memory_set, mut user_sp, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
+
+        // 将命令行参数以某种格式压入用户栈
+        // 在用户栈中提前分配好 参数字符串首地址 的空间
+        user_sp -= (args.len() + 1) * core::mem::size_of::<usize>();
+        let argv_base = user_sp;                             // 参数字符串首地址数组 起始地址
+        let mut argv: Vec<_> = (0..=args.len()) // 获取 参数字符串首地址数组 在用户栈中的可变引用
+            .map(|arg| {
+                translated_refmut(
+                    memory_set.token(),
+                    (argv_base + arg * core::mem::size_of::<usize>()) as *mut usize,
+                )
+            })
+            .collect();
+            
+        // 参数字符串
+        *argv[args.len()] = 0;  // 标记参数尾
+        for i in 0..args.len() {
+            user_sp -= args[i].len() + 1;   // 在用户栈中分配 参数i 的空间
+            *argv[i] = user_sp;             // 在 参数字符串首地址数组中 记录 参数i 首地址
+            let mut p = user_sp;
+            for c in args[i].as_bytes() {   // 将参数写入到用户栈
+                *translated_refmut(memory_set.token(), p as *mut u8) = *c;
+                p += 1;
+            }                                    // 写入字符串结束标记
+            *translated_refmut(memory_set.token(), p as *mut u8) = 0;
+        }
+
+        // 将 user_sp 以 8 字节对齐，这是因为命令行参数的长度不一，很有可能压入之后 user_sp 没有对齐到 8 字节，
+        // 那么在 K210 平台上在访问用户栈的时候就会触发访存不对齐的异常.在 Qemu 平台上则并不存在这个问题。
+        user_sp -= user_sp % core::mem::size_of::<usize>();
 
         let mut inner = self.inner_exclusive_access();
         inner.memory_set = memory_set;  // 这将导致原有的地址空间生命周期结束，里面包含的全部物理页帧都会被回收
@@ -178,6 +213,9 @@ impl TaskControlBlock {
             self.kernel_stack.get_top(),
             trap_handler as usize,
         );
+        // 修改 Trap 上下文中的 a0/a1 寄存器
+        trap_cx.x[10] = args.len(); // a0 表示命令行参数的个数
+        trap_cx.x[11] = argv_base;  // a1 则表示 参数字符串首地址数组 的起始地址
     }
     
     /// 用来实现 fork 系统调用，即当前进程 fork 出来一个与之几乎相同的子进程
@@ -219,6 +257,7 @@ impl TaskControlBlock {
                     children: Vec::new(),
                     exit_code: 0,
                     fd_table: new_fd_table,
+                    signals: SignalFlags::empty(),
                 })
             },
         });

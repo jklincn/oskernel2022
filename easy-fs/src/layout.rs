@@ -101,6 +101,7 @@ type IndirectBlock = [u32; BLOCK_SZ / 4];
 type DataBlock = [u8; BLOCK_SZ];
 
 /// ### 磁盘上的索引节点
+/// size: 32*32bit = 1kib
 /// |成员变量|描述|
 /// |--|--|
 /// |`size`|文件/目录内容的字节数|

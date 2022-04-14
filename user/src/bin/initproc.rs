@@ -12,7 +12,7 @@ use user_lib::{exec, fork, wait, yield_};
 #[no_mangle]
 fn main() -> i32 {
     if fork() == 0 {// 子进程执行 user_shell
-        exec("user_shell\0");
+        exec("user_shell\0", &[core::ptr::null::<u8>()]);
     } else {
         loop {      // 父进程等待子进程结束，回收资源
             let mut exit_code: i32 = 0;

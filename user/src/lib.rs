@@ -14,6 +14,7 @@ extern crate alloc;
 #[macro_use]
 extern crate bitflags;
 
+use alloc::vec::Vec;
 use buddy_system_allocator::LockedHeap;
 
 const USER_HEAP_SIZE: usize = 16384;
@@ -30,15 +31,30 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
 
 #[no_mangle]
 #[link_section = ".text.entry"]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(argc: usize, argv: usize) -> ! {
     unsafe {    // 初始化一个由伙伴系统控制的堆空间
         HEAP.lock()
             .init(HEAP_SPACE.as_ptr() as usize, USER_HEAP_SIZE);
     }
+    // 将起始地址转换为对应地址下的参数向量
+    let mut v: Vec<&'static str> = Vec::new();
+    for i in 0..argc {
+        let str_start =
+            unsafe { ((argv + i * core::mem::size_of::<usize>()) as *const usize).read_volatile() };
+        let len = (0usize..)
+            .find(|i| unsafe { ((str_start + *i) as *const u8).read_volatile() == 0 })
+            .unwrap();
+        v.push(
+            core::str::from_utf8(unsafe {
+                core::slice::from_raw_parts(str_start as *const u8, len)
+            })
+            .unwrap(),
+        );
+    }
     // 调用main函数得到一个类型为i32的返回值
     // 最后调用用户库提供的 exit 接口退出应用程序
     // 并将 main 函数的返回值告知批处理系统
-    exit(main());   
+    exit(main(argc, v.as_slice()));   
     panic!("unreachable after sys_exit!");
 }
 
@@ -50,7 +66,7 @@ pub extern "C" fn _start() -> ! {
 // 那么编译也能够通过，但会在运行时报错。
 #[linkage = "weak"]
 #[no_mangle]
-fn main() -> i32 {
+fn main(_argc: usize, _argv: &[&str]) -> i32 {
     panic!("Cannot find main!");
 }
 
@@ -67,22 +83,32 @@ bitflags! {
 mod syscall;
 use syscall::*;
 
+
+pub fn dup(fd: usize) -> isize {
+    sys_dup(fd)
+}
 pub fn open(path: &str, flags: OpenFlags) -> isize {
     sys_open(path, flags.bits)
 }
 pub fn close(fd: usize) -> isize {
     sys_close(fd)
 }
-/// ### 从文件描述符读取字符到缓冲区
-/// - `fd` : 文件描述符
-///     - 0表示标准输入
+/// ### 创建一个管道
+/// - `pipe_fd`：管道读/写端的文件米描述符数组(大小为2)的起始地址
+pub fn pipe(pipe_fd: &mut [usize]) -> isize {
+    sys_pipe(pipe_fd)
+}
+/// ### 从文件读取数据到缓冲区
+/// - `fd` : 文件描述符(aka.文件描述符表下标)
+///     - `0`：stdin
 /// - `buf`: 缓冲区起始地址
 pub fn read(fd: usize, buf: &mut [u8]) -> isize {
     sys_read(fd, buf)
 }
-/// ### 打印输出
-/// - `fd` : 文件描述符
-///     - 1表示标准输出
+/// ### 将缓冲区数据写到文件
+/// - `fd` : 文件描述符(aka.文件描述符表下标)
+///     - `1`：stdout
+///     - `2`：stderr
 /// - `buf`: 缓冲区起始地址
 pub fn write(fd: usize, buf: &[u8]) -> isize {
     sys_write(fd, buf)
@@ -105,9 +131,10 @@ pub fn fork() -> isize {
     sys_fork()
 }
 /// ### 系统调用 `sys_exec` 的封装
-/// - 参数 path 必须在最后加 \0
-pub fn exec(path: &str) -> isize {
-    sys_exec(path)
+/// - `path`：程序路径，必须在最后加 \0
+/// - `args`：参数数组，数组中的每个元素都是一个命令行参数字符串的起始地址
+pub fn exec(path: &str, args: &[*const u8]) -> isize {
+    sys_exec(path, args)
 }
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值
 /// - 返回值：
@@ -137,10 +164,28 @@ pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
         }
     }
 }
+/// 判断一个进程是否退出
+pub fn waitpid_nb(pid: usize, exit_code: &mut i32) -> isize {
+    sys_waitpid(pid as isize, exit_code as *mut _)
+}
 /// 通过 `sys_yield` 放弃CPU一段时间
 pub fn sleep(period_ms: usize) {
     let start = sys_get_time();
     while sys_get_time() < start + period_ms as isize {
         sys_yield();
     }
+}
+
+bitflags! {
+    pub struct SignalFlags: i32 {
+        const SIGINT    = 1 << 2;
+        const SIGILL    = 1 << 4;
+        const SIGABRT   = 1 << 6;
+        const SIGFPE    = 1 << 8;
+        const SIGSEGV   = 1 << 11;
+    }
+}
+
+pub fn kill(pid: usize, signal: i32) -> isize {
+    sys_kill(pid, signal)
 }
