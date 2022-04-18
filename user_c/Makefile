@@ -6,9 +6,8 @@ APPS := $(wildcard $(APP_DIR)/*.c)
 # ELFS := $(patsubst $(APP_DIR)/%.c, $(TARGET_DIR)/%, $(APPS))
 # BINS := $(patsubst $(APP_DIR)/%.c, $(TARGET_DIR)/%.bin, $(APPS))
 
-test:
-	@echo $(c_src)
-	@echo $(c_src).c
+bin:
+	mkdir bin
 
-build:
+build: bin
 	$(foreach i_src, $(APPS), $(CC) $(i_src) $(LIB_DIR) -T ./linker.ld -o $(patsubst $(APP_DIR)/%.c,$(TARGET_DIR)/%,$(i_src));)
