@@ -80,7 +80,7 @@ impl VFile{
     }
 
     pub fn is_dir(&self)->bool{
-        if 0 != (self.attribute & ATTRIBUTE_DIRECTORY) {
+        if 0 != (self.attribute & ATTR_DIRECTORY) {
             true
         }else{
             false   
@@ -432,7 +432,26 @@ impl VFile{
             // 生成短文件名及对应目录项
             let short_name = manager_reader.generate_short_name(name);
             let (name_bytes, ext_bytes) = manager_reader.short_name_format(short_name.as_str());
-            short_ent.initialize(&name_bytes, &ext_bytes, attribute);
+            {
+                let ref mut this = short_ent;
+                let name_: &[u8] = &name_bytes;
+                let dir_attr = &ext_bytes;
+                let dir_name : [u8;11] = clone_into_array(&name_[0..11]);
+                *this = Self {
+                    dir_name,
+                    dir_attr,
+                    dir_ntres: 0,
+                    dir_crt_time_tenth: 0,
+                    dir_crt_time: 0,
+                    dir_crt_date: 0x529c,
+                    dir_lst_acc_date: 0,
+                    dir_fst_clus_hi: 0,
+                    dir_wrt_time: 0,
+                    dir_wrt_date: 0,
+                    dir_fst_clus_lo: 0,
+                    dir_file_size: 0,
+                };
+            };
             let check_sum = short_ent.checksum();
             //println!("*** aft checksum");
             drop(manager_reader);
@@ -455,7 +474,26 @@ impl VFile{
             }
         } else { // 短文件名格式化
             let (name_bytes, ext_bytes) = manager_reader.short_name_format(name);
-            short_ent.initialize(&name_bytes, &ext_bytes, attribute);
+            {
+                let ref mut this = short_ent;
+                let name_: &[u8] = &name_bytes;
+                let dir_attr = &ext_bytes;
+                let dir_name : [u8;11] = clone_into_array(&name_[0..11]);
+                *this = Self {
+                    dir_name,
+                    dir_attr,
+                    dir_ntres: 0,
+                    dir_crt_time_tenth: 0,
+                    dir_crt_time: 0,
+                    dir_crt_date: 0x529c,
+                    dir_lst_acc_date: 0,
+                    dir_fst_clus_hi: 0,
+                    dir_wrt_time: 0,
+                    dir_wrt_date: 0,
+                    dir_fst_clus_lo: 0,
+                    dir_file_size: 0,
+                };
+            };
             short_ent.set_case(ALL_LOWER_CASE);
             drop(manager_reader);
         }
