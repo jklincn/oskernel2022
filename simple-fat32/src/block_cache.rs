@@ -124,11 +124,7 @@ impl BlockCacheManager {
     }
 
     // 获取一个块缓存
-    pub fn get_block_cache(
-        &mut self,
-        block_id: usize,
-        block_device: Arc<dyn BlockDevice>,
-    ) -> Arc<RwLock<BlockCache>> {
+    pub fn get_block_cache(&mut self, block_id: usize, block_device: Arc<dyn BlockDevice>) -> Arc<RwLock<BlockCache>> {
         // 先在队列中寻找，若找到则将块缓存的引用复制一份并返回
         if let Some(pair) = self.queue.iter().find(|pair| pair.0 == block_id) {
             Arc::clone(&pair.1)
@@ -136,12 +132,7 @@ impl BlockCacheManager {
             // 判断块缓存数量是否到达上线
             if self.queue.len() == self.limit {
                 // FIFO 替换，找强引用计数为1的替换出去
-                if let Some((idx, _)) = self
-                    .queue
-                    .iter()
-                    .enumerate()
-                    .find(|(_, pair)| Arc::strong_count(&pair.1) == 1)
-                {
+                if let Some((idx, _)) = self.queue.iter().enumerate().find(|(_, pair)| Arc::strong_count(&pair.1) == 1) {
                     self.queue.drain(idx..=idx);
                 } else {
                     // 队列已满且其中所有的块缓存都正在使用的情形
@@ -149,10 +140,7 @@ impl BlockCacheManager {
                 }
             }
             // 创建新的块缓存（会触发 read_block 进行块读取）
-            let block_cache = Arc::new(RwLock::new(BlockCache::new(
-                block_id,
-                Arc::clone(&block_device),
-            )));
+            let block_cache = Arc::new(RwLock::new(BlockCache::new(block_id, Arc::clone(&block_device))));
             // 加入到队尾，最后返回
             self.queue.push_back((block_id, Arc::clone(&block_cache)));
             block_cache
@@ -166,14 +154,12 @@ impl BlockCacheManager {
 
 // 1034个数据缓存块
 lazy_static! {
-    pub static ref DATA_BLOCK_CACHE_MANAGER: RwLock<BlockCacheManager> =
-        RwLock::new(BlockCacheManager::new(1034));
+    pub static ref DATA_BLOCK_CACHE_MANAGER: RwLock<BlockCacheManager> = RwLock::new(BlockCacheManager::new(1034));
 }
 
 // 10个信息缓存块
 lazy_static! {
-    pub static ref INFO_CACHE_MANAGER: RwLock<BlockCacheManager> =
-        RwLock::new(BlockCacheManager::new(10));
+    pub static ref INFO_CACHE_MANAGER: RwLock<BlockCacheManager> = RwLock::new(BlockCacheManager::new(10));
 }
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -183,11 +169,7 @@ pub enum CacheMode {
 }
 
 /* 仅用于访问文件数据块，不包括目录项 */
-pub fn get_block_cache(
-    block_id: usize,
-    block_device: Arc<dyn BlockDevice>,
-    rw_mode: CacheMode,
-) -> Arc<RwLock<BlockCache>> {
+pub fn get_block_cache(block_id: usize, block_device: Arc<dyn BlockDevice>, rw_mode: CacheMode) -> Arc<RwLock<BlockCache>> {
     // 这里的read是RWLock读写锁
     let phy_blk_id = DATA_BLOCK_CACHE_MANAGER.read().get_start_sec() + block_id;
     if rw_mode == CacheMode::READ {
@@ -196,51 +178,33 @@ pub fn get_block_cache(
             return blk;
         }
         // 获取块缓存，如果队列中有则直接返回，没有则申请块缓存，内置了panic
-        DATA_BLOCK_CACHE_MANAGER
-            .write()
-            .get_block_cache(phy_blk_id, block_device);
+        DATA_BLOCK_CACHE_MANAGER.write().get_block_cache(phy_blk_id, block_device);
         // 返回
-        DATA_BLOCK_CACHE_MANAGER
-            .read()
-            .read_block_cache(phy_blk_id)
-            .unwrap()
+        DATA_BLOCK_CACHE_MANAGER.read().read_block_cache(phy_blk_id).unwrap()
     } else {
         // 这个块是要写入的
         if let Some(blk) = INFO_CACHE_MANAGER.read().read_block_cache(phy_blk_id) {
             return blk;
         }
-        DATA_BLOCK_CACHE_MANAGER
-            .write()
-            .get_block_cache(phy_blk_id, block_device)
+        DATA_BLOCK_CACHE_MANAGER.write().get_block_cache(phy_blk_id, block_device)
     }
 }
 
 /* 用于访问保留扇区，以及目录项 */
-pub fn get_info_cache(
-    block_id: usize,
-    block_device: Arc<dyn BlockDevice>,
-    rw_mode: CacheMode,
-) -> Arc<RwLock<BlockCache>> {
+pub fn get_info_cache(block_id: usize, block_device: Arc<dyn BlockDevice>, rw_mode: CacheMode) -> Arc<RwLock<BlockCache>> {
     let phy_blk_id = INFO_CACHE_MANAGER.read().get_start_sec() + block_id;
     if rw_mode == CacheMode::READ {
         // make sure the blk is in cache
         if let Some(blk) = DATA_BLOCK_CACHE_MANAGER.read().read_block_cache(phy_blk_id) {
             return blk;
         }
-        INFO_CACHE_MANAGER
-            .write()
-            .get_block_cache(phy_blk_id, block_device);
-        INFO_CACHE_MANAGER
-            .read()
-            .read_block_cache(phy_blk_id)
-            .unwrap()
+        INFO_CACHE_MANAGER.write().get_block_cache(phy_blk_id, block_device);
+        INFO_CACHE_MANAGER.read().read_block_cache(phy_blk_id).unwrap()
     } else {
         if let Some(blk) = DATA_BLOCK_CACHE_MANAGER.read().read_block_cache(phy_blk_id) {
             return blk;
         }
-        INFO_CACHE_MANAGER
-            .write()
-            .get_block_cache(phy_blk_id, block_device)
+        INFO_CACHE_MANAGER.write().get_block_cache(phy_blk_id, block_device)
     }
 }
 
@@ -255,4 +219,3 @@ pub fn write_to_dev() {
     INFO_CACHE_MANAGER.write().drop_all();
     DATA_BLOCK_CACHE_MANAGER.write().drop_all();
 }
-

@@ -121,18 +121,19 @@ impl OSInode {
     }
 }
 
+// 这里在实例化的时候进行文件系统的打开
 lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
         let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
         let manager_reader = fat32_manager.read();
-        Arc::new(manager_reader.get_root_vfile(&fat32_manager))
+        Arc::new(manager_reader.get_root_vfile(&fat32_manager)) // 返回根目录
     };
 }
 
 pub fn list_apps() {
     println!("/**** APPS ****");
     for app in ROOT_INODE.ls_lite().unwrap() {
-        if app.1 & ATTRIBUTE_DIRECTORY == 0 {
+        if app.1 & ATTRIBUTE_DIRECTORY == 0 { // 如果不是目录
             println!("{}", app.0);
         }
     }

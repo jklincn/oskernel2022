@@ -1,7 +1,4 @@
-use super::{
-    get_block_cache, get_info_cache, set_start_sec, write_to_dev, BlockDevice, CacheMode, FSInfo,
-    FatBS, FatExtBS, FAT,
-};
+use super::{get_block_cache, get_info_cache, set_start_sec, write_to_dev, BlockDevice, CacheMode, FSInfo, FatBS, FatExtBS, FAT};
 use alloc::sync::Arc;
 //#[macro_use]
 use crate::{layout::*, VFile};
@@ -52,7 +49,8 @@ impl FAT32Manager {
         // 读入分区偏移
         let start_sector: u32 = get_info_cache(0, Arc::clone(&block_device), CacheMode::READ)
             .read()
-            .read(0x1c6, |ssec_bytes: &[u8; 4]| {   //0x1c6可以看文档
+            .read(0x1c6, |ssec_bytes: &[u8; 4]| {
+                //0x1c6可以看文档
                 // DEBUG
                 let mut start_sec: u32 = 0;
                 // 小端存储
@@ -90,12 +88,12 @@ impl FAT32Manager {
             "Error loading fat32! Illegal signature"
         );
 
-        let sectors_per_cluster = boot_sec.bpb_sec_per_clus as u32;   // 每簇包含的扇区数
-        let bytes_per_sector = boot_sec.bpb_bytes_per_sec as u32;// 每扇区包含的字节数
-        let bytes_per_cluster = sectors_per_cluster * bytes_per_sector;  // 每簇包含的字节数
-        let fat_n_sec = ext_boot_sec.bpb_fatsz32;  // fat表所占的扇区数，即fat表大小
+        let sectors_per_cluster = boot_sec.bpb_sec_per_clus as u32; // 每簇包含的扇区数
+        let bytes_per_sector = boot_sec.bpb_bytes_per_sec as u32; // 每扇区包含的字节数
+        let bytes_per_cluster = sectors_per_cluster * bytes_per_sector; // 每簇包含的字节数
+        let fat_n_sec = ext_boot_sec.bpb_fatsz32; // fat表所占的扇区数，即fat表大小
         let fat1_sector = boot_sec.bpb_rsvd_sec_cnt as u32; // fat表1起始的扇区号
-        let fat2_sector = fat1_sector + fat_n_sec;// fat表2起始的扇区号
+        let fat2_sector = fat1_sector + fat_n_sec; // fat表2起始的扇区号
         let fat_n_entry = fat_n_sec * bytes_per_sector / 4; // fat（最大支持？）表项数量
 
         // 在内存的数据结构
@@ -106,7 +104,7 @@ impl FAT32Manager {
 
         let mut root_dirent = ShortDirEntry::new(
             &[
-                0x2F, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,  // 0x2F 是 /
+                0x2F, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, // 0x2F 是 /
             ],
             ATTR_DIRECTORY,
         );
@@ -159,16 +157,14 @@ impl FAT32Manager {
         //let mut cluster_vec:Vec<u32> = Vec::new();
         //cluster_vec.push(current_cluster);
         //let first_cluster = current_cluster;
-        let first_cluster: u32 =
-            fat_writer.next_free_cluster(prev_cluster, self.block_device.clone());
+        let first_cluster: u32 = fat_writer.next_free_cluster(prev_cluster, self.block_device.clone());
         let mut current_cluster = first_cluster;
         //println!("alloc: first = {}, num = {}", first_cluster, num);
         // 搜索可用簇，同时写表项
         #[allow(unused)]
         for i in 1..num {
             self.clear_cluster(current_cluster);
-            let next_cluster =
-                fat_writer.next_free_cluster(current_cluster, self.block_device.clone());
+            let next_cluster = fat_writer.next_free_cluster(current_cluster, self.block_device.clone());
             assert_ne!(next_cluster, 0);
             fat_writer.set_next_cluster(current_cluster, next_cluster, self.block_device.clone());
             //cluster_vec.push(next_cluster);
@@ -180,11 +176,9 @@ impl FAT32Manager {
         fat_writer.set_end(current_cluster, self.block_device.clone());
         // 修改FSINFO
         //let next_cluster = fat_writer.next_free_cluster(current_cluster, self.block_device.clone());
-        self.fsinfo
-            .write_free_clusters(free_clusters - num, self.block_device.clone());
+        self.fsinfo.write_free_clusters(free_clusters - num, self.block_device.clone());
         // 写入分配的最后一个簇
-        self.fsinfo
-            .write_first_free_cluster(current_cluster, self.block_device.clone());
+        self.fsinfo.write_first_free_cluster(current_cluster, self.block_device.clone());
         //self.cache_write_back();
         //println!("[fs]: after alloc, first free cluster = {}",self.fsinfo.first_free_cluster(self.block_device.clone()));
         Some(first_cluster)
@@ -203,11 +197,8 @@ impl FAT32Manager {
             self.fsinfo
                 .write_free_clusters(free_clusters + num as u32, self.block_device.clone());
             // 如果释放的簇号小于开始空闲簇字段，更新该字段
-            if clusters[0] > 2
-                && clusters[0] < self.fsinfo.first_free_cluster(self.block_device.clone())
-            {
-                self.fsinfo
-                    .write_first_free_cluster(clusters[0] - 1, self.block_device.clone());
+            if clusters[0] > 2 && clusters[0] < self.fsinfo.first_free_cluster(self.block_device.clone()) {
+                self.fsinfo.write_first_free_cluster(clusters[0] - 1, self.block_device.clone());
             }
         }
         //println!("[fs]: after dealloc, first free cluster = {}",self.fsinfo.first_free_cluster(self.block_device.clone()));
@@ -216,20 +207,17 @@ impl FAT32Manager {
     pub fn clear_cluster(&self, cluster_id: u32) {
         let start_sec = self.first_sector_of_cluster(cluster_id);
         for i in 0..self.sectors_per_cluster {
-            get_block_cache(
-                start_sec + i as usize,
-                self.block_device.clone(),
-                CacheMode::WRITE,
-            )
-            .write()
-            .modify(0, |blk: &mut [u8; 512]| {
-                for j in 0..512 {
-                    blk[j] = 0;
-                }
-            });
+            get_block_cache(start_sec + i as usize, self.block_device.clone(), CacheMode::WRITE)
+                .write()
+                .modify(0, |blk: &mut [u8; 512]| {
+                    for j in 0..512 {
+                        blk[j] = 0;
+                    }
+                });
         }
     }
 
+    /// 获取 FAT
     pub fn get_fat(&self) -> Arc<RwLock<FAT>> {
         Arc::clone(&self.fat)
     }
@@ -241,22 +229,13 @@ impl FAT32Manager {
     }*/
 
     /* 计算扩大至new_size(B)需要多少个簇 */
-    pub fn cluster_num_needed(
-        &self,
-        old_size: u32,
-        new_size: u32,
-        is_dir: bool,
-        first_cluster: u32,
-    ) -> u32 {
+    pub fn cluster_num_needed(&self, old_size: u32, new_size: u32, is_dir: bool, first_cluster: u32) -> u32 {
         if old_size >= new_size {
             0
         } else {
             if is_dir {
                 //println!("count old_clusters");
-                let old_clusters = self
-                    .fat
-                    .read()
-                    .count_claster_num(first_cluster, self.block_device.clone());
+                let old_clusters = self.fat.read().count_claster_num(first_cluster, self.block_device.clone());
                 //println!("first cluster = {}, old_clusters = {}, new_clusters = {}", first_cluster, old_clusters, self.size_to_clusters(new_size));
                 // DEBUG 这里有问题 ?
                 self.size_to_clusters(new_size) - old_clusters
@@ -267,12 +246,12 @@ impl FAT32Manager {
         }
     }
 
-    /* 字节转化为所需的簇数 */
+    /// 字节转化为所需的簇数
     pub fn size_to_clusters(&self, size: u32) -> u32 {
         (size + self.bytes_per_cluster - 1) / self.bytes_per_cluster
     }
 
-    /* 计算当前偏移量在第几个簇 */
+    /// 计算当前偏移量在第几个簇
     pub fn cluster_of_offset(&self, offset: usize) -> u32 {
         //println!("cluster_of_offset: off = {}, bytes_per_cluster = {}",offset, self.bytes_per_cluster);
         offset as u32 / self.bytes_per_cluster
@@ -282,7 +261,7 @@ impl FAT32Manager {
         self.fsinfo.read_free_clusters(self.block_device.clone())
     }
 
-    /* 将长文件名拆分，并且补全0 */
+    /// 将长文件名拆分，并且补全0
     // DEBUG
     pub fn long_name_split(&self, name: &str) -> Vec<String> {
         let len = name.len() as u32; // 要有\0
@@ -307,7 +286,7 @@ impl FAT32Manager {
         name_vec
     }
 
-    /* 拆分文件名和后缀 */
+    /// 拆分文件名和后缀
     pub fn split_name_ext<'a>(&self, name: &'a str) -> (&'a str, &'a str) {
         let mut name_and_ext: Vec<&str> = name.split(".").collect();
         let name_ = name_and_ext[0];
@@ -318,7 +297,7 @@ impl FAT32Manager {
         (name_, ext_)
     }
 
-    /* 将短文件名格式化为目录项存储的内容 */
+    /// 将短文件名格式化为目录项存储的内容
     pub fn short_name_format(&self, name: &str) -> ([u8; 8], [u8; 3]) {
         let (mut name_, mut ext_) = self.split_name_ext(name);
         if name == "." || name == ".." {
@@ -348,7 +327,7 @@ impl FAT32Manager {
         (f_name, f_ext)
     }
 
-    /* 由长文件名生成短文件名 */
+    /// 由长文件名生成短文件名
     // DEBUG
     pub fn generate_short_name(&self, long_name: &str) -> String {
         // 目前仅支持【name.extension】 或者 【没有后缀】 形式的文件名！

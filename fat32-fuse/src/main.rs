@@ -1,9 +1,6 @@
 #[allow(unused)]
 use simple_fat32::{
     BlockDevice,
-    //EasyFileSystem,
-    //DiskInodeType,
-    //Inode,
     FAT32Manager,
     VFile,
     ShortDirEntry,
