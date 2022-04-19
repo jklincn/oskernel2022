@@ -133,7 +133,6 @@ impl FAT32Manager {
             0,
             long_pos_vec,
             ATTR_DIRECTORY,
-            0,
             Arc::clone(fs_manager),
             self.block_device.clone(),
         )
@@ -298,33 +297,14 @@ impl FAT32Manager {
     }
 
     /// 将短文件名格式化为目录项存储的内容
-    pub fn short_name_format(&self, name: &str) -> ([u8; 8], [u8; 3]) {
-        let (mut name_, mut ext_) = self.split_name_ext(name);
-        if name == "." || name == ".." {
-            name_ = name;
-            ext_ = ""
+    pub fn short_name_format(&self, name: &str) -> ([u8; 11]) {
+        let mut f_name =[0u8;11];
+        let name_bytes = name.as_bytes();
+        for i in 0..13{
+            f_name[i] = (name_bytes[i] as char).to_ascii_uppercase() as u8;
         }
-        let name_bytes = name_.as_bytes();
-        let ext_bytes = ext_.as_bytes();
-        let mut f_name = [0u8; 8];
-        let mut f_ext = [0u8; 3];
-        for i in 0..8 {
-            if i >= name_bytes.len() {
-                f_name[i] = 0x20;
-            } else {
-                f_name[i] = (name_bytes[i] as char).to_ascii_uppercase() as u8;
-                //f_name[i] =  name_bytes[i] as char as u8;
-            }
-        }
-        for i in 0..3 {
-            if i >= ext_bytes.len() {
-                f_ext[i] = 0x20;
-            } else {
-                f_ext[i] = (ext_bytes[i] as char).to_ascii_uppercase() as u8;
-                //f_ext[i] = ext_bytes[i] as char as u8;
-            }
-        }
-        (f_name, f_ext)
+        f_name
+
     }
 
     /// 由长文件名生成短文件名

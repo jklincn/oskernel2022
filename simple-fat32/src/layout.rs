@@ -310,7 +310,7 @@ impl ShortDirEntry {
         }
     }
 
-    pub fn LDIR_Attr(&self) -> u8 {
+    pub fn ldir_attr(&self) -> u8 {
         self.dir_attr
     }
 
@@ -376,10 +376,18 @@ impl ShortDirEntry {
         // }
     }
 
+    pub fn get_name_lowercase(&self) -> String {
+        let mut name: String = String::new();
+        for i in 0..11 {
+            name.push((self.dir_name[i] as char).to_ascii_lowercase());
+        }
+        name
+    }
+    
     /* 设置当前文件的大小 */
     // 簇的分配和回收实际要对FAT表操作
-    pub fn set_size(&mut self, DIR_FileSize: u32) {
-        self.dir_file_size = DIR_FileSize;
+    pub fn set_size(&mut self, dir_file_size: u32) {
+        self.dir_file_size = dir_file_size;
     }
 
     pub fn get_size(&self) -> u32 {
@@ -536,8 +544,8 @@ impl ShortDirEntry {
         let mut current_off = offset;
         let end: usize;
         if self.is_dir() {
-            let DIR_FileSize = bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
-            end = offset + buf.len().min(DIR_FileSize); // DEBUG:约束上界
+            let dir_file_size = bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
+            end = offset + buf.len().min(dir_file_size); // DEBUG:约束上界
         } else {
             end = (offset + buf.len()).min(self.dir_file_size as usize);
         }
@@ -596,6 +604,20 @@ impl ShortDirEntry {
             }
         }
         write_size
+    }
+
+    pub fn checksum(&self)->u8{
+        let mut name_buff:[u8;11] = [0u8;11]; 
+        let mut sum:u8 = 0;
+        for i in 0..11 { name_buff[i] = self.dir_name[i]; }
+        for i in 0..11{ 
+            if (sum & 1) != 0 {
+                sum = 0x80 + (sum>>1) + name_buff[i];
+            }else{
+                sum = (sum>>1) + name_buff[i];
+            }
+        }
+        sum
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -681,8 +703,8 @@ impl LongDirEntry {
 
     /* 上层要完成对namebuffer的填充，注意\0，以及checksum的计算 */
     /* 目前只支持英文，因此传入ascii */
-    pub fn initialize(&mut self, name_buffer: &[u8], LDIR_Ord: u8, LDIR_Chksum: u8) {
-        let ord = LDIR_Ord;
+    pub fn initialize(&mut self, name_buffer: &[u8], ldir_ord: u8, ldir_chksum: u8) {
+        let ord = ldir_ord;
         //println!("** initialize namebuffer = {:?}", name_buffer);
         //if is_last { ord = ord | 0x40 }
         let mut ldir_name1: [u8; 10] = [0; 10];
@@ -727,7 +749,7 @@ impl LongDirEntry {
             ldir_name1,
             ldir_attr: ATTR_LONG_NAME,
             ldir_type: 0,
-            ldir_chksum: LDIR_Chksum,
+            ldir_chksum,
             ldir_name2,
             ldir_fst_clus_lo: [0u8; 2],
             ldir_name3,
