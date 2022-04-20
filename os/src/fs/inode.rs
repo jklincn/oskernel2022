@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use alloc::{string::String, sync::Arc};
 use bitflags::*;
 use lazy_static::*;
-use simple_fat32::{FAT32Manager, VFile, ATTRIBUTE_ARCHIVE, ATTRIBUTE_DIRECTORY};
+use simple_fat32::{FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
 
 pub const SEEK_SET: i32 = 0; /* set to offset bytes.  */
@@ -133,7 +133,7 @@ lazy_static! {
 pub fn list_apps() {
     println!("/**** APPS ****");
     for app in ROOT_INODE.ls_lite().unwrap() {
-        if app.1 & ATTRIBUTE_DIRECTORY == 0 { // 如果不是目录
+        if app.1 & ATTR_DIRECTORY == 0 { // 如果不是目录
             println!("{}", app.0);
         }
     }
@@ -181,7 +181,7 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         {
             // 创建文件
             ROOT_INODE
-                .create(name, ATTRIBUTE_ARCHIVE)
+                .create(name, ATTR_ARCHIVE)
                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
         }
     } else {

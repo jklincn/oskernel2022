@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33.3"
-simple-fat32 = { path = "../simple_fat32" }
+simple-fat32 = { path = "../simple-fat32" }
 rand = "0.8.0"

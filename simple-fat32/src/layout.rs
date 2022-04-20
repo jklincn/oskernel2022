@@ -28,9 +28,6 @@ pub const SHORT_NAME_LEN: u32 = 8;
 pub const SHORT_EXT_LEN: u32 = 3;
 pub const LONG_NAME_LEN: u32 = 13;
 
-pub const ALL_UPPER_CASE: u8 = 0x00;
-pub const ALL_LOWER_CASE: u8 = 0x08;
-
 type DataBlock = [u8; BLOCK_SZ];
 
 /// DBR(Dos Boot Record) and BPB Structure
@@ -185,7 +182,8 @@ impl FSInfo {
 #[repr(packed)]
 #[allow(unused)]
 pub struct ShortDirEntry {
-    dir_name: [u8; 11],     // 短文件名
+    dir_name: [u8; 8],      // 短文件名
+    dir_extension: [u8; 3], //扩展名
     dir_attr: u8,           // 文件属性
     dir_ntres: u8,          // Reserved for use by Windows NT
     dir_crt_time_tenth: u8, // Millisecond stamp at file creation time
@@ -200,11 +198,11 @@ pub struct ShortDirEntry {
 }
 
 impl ShortDirEntry {
-    /* 建一个空的，一般读取时用到 */
-    // QUES 真的用得到？
+    /// 建一个空的目录项
     pub fn empty() -> Self {
         Self {
-            dir_name: [0; 11],
+            dir_name: [0; 8],
+            dir_extension: [0; 3],
             dir_attr: 0,
             dir_ntres: 0,
             dir_crt_time_tenth: 0,
@@ -222,10 +220,12 @@ impl ShortDirEntry {
     /* 创建文件时调用
      * 新建时不必分配块。写时检测初始簇是否为0，为0则需要分配。
      */
-    pub fn new(name_: &[u8], dir_attr: u8) -> Self {
-        let dir_name: [u8; 11] = clone_into_array(&name_[0..11]);
+    pub fn new(name_: &[u8], extension_: &[u8], dir_attr: u8) -> Self {
+        let dir_name: [u8; 8] = clone_into_array(&name_[0..8]);
+        let dir_extension: [u8; 3] = clone_into_array(&extension_[0..3]);
         Self {
             dir_name,
+            dir_extension,
             dir_attr,
             dir_ntres: 0,
             dir_crt_time_tenth: 0,
@@ -240,10 +240,13 @@ impl ShortDirEntry {
         }
     }
 
-    pub fn initialize(&mut self, name_: &[u8], dir_attr: u8) {
-        let dir_name: [u8; 11] = clone_into_array(&name_[0..11]);
+    /// 初始化，功能和new一样，目前只在create中使用
+    pub fn initialize(&mut self, name_: &[u8], extension_: &[u8], dir_attr: u8) {
+        let dir_name: [u8; 8] = clone_into_array(&name_[0..8]);
+        let dir_extension: [u8; 3] = clone_into_array(&extension_[0..3]);
         *self = Self {
             dir_name,
+            dir_extension,
             dir_attr,
             dir_ntres: 0,
             dir_crt_time_tenth: 0,
@@ -359,31 +362,46 @@ impl ShortDirEntry {
     }
 
     /// 获取短文件名
-    pub fn get_name_uppercase(&self) -> String {
+    pub fn get_name_uppercase(&self)-> String {
         let mut name: String = String::new();
-        for i in 0..11 {
-            name.push(self.dir_name[i] as char);
+        for i in 0..8 {  // 记录文件名
+            if self.dir_name[i] == 0x20 {
+                break;
+            } else {
+                name.push(self.dir_name[i] as char);
+            }
+        }
+        for i in 0..3 { // 记录扩展名
+            if self.dir_extension[i] == 0x20 {
+                break;
+            } else {
+                if i == 0 {name.push('.'); }
+                name.push(self.dir_extension[i] as char);
+            }
         }
         name
-        // 检查合法性 todo
-        // if self.dir_name[0] == 0x20 {
-        //     panic!("get_name_uppercase_panic");
-        // } else {
-        //     for i in 0..11 {
-        //         name.push(self.dir_name[i] as char);
-        //     }
-        //     name
-        // }
     }
 
     pub fn get_name_lowercase(&self) -> String {
         let mut name: String = String::new();
-        for i in 0..11 {
-            name.push((self.dir_name[i] as char).to_ascii_lowercase());
+        for i in 0..8 {  // 记录文件名
+            if self.dir_name[i] == 0x20 {
+                break;
+            } else {
+                name.push((self.dir_name[i] as char).to_ascii_lowercase());
+            }
+        }
+        for i in 0..3 { // 记录扩展名
+            if self.dir_extension[i] == 0x20 {
+                break;
+            } else {
+                if i == 0 {name.push('.'); }
+                name.push((self.dir_extension[i] as char).to_ascii_lowercase());
+            }
         }
         name
     }
-    
+
     /* 设置当前文件的大小 */
     // 簇的分配和回收实际要对FAT表操作
     pub fn set_size(&mut self, dir_file_size: u32) {
@@ -394,9 +412,9 @@ impl ShortDirEntry {
         self.dir_file_size
     }
 
-    pub fn set_case(&mut self, case: u8) {
-        self.dir_ntres = case;
-    }
+    // pub fn set_case(&mut self, case: u8) {
+    //     self.dir_ntres = case;
+    // }
 
     /* 设置文件起始簇 */
     pub fn set_first_cluster(&mut self, cluster: u32) {
@@ -544,7 +562,8 @@ impl ShortDirEntry {
         let mut current_off = offset;
         let end: usize;
         if self.is_dir() {
-            let dir_file_size = bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
+            let dir_file_size =
+                bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
             end = offset + buf.len().min(dir_file_size); // DEBUG:约束上界
         } else {
             end = (offset + buf.len()).min(self.dir_file_size as usize);
@@ -598,7 +617,6 @@ impl ShortDirEntry {
                     panic!("END_CLUSTER");
                 }
                 current_sector = manager_reader.first_sector_of_cluster(current_cluster);
-
             } else {
                 current_sector += 1; //没读完一个簇，直接进入下一扇区
             }
@@ -606,10 +624,12 @@ impl ShortDirEntry {
         write_size
     }
 
+    /* 计算校验和 */ // DEBUG
     pub fn checksum(&self)->u8{
         let mut name_buff:[u8;11] = [0u8;11]; 
         let mut sum:u8 = 0;
-        for i in 0..11 { name_buff[i] = self.dir_name[i]; }
+        for i in 0..8 { name_buff[i] = self.dir_name[i]; }
+        for i in 0..3 { name_buff[i+8] = self.dir_extension[i]; }
         for i in 0..11{ 
             if (sum & 1) != 0 {
                 sum = 0x80 + (sum>>1) + name_buff[i];
@@ -619,7 +639,6 @@ impl ShortDirEntry {
         }
         sum
     }
-
     pub fn as_bytes(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, DIRENT_SZ) }
     }

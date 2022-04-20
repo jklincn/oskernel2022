@@ -81,6 +81,7 @@ impl VFile {
 
     pub fn read_short_dirent<V>(&self, f: impl FnOnce(&ShortDirEntry) -> V) -> V {
         if self.short_sector == 0 {
+            // 根目录项
             let root_dirent = self.fs.read().get_root_dirent();
             let rr = root_dirent.read();
             f(&rr)
@@ -119,6 +120,7 @@ impl VFile {
     }
 
     fn find_long_name(&self, name: &str, dir_ent: &ShortDirEntry) -> Option<VFile> {
+        // 拆分长文件名
         let name_vec = self.fs.read().long_name_split(name);
         let mut offset: usize = 0;
         let mut long_ent = LongDirEntry::empty();
@@ -390,6 +392,7 @@ impl VFile {
         } else {
             return None;
         }
+        // 定义一个空的短文件名目录项
         let mut short_ent = ShortDirEntry::empty();
         if name_.len() > 8 || ext_.len() > 3 {
             // 长文件名拆分
@@ -398,8 +401,8 @@ impl VFile {
             let mut long_ent = LongDirEntry::empty();
             // 生成短文件名及对应目录项
             let short_name = manager_reader.generate_short_name(name);
-            let short_name = manager_reader.short_name_format(short_name.as_str());
-            short_ent.initialize(&short_name, attribute);
+            let (name_bytes, ext_bytes) = manager_reader.short_name_format(short_name.as_str());
+            short_ent.initialize(&name_bytes, &ext_bytes, attribute);
             let check_sum = short_ent.checksum();
             //println!("*** aft checksum");
             drop(manager_reader);
@@ -414,32 +417,28 @@ impl VFile {
                 dirent_offset += DIRENT_SZ;
             }
         } else {
-            // 短文件名格式化
-            let short_name = manager_reader.short_name_format(name);
-            short_ent.initialize(&short_name, attribute);
-            short_ent.set_case(ALL_LOWER_CASE);
+            // 短文件名
+            let (name_bytes, ext_bytes) = manager_reader.short_name_format(name);
+            short_ent.initialize(&name_bytes, &ext_bytes, attribute);
             drop(manager_reader);
         }
         // 写短目录项
         assert_eq!(self.write_at(dirent_offset, short_ent.as_bytes_mut()), DIRENT_SZ);
 
-        // 如果是目录类型，需要创建.和..
-
+        // 这边的 if let 算是一个验证
         if let Some(vfile) = self.find_vfile_byname(name) {
+            // 如果是目录类型，需要创建.和..
             if attribute & ATTR_DIRECTORY != 0 {
                 let manager_reader = self.fs.read();
-                let short_name = manager_reader.short_name_format(".");
-                let mut self_dir = ShortDirEntry::new(&short_name, ATTR_DIRECTORY);
-                let short_name = manager_reader.short_name_format("..");
-                let mut par_dir = ShortDirEntry::new(&short_name, ATTR_DIRECTORY);
-                drop(manager_reader);
+                let (name_bytes, ext_bytes) = manager_reader.short_name_format(".");
+                let mut self_dir = ShortDirEntry::new(&name_bytes, &ext_bytes, ATTR_DIRECTORY);
+                let (name_bytes, ext_bytes) = manager_reader.short_name_format("..");
+                let mut par_dir = ShortDirEntry::new(&name_bytes, &ext_bytes, ATTR_DIRECTORY);
+                drop(manager_reader);        
+                self_dir.set_first_cluster(self.first_cluster());
                 par_dir.set_first_cluster(self.first_cluster());
-
                 vfile.write_at(0, self_dir.as_bytes_mut());
                 vfile.write_at(DIRENT_SZ, par_dir.as_bytes_mut());
-                let first_cluster = vfile.read_short_dirent(|se: &ShortDirEntry| se.first_cluster());
-                self_dir.set_first_cluster(first_cluster);
-                vfile.write_at(0, self_dir.as_bytes_mut());
             }
             return Some(Arc::new(vfile));
         } else {
@@ -675,6 +674,7 @@ impl VFile {
     }
 
     pub fn write_at(&self, offset: usize, buf: &[u8]) -> usize {
+        // 先扩容
         self.increase_size((offset + buf.len()) as u32);
         self.modify_short_dirent(|short_ent: &mut ShortDirEntry| {
             short_ent.write_at(offset, buf, &self.fs, &self.fs.read().get_fat(), &self.block_device)
@@ -714,9 +714,6 @@ impl VFile {
         }
         let mut offset = 0;
         loop {
-            if (offset / DIRENT_SZ) % 5 == 0 {
-                // print!("\n");
-            }
             let mut tmp_dirent = ShortDirEntry::empty();
             let read_sz = self.read_short_dirent(|short_ent: &ShortDirEntry| {
                 short_ent.read_at(
