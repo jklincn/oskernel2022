@@ -107,9 +107,7 @@ impl OSInode {
         let mut base = 0;
         loop {
             let len = remain.min(512);
-            inner
-                .inode
-                .write_at(inner.offset, &str_vec.as_slice()[base..base + len]);
+            inner.inode.write_at(inner.offset, &str_vec.as_slice()[base..base + len]);
             inner.offset += len;
             base += len;
             remain -= len;
@@ -133,7 +131,8 @@ lazy_static! {
 pub fn list_apps() {
     println!("/**** APPS ****");
     for app in ROOT_INODE.ls_lite().unwrap() {
-        if app.1 & ATTR_DIRECTORY == 0 { // 如果不是目录
+        if app.1 & ATTR_DIRECTORY == 0 {
+            // 如果不是目录
             println!("{}", app.0);
         }
     }
@@ -143,11 +142,11 @@ pub fn list_apps() {
 // 定义一份打开文件的标志
 bitflags! {
     pub struct OpenFlags: u32 {
-        const RDONLY = 0;
-        const WRONLY = 1 << 0;
-        const RDWR = 1 << 1;
-        const CREATE = 1 << 9;
-        const TRUNC = 1 << 10;
+        const RDONLY = 0;   // 只读
+        const WRONLY = 1 << 0; // 只写
+        const RDWR = 1 << 1; // 可读可写
+        const CREATE = 1 << 9; // 创建
+        const TRUNC = 1 << 10; // 若文件存在则清空文件内容
     }
 }
 
@@ -177,7 +176,7 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         if let Some(inode) = ROOT_INODE.find_vfile_bypath(pathv.clone()) {
             // 如果文件已经存在，则清空文件的内容
             inode.remove();
-        }  //非常奇怪的一个点
+        } //非常奇怪的一个点
         {
             // 创建文件
             ROOT_INODE

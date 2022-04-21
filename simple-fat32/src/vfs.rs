@@ -7,8 +7,8 @@ use spin::RwLock;
 #[derive(Clone)]
 pub struct VFile {
     name: String,
-    short_sector: usize,               //文件短目录项所在扇区
-    short_offset: usize,               //文件短目录项所在扇区的偏移
+    short_sector: usize,               // 文件短目录项所在扇区
+    short_offset: usize,               // 文件短目录项所在扇区的偏移
     long_pos_vec: Vec<(usize, usize)>, // 长目录项的位置<sector, offset>
     attribute: u8,
     fs: Arc<RwLock<FAT32Manager>>,
@@ -43,8 +43,8 @@ impl VFile {
     }
 
     pub fn clear_cache(&self) {
-        let fat = self.fs.read();
-        fat.cache_write_back();
+        let fat_manager = self.fs.read();
+        fat_manager.cache_write_back();
     }
 
     pub fn get_name(&self) -> &str {
@@ -379,10 +379,7 @@ impl VFile {
     pub fn create(&self, name: &str, attribute: u8) -> Option<Arc<VFile>> {
         // 检测同名文件
         assert!(self.is_dir());
-        //if self.find_vfile_byname(name).is_some() {
-        //    //println!("already exist：{}",name);
-        //    return None
-        //}
+
         let manager_reader = self.fs.read();
         let (name_, ext_) = manager_reader.split_name_ext(name);
         // 搜索空处
@@ -392,56 +389,67 @@ impl VFile {
         } else {
             return None;
         }
-        // 定义一个空的短文件名目录项
-        let mut short_ent = ShortDirEntry::new();
+        // 定义一个空的短文件名目录项用于写入
+        let mut tmp_short_ent = ShortDirEntry::new();
         if name_.len() > 8 || ext_.len() > 3 {
-            // 长文件名拆分
-            let mut v_long_name = manager_reader.long_name_split(name);
-            let long_ent_num = v_long_name.len();
-            let mut long_ent = LongDirEntry::new();
+
             // 生成短文件名及对应目录项
             let short_name = manager_reader.generate_short_name(name);
-            let (name_bytes, ext_bytes) = manager_reader.short_name_format(short_name.as_str());
-            short_ent.initialize(&name_bytes, &ext_bytes, attribute);
-            let check_sum = short_ent.checksum();
-            //println!("*** aft checksum");
+            let (_name, _ext) = manager_reader.short_name_format(short_name.as_str());
+            tmp_short_ent.initialize(&_name, &_ext, attribute);
+            
+            // 长文件名拆分
+            let mut v_long_name = manager_reader.long_name_split(name);
             drop(manager_reader);
-            // 写长名目录项
+            let long_ent_num = v_long_name.len();// 需要创建的长文件名目录项个数
+            
+            // 计算校验和
+            let check_sum = tmp_short_ent.checksum();
+            
+            // 定义一个空的长文件名目录项用于写入
+            let mut tmp_long_ent = LongDirEntry::new();
+            // 逐个写入长名目录项
             for i in 0..long_ent_num {
+                // 按倒序填充长文件名目录项，目的是为了避免名字混淆
                 let mut order: u8 = (long_ent_num - i) as u8;
                 if i == 0 {
+                    // 最后一个长文件名目录项，将该目录项的序号与 0x40 进行或运算然后写入
                     order |= 0x40;
                 }
-                long_ent.initialize(v_long_name.pop().unwrap().as_bytes(), order, check_sum);
-                assert_eq!(self.write_at(dirent_offset, long_ent.as_bytes_mut()), DIRENT_SZ);
+                // 初始化长文件名目录项
+                tmp_long_ent.initialize(v_long_name.pop().unwrap().as_bytes(), order, check_sum);
+                // 写入长文件名目录项
+                assert_eq!(self.write_at(dirent_offset, tmp_long_ent.as_bytes_mut()), DIRENT_SZ);
+                // 更新写入位置
                 dirent_offset += DIRENT_SZ;
             }
         } else {
             // 短文件名
-            let (name_bytes, ext_bytes) = manager_reader.short_name_format(name);
-            short_ent.initialize(&name_bytes, &ext_bytes, attribute);
+            let (_name, _ext) = manager_reader.short_name_format(name);
+            tmp_short_ent.initialize(&_name, &_ext, attribute);
             drop(manager_reader);
         }
-        // 写短目录项
-        assert_eq!(self.write_at(dirent_offset, short_ent.as_bytes_mut()), DIRENT_SZ);
+        // 写短目录项（长文件名也是有短文件名目录项的）
+        assert_eq!(self.write_at(dirent_offset, tmp_short_ent.as_bytes_mut()), DIRENT_SZ);
 
         // 这边的 if let 算是一个验证
         if let Some(vfile) = self.find_vfile_byname(name) {
             // 如果是目录类型，需要创建.和..
             if attribute & ATTR_DIRECTORY != 0 {
                 let manager_reader = self.fs.read();
-                let (name_bytes, ext_bytes) = manager_reader.short_name_format(".");
+                let (_name, _ext) = manager_reader.short_name_format(".");
                 let mut self_dir = ShortDirEntry::new();
-                self_dir.initialize(&name_bytes, &ext_bytes, ATTR_DIRECTORY);
-                let (name_bytes, ext_bytes) = manager_reader.short_name_format("..");
-                let mut par_dir = ShortDirEntry::new();
-                par_dir.initialize(&name_bytes, &ext_bytes, ATTR_DIRECTORY);
-
-                drop(manager_reader);        
+                self_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
                 self_dir.set_first_cluster(self.first_cluster());
-                par_dir.set_first_cluster(self.first_cluster());
                 vfile.write_at(0, self_dir.as_bytes_mut());
+
+                let (_name, _ext) = manager_reader.short_name_format("..");
+                let mut par_dir = ShortDirEntry::new();
+                par_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
+                par_dir.set_first_cluster(self.first_cluster());
                 vfile.write_at(DIRENT_SZ, par_dir.as_bytes_mut());
+                
+                drop(manager_reader);
             }
             return Some(Arc::new(vfile));
         } else {
@@ -459,90 +467,90 @@ impl VFile {
         })
     }
 
-    /* 获取当前目录下的所有文件名以及属性，以Vector形式返回 */
-    // 如果出现错误，返回None
-    pub fn ls(&self) -> Option<Vec<(String, u8)>> {
-        if !self.is_dir() {
-            return None;
-        }
-        let mut list: Vec<(String, u8)> = Vec::new();
-        // DEBUG
-        let mut offset: usize = 0;
-        let mut short_ent = ShortDirEntry::new();
-        loop {
-            let mut read_sz = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
-                curr_ent.read_at(
-                    offset,
-                    short_ent.as_bytes_mut(),
-                    &self.fs,
-                    &self.fs.read().get_fat(),
-                    &self.block_device,
-                )
-            });
-            // 检测是否结束或被删除
-            if read_sz != DIRENT_SZ || short_ent.is_empty() {
-                return Some(list);
-            }
-            if short_ent.is_deleted() {
-                offset += DIRENT_SZ;
-                continue;
-            }
-            if short_ent.is_long() {
-                // 长文件名
-                let (_, long_ent_list, _) = unsafe { short_ent.as_bytes_mut().align_to_mut::<LongDirEntry>() };
-                // DEBUG
-                let mut long_ent = long_ent_list[0];
-                let mut order = long_ent.get_order(); //^ 0x40;
-                if order & 0x40 == 0 {
-                    offset += DIRENT_SZ;
-                    continue;
-                } else {
-                    order = order ^ 0x40;
-                }
-                let mut name = long_ent.get_name_raw();
-                #[allow(unused)]
-                for i in 1..order as usize {
-                    offset += DIRENT_SZ;
-                    read_sz = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
-                        curr_ent.read_at(
-                            offset,
-                            long_ent.as_bytes_mut(),
-                            &self.fs,
-                            &self.fs.read().get_fat(),
-                            &self.block_device,
-                        )
-                    });
-                    if read_sz != DIRENT_SZ || long_ent.is_empty() || long_ent.is_deleted() {
-                        return Some(list);
-                    }
-                    // 若无误，把该段名字放在name最前
-                    name.insert_str(0, long_ent.get_name_raw().as_str());
-                }
-                // 从短文件获取类型
-                offset += DIRENT_SZ;
-                read_sz = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
-                    curr_ent.read_at(
-                        offset,
-                        long_ent.as_bytes_mut(),
-                        &self.fs,
-                        &self.fs.read().get_fat(),
-                        &self.block_device,
-                    )
-                });
-                if read_sz != DIRENT_SZ || long_ent.is_empty() || long_ent.is_deleted() {
-                    return Some(list);
-                }
-                list.push((name, long_ent.ldir_attr()));
-                offset += DIRENT_SZ;
-                continue;
-            } else {
-                // 短文件名
-                list.push((short_ent.get_name_lowercase(), short_ent.ldir_attr()));
-                offset += DIRENT_SZ;
-                continue;
-            }
-        }
-    }
+    // /* 获取当前目录下的所有文件名以及属性，以Vector形式返回 */
+    // // 如果出现错误，返回None
+    // pub fn ls(&self) -> Option<Vec<(String, u8)>> {
+    //     if !self.is_dir() {
+    //         return None;
+    //     }
+    //     let mut list: Vec<(String, u8)> = Vec::new();
+    //     // DEBUG
+    //     let mut offset: usize = 0;
+    //     let mut short_ent = ShortDirEntry::new();
+    //     loop {
+    //         let mut read_sz = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
+    //             curr_ent.read_at(
+    //                 offset,
+    //                 short_ent.as_bytes_mut(),
+    //                 &self.fs,
+    //                 &self.fs.read().get_fat(),
+    //                 &self.block_device,
+    //             )
+    //         });
+    //         // 检测是否结束或被删除
+    //         if read_sz != DIRENT_SZ || short_ent.is_empty() {
+    //             return Some(list);
+    //         }
+    //         if short_ent.is_deleted() {
+    //             offset += DIRENT_SZ;
+    //             continue;
+    //         }
+    //         if short_ent.is_long() {
+    //             // 长文件名
+    //             let (_, long_ent_list, _) = unsafe { short_ent.as_bytes_mut().align_to_mut::<LongDirEntry>() };
+    //             // DEBUG
+    //             let mut long_ent = long_ent_list[0];
+    //             let mut order = long_ent.get_order(); //^ 0x40;
+    //             if order & 0x40 == 0 {
+    //                 offset += DIRENT_SZ;
+    //                 continue;
+    //             } else {
+    //                 order = order ^ 0x40;
+    //             }
+    //             let mut name = long_ent.get_name_raw();
+    //             #[allow(unused)]
+    //             for i in 1..order as usize {
+    //                 offset += DIRENT_SZ;
+    //                 read_sz = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
+    //                     curr_ent.read_at(
+    //                         offset,
+    //                         long_ent.as_bytes_mut(),
+    //                         &self.fs,
+    //                         &self.fs.read().get_fat(),
+    //                         &self.block_device,
+    //                     )
+    //                 });
+    //                 if read_sz != DIRENT_SZ || long_ent.is_empty() || long_ent.is_deleted() {
+    //                     return Some(list);
+    //                 }
+    //                 // 若无误，把该段名字放在name最前
+    //                 name.insert_str(0, long_ent.get_name_raw().as_str());
+    //             }
+    //             // 从短文件获取类型
+    //             offset += DIRENT_SZ;
+    //             read_sz = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
+    //                 curr_ent.read_at(
+    //                     offset,
+    //                     long_ent.as_bytes_mut(),
+    //                     &self.fs,
+    //                     &self.fs.read().get_fat(),
+    //                     &self.block_device,
+    //                 )
+    //             });
+    //             if read_sz != DIRENT_SZ || long_ent.is_empty() || long_ent.is_deleted() {
+    //                 return Some(list);
+    //             }
+    //             list.push((name, long_ent.ldir_attr()));
+    //             offset += DIRENT_SZ;
+    //             continue;
+    //         } else {
+    //             // 短文件名
+    //             list.push((short_ent.get_name_lowercase(), short_ent.ldir_attr()));
+    //             offset += DIRENT_SZ;
+    //             continue;
+    //         }
+    //     }
+    // }
 
     /* 获取目录中offset处目录项的信息 TODO:之后考虑和stat复用
      * 返回<name, offset, firstcluster,attributes>

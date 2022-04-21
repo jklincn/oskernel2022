@@ -601,7 +601,7 @@ impl ShortDirEntry {
         write_size
     }
 
-    /* 计算校验和 */ // DEBUG
+    /// 为相应的长文件名计算校验和
     pub fn checksum(&self)->u8{
         let mut name_buff:[u8;11] = [0u8;11]; 
         let mut sum:u8 = 0;
@@ -630,18 +630,18 @@ impl ShortDirEntry {
 #[allow(unused)]
 #[derive(Clone, Copy, Debug)]
 pub struct LongDirEntry {
-    // use Unicode !!!
+    // 使用 Unicode 编码，即每个字符占用2个字节，一组 13 个字符，共 26 字节，即 10+12+4
     // 如果是该文件的最后一个长文件名目录项，
     // 则将该目录项的序号与 0x40 进行“或（OR）运算”的结果写入该位置。
     // 长文件名要有\0
-    ldir_ord: u8, // The order of this entry in the sequence of long dir entries associated with the short dir entry at the end of the long dir set.
-    ldir_name1: [u8; 10], // 5characters
-    ldir_attr: u8, // Attributes - must be ATTR_LONG_NAME
+    ldir_ord: u8, // 长文件名目录项的序列号，一个文件的第一个目录项序列号为 1，然后依次递增
+    ldir_name1: [u8; 10], // 5 characters
+    ldir_attr: u8, // 长文件名目录项标志，取值 0x0F
     ldir_type: u8, // If zero, indicates a directory entry that is a sub-component of a long name.Non-zero implies other dirent types.
-    ldir_chksum: u8, // Checksum of name in the short dir entry at the end of the long dir set.
-    ldir_name2: [u8; 12], // 6characters
-    ldir_fst_clus_lo: [u8; 2], // Must be ZERO
-    ldir_name3: [u8; 4], // 2characters
+    ldir_chksum: u8, // 根据对应短文件名计算出的校验值，用于长文件名与短文件名的匹配
+    ldir_name2: [u8; 12], // 6 characters
+    ldir_fst_clus_lo: [u8; 2], // 文件起始簇号，目前置 0
+    ldir_name3: [u8; 4], // 2 characters
 }
 
 impl From<&[u8]> for LongDirEntry {
@@ -697,12 +697,9 @@ impl LongDirEntry {
         !self.is_valid()
     }
 
-    /* 上层要完成对namebuffer的填充，注意\0，以及checksum的计算 */
-    /* 目前只支持英文，因此传入ascii */
+    /// 长文件名目录项初始化
+    /// 传入长度为 13 的字符数组，目前还是以 ASCII 码进行处理!
     pub fn initialize(&mut self, name_buffer: &[u8], ldir_ord: u8, ldir_chksum: u8) {
-        let ord = ldir_ord;
-        //println!("** initialize namebuffer = {:?}", name_buffer);
-        //if is_last { ord = ord | 0x40 }
         let mut ldir_name1: [u8; 10] = [0; 10];
         let mut ldir_name2: [u8; 12] = [0; 12];
         let mut ldir_name3: [u8; 4] = [0; 4];
@@ -741,7 +738,7 @@ impl LongDirEntry {
             }
         }
         *self = Self {
-            ldir_ord: ord,
+            ldir_ord,
             ldir_name1,
             ldir_attr: ATTR_LONG_NAME,
             ldir_type: 0,

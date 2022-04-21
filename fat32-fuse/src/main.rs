@@ -20,6 +20,43 @@ const BLOCK_SZ: usize = 512;
 
 struct BlockFile(Mutex<File>);
 
+/**
+ * 红色 91
+ * 绿色 92
+ * 黄色 93
+ * 蓝色 94
+ */
+#[allow(unused)]
+macro_rules! color_text {
+    ($text:expr, $color:expr) => {{
+        format_args!("\x1b[{}m{}\x1b[0m", $color, $text)
+    }};
+}
+
+macro_rules! error{
+    ($info:expr) => {
+        println!("{}",color_text!($info,91));
+    }
+}
+
+macro_rules! debug{
+    ($info:expr) => {
+        println!("{}",color_text!($info,92));
+    }
+}
+
+macro_rules! warn{
+    ($info:expr) => {
+        println!("{}",color_text!($info,93));
+    }
+}
+
+macro_rules! info{
+    ($info:expr) => {
+        println!("{}",color_text!($info,94));
+    }
+}
+
 impl BlockDevice for BlockFile {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
         let mut file = self.0.lock().unwrap();
@@ -124,16 +161,18 @@ fn fat32_pack() -> std::io::Result<()> {
     for app in root_vfile.ls_lite().unwrap() {
         println!("{}", app.0);
     }
-    println!("pack OK!");
+
+    error!("error");
+    info!("info");
+    warn!("warn");
+    debug!("debug");
+
+
+    
     Ok(())
 }
 
-#[allow(unused)]
-macro_rules! color_text {
-    ($text:expr, $color:expr) => {{
-        format_args!("\x1b[{}m{}\x1b[0m", $color, $text)
-    }};
-}
+
 
 #[test]
 fn ufs_test() -> std::io::Result<()> {

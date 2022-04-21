@@ -102,9 +102,8 @@ impl FAT32Manager {
         // 保留扇区数+所有FAT表的扇区数
         let root_sec = boot_sec.bpb_num_fats as u32 * fat_n_sec + boot_sec.bpb_rsvd_sec_cnt as u32;
 
-        // 0x2F in ASCII is .
+        // 0x2F in ASCII is /
         let mut root_dirent = ShortDirEntry::new();
-
         root_dirent.initialize(
             &[0x2F, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20],
             &[0x20, 0x20, 0x20],
@@ -141,6 +140,7 @@ impl FAT32Manager {
         )
     }
 
+    /// 获取（虚拟）根目录项
     pub fn get_root_dirent(&self) -> Arc<RwLock<ShortDirEntry>> {
         self.vroot_dirent.clone()
     }
@@ -270,15 +270,18 @@ impl FAT32Manager {
         let name_bytes = name.as_bytes();
         let mut name_vec: Vec<String> = Vec::new();
         // 计算需要几个目录项，向上取整
+        // 以13个字符为单位进行切割，每一组占据一个目录项
         let n_ent = (len + LONG_NAME_LEN - 1) / LONG_NAME_LEN;
         let mut temp_buffer = String::new();
+        // 如果文件名结束但还有未使用的字节，则会在文件名后先填充两个字节的 0x00，然后开始使用 0xFF 填充
         for i in 0..n_ent {
             temp_buffer.clear();
             for j in i * LONG_NAME_LEN..(i + 1) * LONG_NAME_LEN {
                 if j < len {
+                    // 有效的文件名字
                     temp_buffer.push(name_bytes[j as usize] as char);
                 } else if j > len {
-                    temp_buffer.push(0xFF as char); //填充
+                    temp_buffer.push(0xFF as char);
                 } else {
                     temp_buffer.push(0x00 as char);
                 }
@@ -291,8 +294,8 @@ impl FAT32Manager {
     /* 拆分文件名和后缀 */
     pub fn split_name_ext<'a>(&self, name: &'a str) -> (&'a str, &'a str) {
         let mut name_and_ext: Vec<&str> = name.split(".").collect(); // 按 . 进行分割
-                                                                     // 如果没有后缀名则推入一个空值
         if name_and_ext.len() == 1 {
+            // 如果没有后缀名则推入一个空值
             name_and_ext.push("");
         }
         (name_and_ext[0], name_and_ext[1])
@@ -337,8 +340,9 @@ impl FAT32Manager {
         let name = name_.as_bytes();
         let extension = ext_.as_bytes();
         let mut short_name = String::new();
+        // 取长文件名的前6个字符加上"~1"形成短文件名，扩展名不变，
+        // 目前不支持重名，即"~2""~3"
         for i in 0..6 {
-            //fill name
             short_name.push((name[i] as char).to_ascii_uppercase())
         }
         short_name.push('~');
@@ -347,11 +351,12 @@ impl FAT32Manager {
         for i in 0..3 {
             //fill extension
             if i >= ext_len {
-                short_name.push(0x20 as char); //填充
+                short_name.push(0x20 as char); // 不足的用0x20进行填充
             } else {
-                short_name.push((name[i] as char).to_ascii_uppercase()); //需要为大写
+                short_name.push((name[i] as char).to_ascii_uppercase());
             }
         }
+        // 返回一个长度为 11 的string数组
         short_name
     }
 
