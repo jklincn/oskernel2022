@@ -102,12 +102,15 @@ impl FAT32Manager {
         // 保留扇区数+所有FAT表的扇区数
         let root_sec = boot_sec.bpb_num_fats as u32 * fat_n_sec + boot_sec.bpb_rsvd_sec_cnt as u32;
 
-        // 0x2F in ASCII is . 
-        let mut root_dirent = ShortDirEntry::new(
+        // 0x2F in ASCII is .
+        let mut root_dirent = ShortDirEntry::new();
+
+        root_dirent.initialize(
             &[0x2F, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20],
             &[0x20, 0x20, 0x20],
             ATTR_DIRECTORY,
         );
+
         root_dirent.set_first_cluster(2);
 
         let fat32_manager = Self {
@@ -262,42 +265,42 @@ impl FAT32Manager {
 
     /// 将长文件名拆分，并且补全0
     // DEBUG
-    pub fn long_name_split(&self, name: &str)->Vec<String>{
-        let len = name.len() as u32; // 要有\0 
+    pub fn long_name_split(&self, name: &str) -> Vec<String> {
+        let len = name.len() as u32; // 要有\0
         let name_bytes = name.as_bytes();
-        let mut name_vec:Vec<String> = Vec::new();
+        let mut name_vec: Vec<String> = Vec::new();
         // 计算需要几个目录项，向上取整
-        let n_ent = (len + LONG_NAME_LEN - 1)/LONG_NAME_LEN;
+        let n_ent = (len + LONG_NAME_LEN - 1) / LONG_NAME_LEN;
         let mut temp_buffer = String::new();
-        for i in 0..n_ent{
+        for i in 0..n_ent {
             temp_buffer.clear();
-            for j in i*LONG_NAME_LEN..(i+1)*LONG_NAME_LEN {
+            for j in i * LONG_NAME_LEN..(i + 1) * LONG_NAME_LEN {
                 if j < len {
-                    temp_buffer.push( name_bytes[j as usize] as char );
+                    temp_buffer.push(name_bytes[j as usize] as char);
                 } else if j > len {
                     temp_buffer.push(0xFF as char); //填充
                 } else {
                     temp_buffer.push(0x00 as char);
                 }
             }
-            name_vec.push( temp_buffer.clone() );
+            name_vec.push(temp_buffer.clone());
         }
         name_vec
     }
 
     /* 拆分文件名和后缀 */
-    pub fn split_name_ext<'a>(&self, name: &'a str)->(&'a str, &'a str){
-        let mut name_and_ext: Vec<&str> = name.split(".").collect();  // 按 . 进行分割
-        // 如果没有后缀名则推入一个空值
+    pub fn split_name_ext<'a>(&self, name: &'a str) -> (&'a str, &'a str) {
+        let mut name_and_ext: Vec<&str> = name.split(".").collect(); // 按 . 进行分割
+                                                                     // 如果没有后缀名则推入一个空值
         if name_and_ext.len() == 1 {
             name_and_ext.push("");
-        } 
+        }
         (name_and_ext[0], name_and_ext[1])
     }
 
     /* 将短文件名格式化为目录项存储的内容 */
-    pub fn short_name_format(&self, name: &str)->([u8;8],[u8;3]){
-        let (mut name_,mut ext_) = self.split_name_ext(name);
+    pub fn short_name_format(&self, name: &str) -> ([u8; 8], [u8; 3]) {
+        let (mut name_, mut ext_) = self.split_name_ext(name);
         // 对这两个目录进行特殊处理（因为不能被正确分割）
         if name == "." || name == ".." {
             name_ = name;
@@ -305,19 +308,19 @@ impl FAT32Manager {
         }
         let name_bytes = name_.as_bytes();
         let ext_bytes = ext_.as_bytes();
-        let mut f_name = [0u8;8];
-        let mut f_ext = [0u8;3];
-        for i in 0..8{
-            if i >= name_bytes.len(){
+        let mut f_name = [0u8; 8];
+        let mut f_ext = [0u8; 3];
+        for i in 0..8 {
+            if i >= name_bytes.len() {
                 f_name[i] = 0x20; // 不足的用0x20进行填充
-            }else{
+            } else {
                 f_name[i] = (name_bytes[i] as char).to_ascii_uppercase() as u8;
             }
         }
-        for i in 0..3{
-            if i >= ext_bytes.len(){
+        for i in 0..3 {
+            if i >= ext_bytes.len() {
                 f_ext[i] = 0x20; // 不足的用0x20进行填充
-            }else{
+            } else {
                 f_ext[i] = (ext_bytes[i] as char).to_ascii_uppercase() as u8;
             }
         }
@@ -326,25 +329,27 @@ impl FAT32Manager {
 
     /* 由长文件名生成短文件名 */
     // DEBUG
-    pub fn generate_short_name(&self, long_name:&str)->String {
+    pub fn generate_short_name(&self, long_name: &str) -> String {
         // 目前仅支持【name.extension】 或者 【没有后缀】 形式的文件名！
         // 暂时不支持重复检测，即默认生成序号为~1
         // 无后缀
-        let (name_,ext_) = self.split_name_ext(long_name);
+        let (name_, ext_) = self.split_name_ext(long_name);
         let name = name_.as_bytes();
         let extension = ext_.as_bytes();
         let mut short_name = String::new();
-        for i in 0..6{ //fill name 
-            short_name.push((name[i] as char).to_ascii_uppercase() )
+        for i in 0..6 {
+            //fill name
+            short_name.push((name[i] as char).to_ascii_uppercase())
         }
         short_name.push('~');
         short_name.push('1');
         let ext_len = extension.len();
-        for i in 0..3{ //fill extension
-            if i >= ext_len{
-                short_name.push(0x20 as char ); //填充
+        for i in 0..3 {
+            //fill extension
+            if i >= ext_len {
+                short_name.push(0x20 as char); //填充
             } else {
-                short_name.push((name[i] as char).to_ascii_uppercase() ); //需要为大写
+                short_name.push((name[i] as char).to_ascii_uppercase()); //需要为大写
             }
         }
         short_name

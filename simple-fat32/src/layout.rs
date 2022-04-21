@@ -199,34 +199,11 @@ pub struct ShortDirEntry {
 
 impl ShortDirEntry {
     /// 建一个空的目录项
-    pub fn empty() -> Self {
+    pub fn new() -> Self {
         Self {
             dir_name: [0; 8],
             dir_extension: [0; 3],
             dir_attr: 0,
-            dir_ntres: 0,
-            dir_crt_time_tenth: 0,
-            dir_crt_time: 0,
-            dir_crt_date: 0,
-            dir_lst_acc_date: 0,
-            dir_fst_clus_hi: 0,
-            dir_wrt_time: 0,
-            dir_wrt_date: 0,
-            dir_fst_clus_lo: 0,
-            dir_file_size: 0,
-        }
-    }
-
-    /* 创建文件时调用
-     * 新建时不必分配块。写时检测初始簇是否为0，为0则需要分配。
-     */
-    pub fn new(name_: &[u8], extension_: &[u8], dir_attr: u8) -> Self {
-        let dir_name: [u8; 8] = clone_into_array(&name_[0..8]);
-        let dir_extension: [u8; 3] = clone_into_array(&extension_[0..3]);
-        Self {
-            dir_name,
-            dir_extension,
-            dir_attr,
             dir_ntres: 0,
             dir_crt_time_tenth: 0,
             dir_crt_time: 0,
@@ -683,7 +660,7 @@ impl From<&[u8]> for LongDirEntry {
 }
 
 impl LongDirEntry {
-    pub fn empty() -> Self {
+    pub fn new() -> Self {
         Self {
             ldir_ord: 0,
             ldir_name1: [0; 10],

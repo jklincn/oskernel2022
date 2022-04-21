@@ -123,7 +123,7 @@ impl VFile {
         // 拆分长文件名
         let name_vec = self.fs.read().long_name_split(name);
         let mut offset: usize = 0;
-        let mut long_ent = LongDirEntry::empty();
+        let mut long_ent = LongDirEntry::new();
         let long_ent_num = name_vec.len();
         let mut long_pos_vec: Vec<(usize, usize)> = Vec::new();
         let name_last = name_vec[long_ent_num - 1].clone();
@@ -181,7 +181,7 @@ impl VFile {
                 }
                 if is_match {
                     // 如果成功，读短目录项，进行校验
-                    let mut short_ent = ShortDirEntry::empty();
+                    let mut short_ent = ShortDirEntry::new();
                     let s_off = offset + long_ent_num * DIRENT_SZ;
                     read_sz = dir_ent.read_at(
                         s_off,
@@ -224,7 +224,7 @@ impl VFile {
 
     fn find_short_name(&self, name: &str, dir_ent: &ShortDirEntry) -> Option<VFile> {
         let name_upper = name.to_ascii_uppercase();
-        let mut short_ent = ShortDirEntry::empty();
+        let mut short_ent = ShortDirEntry::new();
         let mut offset = 0;
         let mut read_sz: usize;
         loop {
@@ -393,12 +393,12 @@ impl VFile {
             return None;
         }
         // 定义一个空的短文件名目录项
-        let mut short_ent = ShortDirEntry::empty();
+        let mut short_ent = ShortDirEntry::new();
         if name_.len() > 8 || ext_.len() > 3 {
             // 长文件名拆分
             let mut v_long_name = manager_reader.long_name_split(name);
             let long_ent_num = v_long_name.len();
-            let mut long_ent = LongDirEntry::empty();
+            let mut long_ent = LongDirEntry::new();
             // 生成短文件名及对应目录项
             let short_name = manager_reader.generate_short_name(name);
             let (name_bytes, ext_bytes) = manager_reader.short_name_format(short_name.as_str());
@@ -431,9 +431,12 @@ impl VFile {
             if attribute & ATTR_DIRECTORY != 0 {
                 let manager_reader = self.fs.read();
                 let (name_bytes, ext_bytes) = manager_reader.short_name_format(".");
-                let mut self_dir = ShortDirEntry::new(&name_bytes, &ext_bytes, ATTR_DIRECTORY);
+                let mut self_dir = ShortDirEntry::new();
+                self_dir.initialize(&name_bytes, &ext_bytes, ATTR_DIRECTORY);
                 let (name_bytes, ext_bytes) = manager_reader.short_name_format("..");
-                let mut par_dir = ShortDirEntry::new(&name_bytes, &ext_bytes, ATTR_DIRECTORY);
+                let mut par_dir = ShortDirEntry::new();
+                par_dir.initialize(&name_bytes, &ext_bytes, ATTR_DIRECTORY);
+
                 drop(manager_reader);        
                 self_dir.set_first_cluster(self.first_cluster());
                 par_dir.set_first_cluster(self.first_cluster());
@@ -465,7 +468,7 @@ impl VFile {
         let mut list: Vec<(String, u8)> = Vec::new();
         // DEBUG
         let mut offset: usize = 0;
-        let mut short_ent = ShortDirEntry::empty();
+        let mut short_ent = ShortDirEntry::new();
         loop {
             let mut read_sz = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
                 curr_ent.read_at(
@@ -548,7 +551,7 @@ impl VFile {
         if !self.is_dir() {
             return None;
         }
-        let mut long_ent = LongDirEntry::empty();
+        let mut long_ent = LongDirEntry::new();
         let mut offset = off;
         let mut name = String::new();
         let mut is_long = false;
@@ -624,7 +627,7 @@ impl VFile {
             return None;
         }
         let mut list: Vec<(String, u8)> = Vec::new();
-        let mut long_ent = LongDirEntry::empty();
+        let mut long_ent = LongDirEntry::new();
         let mut offset = 0;
         let mut name = String::new();
         let mut is_long = false;
@@ -714,7 +717,7 @@ impl VFile {
         }
         let mut offset = 0;
         loop {
-            let mut tmp_dirent = ShortDirEntry::empty();
+            let mut tmp_dirent = ShortDirEntry::new();
             let read_sz = self.read_short_dirent(|short_ent: &ShortDirEntry| {
                 short_ent.read_at(
                     offset,
