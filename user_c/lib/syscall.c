@@ -17,3 +17,15 @@ void exit(int exit_code) {
 int uname(void* buf){
     return syscall(SYSCALL_UNAME, buf);
 }
+
+pid_t fork(void){
+    return syscall(SYSCALL_FORK, SIGCHLD, 0);
+}
+
+int waitpid(int pid, int* code, int options){
+    return syscall(SYSCALL_WAITPID, pid, code, options, 0);
+}
+
+int wait(int* code){
+    return waitpid((int)-1, code, 0);
+}
