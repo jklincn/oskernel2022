@@ -10,3 +10,6 @@ edition = "2021"
 buddy_system_allocator = "0.6"
 bitflags = "1.2.1"
 riscv = { git = "https://jeremymo.top:66/GitLab/K210-Driver-Rust/riscv", features = ["inline-asm"] }
+
+[profile.release]
+debug = true

@@ -23,6 +23,8 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+pub use crate::task::{Utsname, UTSNAME};
+
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
@@ -130,8 +132,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         // ++++ temporarily access child PCB lock exclusively
         p.inner_exclusive_access().is_zombie() && (pid == -1 || pid as usize == p.getpid())
         // ++++ release child PCB
-    }); 
-
+    });
 
     if let Some((idx, _)) = pair {
         // 将子进程从向量中移除并置于当前上下文中
@@ -166,4 +167,24 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
     } else {
         -1
     }
+}
+
+/// ### 获取系统utsname参数
+/// - 参数
+///     - `buf`：用户空间存放utsname结构体的缓冲区
+/// - 返回值
+///     - 0表示正常
+/// - syscall_ID: 160
+pub fn sys_uname(buf: *const u8) -> isize {
+    let token = current_user_token();
+    let uname = UTSNAME.exclusive_access();
+    *translated_refmut(token, buf as *mut Utsname) = Utsname{
+        sysname:uname.sysname,
+        nodename:uname.nodename,
+        release: uname.release,
+        version: uname.version,
+        machine: uname.machine,
+        domainname: uname.domainname,
+    };
+    0
 }

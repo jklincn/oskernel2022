@@ -1,7 +1,7 @@
-#include "syscall.h"
+#include <stdio.h>
 
-int main(){
+int main() {
     char* s = "hello world in c\n";
-    sys_write(FD_STDOUT, s, 18);
+    printf("%s", s);
     return 0;
 }

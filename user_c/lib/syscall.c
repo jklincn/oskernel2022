@@ -1,29 +1,19 @@
-#include "syscall.h"
+#include <stddef.h>
+#include <unistd.h>
 
-typedef unsigned long long usize;
-typedef long long isize;
+#include <syscall.h>
 
-isize syscall(usize id, usize a0, usize a1, usize a2)
-{
-    isize ret;
-    asm volatile(
-        "mv x10, %1\n"
-        "mv x11, %2\n"
-        "mv x12, %3\n"
-        "mv x17, %4\n"
-        "ecall\n"
-        "mv %0, x10\n"
-        : "=r"(ret)
-        : "r"(a0), "r"(a1), "r"(a2), "r"(id)
-        : "x10", "x11", "x12", "x17");
-    return ret;
+ssize_t write(int fd, const void* buf, size_t len) {
+    return syscall(SYSCALL_WRITE, fd, (int64)buf, len);
+}
+ssize_t read(int fd, void* buf, size_t len) {
+    return syscall(SYSCALL_READ, fd, buf, len);
 }
 
-isize sys_write(usize fd, char* buf, usize len)
-{
-    return syscall(SYSCALL_WRITE, fd, (usize)buf, len);
+void exit(int exit_code) {
+    syscall(SYSCALL_EXIT, (int64)exit_code, 0, 0);
 }
 
-isize sys_exit(int exit_code) {
-    return syscall(SYSCALL_EXIT, (usize)exit_code, 0, 0);
+int uname(void* buf){
+    return syscall(SYSCALL_UNAME, buf);
 }
