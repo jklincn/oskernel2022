@@ -16,7 +16,7 @@ use crate::fs::{open_file, OpenFlags};
 use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
-    suspend_current_and_run_next, SignalFlags,
+    suspend_current_and_run_next, SignalFlags,current_trap_cx,
 };
 use crate::timer::get_time_ms;
 use alloc::string::String;
@@ -109,7 +109,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
 ///     - exit_code 表示保存子进程返回值的地址，如果这个地址为 0 的话表示不必保存。
 /// - 返回值：
 ///     - 如果要等待的子进程不存在则返回 -1；
-///     - 否则如果要等待的子进程均未结束则返回 -2；
+///     - 否则如果要等待的子进程均未结束则返回，则放权等待；
 ///     - 否则返回结束的子进程的进程 ID。
 /// - syscall ID：260
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
@@ -151,7 +151,12 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
         found_pid as isize
     } else {
-        -2  // 如果找不到的话直接返回 -2
+        // 如果找不到的话则放权等待
+        drop(inner);        // 手动释放 TaskControlBlock 全局可变部分
+        let mut cx = current_trap_cx();
+        cx.sepc -= 4;
+        suspend_current_and_run_next();
+        -2
     }
     // ---- release current PCB lock automatically
 }
