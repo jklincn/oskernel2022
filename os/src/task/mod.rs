@@ -18,6 +18,7 @@ mod signal; // 进程状态标志
 mod switch; // 任务上下文切换模块
 #[allow(clippy::module_inception)]
 mod task;   // 进程控制块
+mod info;   // 系统信息模块
 
 use crate::fs::{open_file, OpenFlags};
 use alloc::sync::Arc;
@@ -28,6 +29,7 @@ use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
+pub use info::{Utsname, UTSNAME};
 pub use manager::{add_task, pid2task};
 pub use pid::{pid_alloc, KernelStack, PidHandle};
 pub use processor::{

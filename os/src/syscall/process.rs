@@ -23,6 +23,8 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+pub use crate::task::{Utsname, UTSNAME};
+
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
@@ -107,13 +109,13 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
 ///     - exit_code 表示保存子进程返回值的地址，如果这个地址为 0 的话表示不必保存。
 /// - 返回值：
 ///     - 如果要等待的子进程不存在则返回 -1；
-///     - 否则如果要等待的子进程均未结束则返回 -2；
+///     - 否则如果要等待的子进程均未结束则返回，则放权等待；
 ///     - 否则返回结束的子进程的进程 ID。
 /// - syscall ID：260
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     let task = current_task().unwrap();
     // ---- access current TCB exclusively
-    let mut inner = task.inner_exclusive_access();
+    let inner = task.inner_exclusive_access();
 
     // 根据pid参数查找有没有符合要求的进程
     if !inner
@@ -124,35 +126,40 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         return -1;
         // ---- release current PCB
     }
+    drop(inner);
 
-    // 查找所有符合PID要求的处于僵尸状态的进程，如果有的话还需要同时找出它在当前进程控制块子进程向量中的下标
-    let pair = inner.children.iter().enumerate().find(|(_, p)| {
-        // ++++ temporarily access child PCB lock exclusively
-        p.inner_exclusive_access().is_zombie() && (pid == -1 || pid as usize == p.getpid())
-        // ++++ release child PCB
-    }); 
-
-
-    if let Some((idx, _)) = pair {
-        // 将子进程从向量中移除并置于当前上下文中
-        let child = inner.children.remove(idx);
-        // 确认这是对于该子进程控制块的唯一一次强引用，即它不会出现在某个进程的子进程向量中，
-        // 更不会出现在处理器监控器或者任务管理器中。当它所在的代码块结束，这次引用变量的生命周期结束，
-        // 将导致该子进程进程控制块的引用计数变为 0 ，彻底回收掉它占用的所有资源，
-        // 包括：内核栈和它的 PID 还有它的应用地址空间存放页表的那些物理页帧等等
-        assert_eq!(Arc::strong_count(&child), 1);
-        // 收集的子进程信息返回
-        let found_pid = child.getpid();
-        // ++++ temporarily access child TCB exclusively
-        let exit_code = child.inner_exclusive_access().exit_code;
-        // ++++ release child PCB
-        // 将子进程的退出码写入到当前进程的应用地址空间中
-        *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
-        found_pid as isize
-    } else {
-        -2  // 如果找不到的话直接返回 -2
+    loop{
+        let mut inner = task.inner_exclusive_access();
+        // 查找所有符合PID要求的处于僵尸状态的进程，如果有的话还需要同时找出它在当前进程控制块子进程向量中的下标
+        let pair = inner.children.iter().enumerate().find(|(_, p)| {
+            // ++++ temporarily access child PCB lock exclusively
+            p.inner_exclusive_access().is_zombie() && (pid == -1 || pid as usize == p.getpid())
+            // ++++ release child PCB
+        });
+        
+        if let Some((idx, _)) = pair {
+            // 将子进程从向量中移除并置于当前上下文中
+            let child = inner.children.remove(idx);
+            // 确认这是对于该子进程控制块的唯一一次强引用，即它不会出现在某个进程的子进程向量中，
+            // 更不会出现在处理器监控器或者任务管理器中。当它所在的代码块结束，这次引用变量的生命周期结束，
+            // 将导致该子进程进程控制块的引用计数变为 0 ，彻底回收掉它占用的所有资源，
+            // 包括：内核栈和它的 PID 还有它的应用地址空间存放页表的那些物理页帧等等
+            assert_eq!(Arc::strong_count(&child), 1);
+            // 收集的子进程信息返回
+            let found_pid = child.getpid();
+            // ++++ temporarily access child TCB exclusively
+            let exit_code = child.inner_exclusive_access().exit_code;
+            // ++++ release child PCB
+            // 将子进程的退出码写入到当前进程的应用地址空间中
+            *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
+            return found_pid as isize;
+        } else {
+            // 如果找不到的话则放权等待
+            drop(inner);        // 手动释放 TaskControlBlock 全局可变部分
+            suspend_current_and_run_next();
+        }
+        // ---- release current PCB lock automatically
     }
-    // ---- release current PCB lock automatically
 }
 
 pub fn sys_kill(pid: usize, signal: u32) -> isize {
@@ -166,4 +173,24 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
     } else {
         -1
     }
+}
+
+/// ### 获取系统utsname参数
+/// - 参数
+///     - `buf`：用户空间存放utsname结构体的缓冲区
+/// - 返回值
+///     - 0表示正常
+/// - syscall_ID: 160
+pub fn sys_uname(buf: *const u8) -> isize {
+    let token = current_user_token();
+    let uname = UTSNAME.exclusive_access();
+    *translated_refmut(token, buf as *mut Utsname) = Utsname{
+        sysname:uname.sysname,
+        nodename:uname.nodename,
+        release: uname.release,
+        version: uname.version,
+        machine: uname.machine,
+        domainname: uname.domainname,
+    };
+    0
 }
