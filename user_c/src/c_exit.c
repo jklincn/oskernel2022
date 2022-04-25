@@ -17,12 +17,13 @@ void test_exit(void) {
         exit(0);
     }
     else {
-        while(1){       
-            waitret = wait(&wstatus);
-            if (waitret >= 0)break;
-        }
+        // while(1){       
+        //     waitret = wait(&wstatus);
+        //     if (waitret >= 0)break;
+        // }
         /*----------SYSCALL_WAIT需修改以支持一下代码-----------*/
-        //waitret = wait(&wstatus);
+        waitret = wait(&wstatus);
+        printf("waitret:%d cpid:%d\n", waitret,cpid);
         if (waitret == cpid) printf("exit OK.\n");
         else printf("exit ERR.\n");
     }
