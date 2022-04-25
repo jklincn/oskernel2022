@@ -56,7 +56,12 @@ macro_rules! info{
         println!("{}",color_text!($info,94));
     }
 }
-
+/**
+ *  error!("error");
+    info!("info");
+    warn!("warn");
+    debug!("debug");
+ */
 impl BlockDevice for BlockFile {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
         let mut file = self.0.lock().unwrap();
@@ -161,14 +166,6 @@ fn fat32_pack() -> std::io::Result<()> {
     for app in root_vfile.ls_lite().unwrap() {
         println!("{}", app.0);
     }
-
-    error!("error");
-    info!("info");
-    warn!("warn");
-    debug!("debug");
-
-
-    
     Ok(())
 }
 

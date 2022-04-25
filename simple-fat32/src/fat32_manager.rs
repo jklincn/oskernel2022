@@ -79,7 +79,7 @@ impl FAT32Manager {
                 *ebs // DEBUG
             });
 
-        // 获取 FSINFO 结构扇区号（通常是1），创建 fsinfo
+        // 获取 FSINFO 结构所在扇区号（通常是1），创建 fsinfo
         let fsinfo = FSInfo::new(ext_boot_sec.fat_info_sec());
 
         // 校验签名
@@ -88,11 +88,11 @@ impl FAT32Manager {
             "Error loading fat32! Illegal signature"
         );
 
-        let sectors_per_cluster = boot_sec.bpb_sec_per_clus as u32; // 每簇包含的扇区数
-        let bytes_per_sector = boot_sec.bpb_bytes_per_sec as u32; // 每扇区包含的字节数
+        let sectors_per_cluster = boot_sec.sec_per_clus() as u32; // 每簇包含的扇区数
+        let bytes_per_sector = boot_sec.bytes_per_sec() as u32; // 每扇区包含的字节数
         let bytes_per_cluster = sectors_per_cluster * bytes_per_sector; // 每簇包含的字节数
-        let fat_n_sec = ext_boot_sec.bpb_fatsz32; // fat表所占的扇区数，即fat表大小
-        let fat1_sector = boot_sec.bpb_rsvd_sec_cnt as u32; // fat表1起始的扇区号
+        let fat_n_sec = ext_boot_sec.fat_size(); // fat表所占的扇区数，即fat表大小
+        let fat1_sector = boot_sec.first_fat_sector() as u32; // fat表1起始的扇区号
         let fat2_sector = fat1_sector + fat_n_sec; // fat表2起始的扇区号
         let fat_n_entry = fat_n_sec * bytes_per_sector / 4; // fat（最大支持？）表项数量
 
@@ -100,7 +100,7 @@ impl FAT32Manager {
         let fat = FAT::new(fat1_sector, fat2_sector, fat_n_sec, fat_n_entry);
 
         // 保留扇区数+所有FAT表的扇区数
-        let root_sec = boot_sec.bpb_num_fats as u32 * fat_n_sec + boot_sec.bpb_rsvd_sec_cnt as u32;
+        let root_sec = boot_sec.first_fat_sector() as u32 + boot_sec.fat_num() as u32 * fat_n_sec;
 
         // 0x2F in ASCII is /
         let mut root_dirent = ShortDirEntry::new();

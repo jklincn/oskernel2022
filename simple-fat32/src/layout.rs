@@ -36,24 +36,39 @@ type DataBlock = [u8; BLOCK_SZ];
 #[derive(Clone, Copy, Debug)]
 pub struct FatBS {
     #[allow(unused)]
-    pub bs_jmp_boot: [u8; 3], // 跳转指令，指向启动代码
+    bs_jmp_boot: [u8; 3], // 跳转指令，指向启动代码
     #[allow(unused)]
-    pub bs_oem_name: [u8; 8], // 建议值为“MSWIN4.1”
-    pub bpb_bytes_per_sec: u16, // 每扇区的字节数
-    pub bpb_sec_per_clus: u8,   // 每簇的扇区数
-    pub bpb_rsvd_sec_cnt: u16,  // 保留扇区的数目
-    pub bpb_num_fats: u8,       // FAT数
-    pub bpb_root_ent_cnt: u16,  // 对于FAT12和FAT16此域包含根目录中目录的个数（每项长度为32字节），对于FAT32，此项必须为0。
-    pub bpb_tot_sec16: u16,     // 早期版本中16bit的总扇区，对于FAT32，此域必为0。
-    pub bpb_media: u8,          // 媒体描述符
-    pub bpb_fatsz16: u16,       // FAT12/FAT16一个FAT表所占的扇区数，对于FAT32来说此域必须为0
-    pub bpb_sec_per_trk: u16,   // 每磁道的扇区数，用于BIOS中断0x13
-    pub bpb_num_heads: u16,     // 磁头数，用于BIOS的0x13中断
-    pub bpb_hidd_sec: u32, // 在此FAT分区之前所隐藏的扇区数，必须使得调用BIOS的0x13中断可以得到此数值，对于那些没有分区的存储介质，此域必须为0
-    pub bpb_tot_sec32: u32, // 该卷总扇区数（32bit），这里的扇区总数包括FAT卷四个个基本分的全部扇区，此域可以为0，若此域为0，BPB_ToSec16必须为非0，对FAT32，此域必须是非0。
+    bs_oem_name: [u8; 8], // 建议值为“MSWIN4.1”
+    bpb_bytes_per_sec: u16, // 每扇区的字节数
+    bpb_sec_per_clus: u8,   // 每簇的扇区数
+    bpb_rsvd_sec_cnt: u16,  // 保留扇区的数目
+    bpb_num_fats: u8,       // FAT数
+    #[allow(unused)]
+    bpb_root_ent_cnt: u16,  // 对于FAT12和FAT16此域包含根目录中目录的个数（每项长度为32字节），对于FAT32，此项必须为0。
+    bpb_tot_sec16: u16,     // 早期版本中16bit的总扇区，对于FAT32，此域必为0。
+    #[allow(unused)]
+    bpb_media: u8,          // 媒体描述符
+    #[allow(unused)]
+    bpb_fatsz16: u16,       // FAT12/FAT16一个FAT表所占的扇区数，对于FAT32来说此域必须为0
+    #[allow(unused)]
+    bpb_sec_per_trk: u16,   // 每磁道的扇区数，用于BIOS中断0x13
+    #[allow(unused)]
+    bpb_num_heads: u16,     // 磁头数，用于BIOS的0x13中断
+    #[allow(unused)]
+    bpb_hidd_sec: u32, // 在此FAT分区之前所隐藏的扇区数，必须使得调用BIOS的0x13中断可以得到此数值，对于那些没有分区的存储介质，此域必须为0
+    bpb_tot_sec32: u32, // 该卷总扇区数（32bit），这里的扇区总数包括四个基本部分，此域可以为0，若此域为0，BPB_ToSec16必须为非0，对FAT32，此域必须是非0。
 }
 
 impl FatBS {
+    pub fn bytes_per_sec(&self) -> u32 {
+        self.bpb_bytes_per_sec as u32
+    }
+    pub fn sec_per_clus(&self) -> u32 {
+        self.bpb_sec_per_clus as u32
+    }
+    pub fn fat_num(&self) -> u32 {
+        self.bpb_num_fats as u32
+    }
     pub fn total_sectors(&self) -> u32 {
         if self.bpb_tot_sec16 == 0 {
             self.bpb_tot_sec32
@@ -71,21 +86,31 @@ impl FatBS {
 /// FAT32 Structure Starting at Offset 36(0x24)
 #[repr(packed)]
 #[derive(Clone, Copy)]
-#[allow(unused)]
 pub struct FatExtBS {
-    pub bpb_fatsz32: u32,          // 一个FAT表所占的扇区数，此域为FAT32特有，同时BPB_FATSz16必须为0
-    pub bpb_ext_flags: u16,        // 扩展标志，此域FAT32特有
-    pub bpb_fs_ver: u16,           // 此域为FAT32特有， 高位为FAT32的主版本号，低位为次版本号
-    pub bpb_root_clus: u32,        // 	根目录所在第一个簇的簇号，通常该数值为2，但不是必须为2。
-    pub bpb_fsinfo: u16,           // 保留区中FAT32卷FSINFO结构所占的扇区数，通常为1。
-    pub bpb_bk_boot_sec: u16,      // 如果不为0，表示在保留区中引导记录的备数据所占的扇区数，通常为6。
-    pub bpb_reserved: [u8; 12],    // 用于以后FAT扩展使用，对FAT32。此域用0填充
-    pub bs_drv_num: u8,            // 用于BIOS中断0x13得到磁盘驱动器参数
-    pub bs_reserved1: u8,          // 保留（供NT使用），格式化FAT卷时必须设为0
-    pub bs_boot_sig: u8,           // 扩展引导标记（0x29）用于指明此后的3个域可用
-    pub bs_vol_id: u32,            // 卷标序列号，此域以BS_VolLab一起可以用来检测磁盘是否正确
-    pub bs_vol_lab: [u8; 11],      // 磁盘卷标，此域必须与根目录中11字节长的卷标一致。
-    pub bs_fil_sys_type: [u8; 64], // 以下的几种之一：“FAT12”，“FAT16”，“FAT32”。
+    bpb_fatsz32: u32,          // 一个FAT表所占的扇区数，此域为FAT32特有，同时BPB_FATSz16必须为0
+    #[allow(unused)]
+    bpb_ext_flags: u16,        // 扩展标志，此域FAT32特有
+    #[allow(unused)]
+    bpb_fs_ver: u16,           // 此域为FAT32特有， 高位为FAT32的主版本号，低位为次版本号
+    #[allow(unused)]
+    bpb_root_clus: u32,        // 	根目录所在第一个簇的簇号，通常该数值为2，但不是必须为2。
+    bpb_fsinfo: u16,           // 保留区中FAT32卷FSINFO结构所在的扇区号，通常为1。
+    #[allow(unused)]
+    bpb_bk_boot_sec: u16,      // 如果不为0，表示在保留区中引导记录的备数据所占的扇区数，通常为6。
+    #[allow(unused)]
+    bpb_reserved: [u8; 12],    // 用于以后FAT扩展使用，对FAT32。此域用0填充
+    #[allow(unused)]
+    bs_drv_num: u8,            // 用于BIOS中断0x13得到磁盘驱动器参数
+    #[allow(unused)]
+    bs_reserved1: u8,          // 保留（供NT使用），格式化FAT卷时必须设为0
+    #[allow(unused)]
+    bs_boot_sig: u8,           // 扩展引导标记（0x29）用于指明此后的3个域可用
+    #[allow(unused)]
+    bs_vol_id: u32,            // 卷标序列号，此域以BS_VolLab一起可以用来检测磁盘是否正确
+    #[allow(unused)]
+    bs_vol_lab: [u8; 11],      // 磁盘卷标，此域必须与根目录中11字节长的卷标一致。
+    #[allow(unused)]
+    bs_fil_sys_type: [u8; 64], // 以下的几种之一：“FAT12”，“FAT16”，“FAT32”。
 }
 
 impl FatExtBS {
@@ -96,11 +121,6 @@ impl FatExtBS {
 
     pub fn fat_info_sec(&self) -> u32 {
         self.bpb_fsinfo as u32
-    }
-
-    #[allow(unused)]
-    pub fn root_clusters(&self) -> u32 {
-        self.bpb_root_clus
     }
 }
 
@@ -339,20 +359,24 @@ impl ShortDirEntry {
     }
 
     /// 获取短文件名
-    pub fn get_name_uppercase(&self)-> String {
+    pub fn get_name_uppercase(&self) -> String {
         let mut name: String = String::new();
-        for i in 0..8 {  // 记录文件名
+        for i in 0..8 {
+            // 记录文件名
             if self.dir_name[i] == 0x20 {
                 break;
             } else {
                 name.push(self.dir_name[i] as char);
             }
         }
-        for i in 0..3 { // 记录扩展名
+        for i in 0..3 {
+            // 记录扩展名
             if self.dir_extension[i] == 0x20 {
                 break;
             } else {
-                if i == 0 {name.push('.'); }
+                if i == 0 {
+                    name.push('.');
+                }
                 name.push(self.dir_extension[i] as char);
             }
         }
@@ -361,18 +385,22 @@ impl ShortDirEntry {
 
     pub fn get_name_lowercase(&self) -> String {
         let mut name: String = String::new();
-        for i in 0..8 {  // 记录文件名
+        for i in 0..8 {
+            // 记录文件名
             if self.dir_name[i] == 0x20 {
                 break;
             } else {
                 name.push((self.dir_name[i] as char).to_ascii_lowercase());
             }
         }
-        for i in 0..3 { // 记录扩展名
+        for i in 0..3 {
+            // 记录扩展名
             if self.dir_extension[i] == 0x20 {
                 break;
             } else {
-                if i == 0 {name.push('.'); }
+                if i == 0 {
+                    name.push('.');
+                }
                 name.push((self.dir_extension[i] as char).to_ascii_lowercase());
             }
         }
@@ -602,16 +630,20 @@ impl ShortDirEntry {
     }
 
     /// 为相应的长文件名计算校验和
-    pub fn checksum(&self)->u8{
-        let mut name_buff:[u8;11] = [0u8;11]; 
-        let mut sum:u8 = 0;
-        for i in 0..8 { name_buff[i] = self.dir_name[i]; }
-        for i in 0..3 { name_buff[i+8] = self.dir_extension[i]; }
-        for i in 0..11{ 
+    pub fn checksum(&self) -> u8 {
+        let mut name_buff: [u8; 11] = [0u8; 11];
+        let mut sum: u8 = 0;
+        for i in 0..8 {
+            name_buff[i] = self.dir_name[i];
+        }
+        for i in 0..3 {
+            name_buff[i + 8] = self.dir_extension[i];
+        }
+        for i in 0..11 {
             if (sum & 1) != 0 {
-                sum = 0x80 + (sum>>1) + name_buff[i];
-            }else{
-                sum = (sum>>1) + name_buff[i];
+                sum = 0x80 + (sum >> 1) + name_buff[i];
+            } else {
+                sum = (sum >> 1) + name_buff[i];
             }
         }
         sum
@@ -634,9 +666,9 @@ pub struct LongDirEntry {
     // 如果是该文件的最后一个长文件名目录项，
     // 则将该目录项的序号与 0x40 进行“或（OR）运算”的结果写入该位置。
     // 长文件名要有\0
-    ldir_ord: u8, // 长文件名目录项的序列号，一个文件的第一个目录项序列号为 1，然后依次递增
-    ldir_name1: [u8; 10], // 5 characters
-    ldir_attr: u8, // 长文件名目录项标志，取值 0x0F
+    ldir_ord: u8,              // 长文件名目录项的序列号，一个文件的第一个目录项序列号为 1，然后依次递增
+    ldir_name1: [u8; 10],      // 5 characters
+    ldir_attr: u8,             // 长文件名目录项标志，取值 0x0F
     ldir_type: u8, // If zero, indicates a directory entry that is a sub-component of a long name.Non-zero implies other dirent types.
     ldir_chksum: u8, // 根据对应短文件名计算出的校验值，用于长文件名与短文件名的匹配
     ldir_name2: [u8; 12], // 6 characters

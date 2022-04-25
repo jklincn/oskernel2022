@@ -32,7 +32,7 @@ impl BlockCache {
     }
 
     /// 获取缓冲区中的位于偏移量 offset 的一个类型为 T 的磁盘上数据结构的不可变引用
-    pub fn get_ref<T>(&self, offset: usize) -> &T
+    fn get_ref<T>(&self, offset: usize) -> &T
     where
         T: Sized,
     {
@@ -43,7 +43,7 @@ impl BlockCache {
     }
 
     /// 获取缓冲区中的位于偏移量 offset 的一个类型为 T 的磁盘上数据结构的可变引用
-    pub fn get_mut<T>(&mut self, offset: usize) -> &mut T
+    fn get_mut<T>(&mut self, offset: usize) -> &mut T
     where
         T: Sized,
     {
@@ -102,19 +102,18 @@ impl BlockCacheManager {
         }
     }
 
-    pub fn set_start_sec(&mut self, new_start_sec: usize) {
-        self.start_sec = new_start_sec;
+    pub fn start_sec(&self) -> usize {
+        self.start_sec
     }
 
-    pub fn get_start_sec(&self) -> usize {
-        self.start_sec
+    pub fn set_start_sec(&mut self, new_start_sec: usize) {
+        self.start_sec = new_start_sec;
     }
 
     // 读取指定id的块的缓存，如果不在队列里则返回None
     pub fn read_block_cache(
         &self,
         block_id: usize,
-        //block_device: Arc<dyn BlockDevice>,
     ) -> Option<Arc<RwLock<BlockCache>>> {
         if let Some(pair) = self.queue.iter().find(|pair| pair.0 == block_id) {
             Some(Arc::clone(&pair.1))
@@ -171,7 +170,7 @@ pub enum CacheMode {
 /* 仅用于访问文件数据块，不包括目录项 */
 pub fn get_block_cache(block_id: usize, block_device: Arc<dyn BlockDevice>, rw_mode: CacheMode) -> Arc<RwLock<BlockCache>> {
     // 这里的read是RWLock读写锁
-    let phy_blk_id = DATA_BLOCK_CACHE_MANAGER.read().get_start_sec() + block_id;
+    let phy_blk_id = DATA_BLOCK_CACHE_MANAGER.read().start_sec() + block_id;
     if rw_mode == CacheMode::READ {
         // 判断是否在索引块缓存队列中，避免缓存一致性问题
         if let Some(blk) = INFO_CACHE_MANAGER.read().read_block_cache(phy_blk_id) {
@@ -192,7 +191,7 @@ pub fn get_block_cache(block_id: usize, block_device: Arc<dyn BlockDevice>, rw_m
 
 /* 用于访问保留扇区，以及目录项 */
 pub fn get_info_cache(block_id: usize, block_device: Arc<dyn BlockDevice>, rw_mode: CacheMode) -> Arc<RwLock<BlockCache>> {
-    let phy_blk_id = INFO_CACHE_MANAGER.read().get_start_sec() + block_id;
+    let phy_blk_id = INFO_CACHE_MANAGER.read().start_sec() + block_id;
     if rw_mode == CacheMode::READ {
         // make sure the blk is in cache
         if let Some(blk) = DATA_BLOCK_CACHE_MANAGER.read().read_block_cache(phy_blk_id) {
