@@ -18,8 +18,11 @@ int main() {
         else {          // 父进程
             waitpid(npid, &child_return, 0);
             if (child_return != 0) {
-                printf("TEST ERROR:%s", prog_name[t]);
+                printf(COLOR_LIGHT_RED"TEST ERROR:%s"COLOR_NONE, prog_name[t]);
                 return -t;
+            }
+            else{
+                printf(COLOR_LIGHT_GREEN"OK\n"COLOR_NONE);
             }
         }
     }
