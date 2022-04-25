@@ -27,6 +27,9 @@ int wait(int* code){
 int sched_yield(void){
     return syscall(SYSCALL_YIELD);
 }
+int exec(char* name){
+    return syscall(SYSCALL_EXEC, name);
+}
 int execve(const char* name, char* const argv[], char* const argp[]){
     return syscall(SYSCALL_EXEC, name, argv, argp);
 }
