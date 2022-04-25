@@ -16,9 +16,10 @@ int main() {
             exec(prog_name[t]);
         }
         else {          // 父进程
+            child_return = -1;
             waitpid(npid, &child_return, 0);
             if (child_return != 0) {
-                printf(COLOR_LIGHT_RED"TEST ERROR:%s"COLOR_NONE, prog_name[t]);
+                printf(COLOR_LIGHT_RED"TEST ERROR:%s return code:%d\n"COLOR_NONE, prog_name[t], child_return);
                 return -t;
             }
             else{

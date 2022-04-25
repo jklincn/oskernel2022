@@ -8,17 +8,14 @@
  * 测试失败则输出：
  * "  execve error."
  */
-void test_execve(void) {
+int test_exec(void) {
     TEST_START(__func__);
-    // char* newargv[] = { NULL, NULL };
-    // char* newenviron[] = { NULL };
     exec("test_echo");
-    // execve("test_echo", newargv, newenviron);
     printf("  execve error.\n");
-    //TEST_END(__func__);
+    return -1;
 }
 
 int main(void) {
-    test_execve();
-    return 0;
+    return test_exec();
+    
 }

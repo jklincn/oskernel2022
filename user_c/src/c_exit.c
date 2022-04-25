@@ -8,29 +8,30 @@
  * 测试失败则输出：
  * "exit ERR."
  */
-void test_exit(void) {
+int test_exit(void) {
     TEST_START(__func__);
     int cpid, waitret, wstatus;
     cpid = fork();
     assert(cpid != -1);
     if (cpid == 0) {
-        exit(0);
+        exit(98988);
     }
     else {
-        // while(1){       
-        //     waitret = wait(&wstatus);
-        //     if (waitret >= 0)break;
-        // }
-        /*----------SYSCALL_WAIT需修改以支持一下代码-----------*/
         waitret = wait(&wstatus);
-        printf("waitret:%d cpid:%d\n", waitret,cpid);
-        if (waitret == cpid) printf("exit OK.\n");
-        else printf("exit ERR.\n");
+        printf("waitret:%d cpid:%d child_retrun:%d\n", waitret, cpid, wstatus);
+        if (waitret == cpid && wstatus == 98988) {
+            printf("exit OK.\n");
+            return 0;
+        }
+        else {
+            printf("exit ERR.\n");
+            return -1;
+        }
     }
     TEST_END(__func__);
 }
 
 int main(void) {
-    test_exit();
-    return 0;
+    return test_exit();
+    
 }
