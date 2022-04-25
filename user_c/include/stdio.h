@@ -10,7 +10,7 @@
 
 //#define TEST_START(x) puts(x)
 #define TEST_START(x) puts("========== START ");puts(x);puts(" ==========\n");
-#define TEST_END(x) puts("========== END ");puts(x);puts(" ==========\n");
+#define TEST_END(x) puts("==========  END  ");puts(x);puts(" ==========\n");
 
 
 #define va_start(ap, last) (__builtin_va_start(ap, last))
