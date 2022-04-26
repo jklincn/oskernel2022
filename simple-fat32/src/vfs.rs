@@ -1,4 +1,4 @@
-use super::{fat32_manager::*, get_info_cache, layout::*, BlockDevice, CacheMode};
+use super::{fat32_manager::*, get_info_cache, layout::*, BlockDevice};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -55,8 +55,8 @@ impl VFile {
         self.attribute
     }
 
-    pub fn get_size(&self) -> u32 {
-        self.read_short_dirent(|se: &ShortDirEntry| se.get_size())
+    pub fn file_size(&self) -> u32 {
+        self.read_short_dirent(|se: &ShortDirEntry| se.file_size())
     }
 
     pub fn get_fs(&self) -> Arc<RwLock<FAT32Manager>> {
@@ -86,7 +86,7 @@ impl VFile {
             let rr = root_dirent.read();
             f(&rr)
         } else {
-            get_info_cache(self.short_sector, self.block_device.clone(), CacheMode::READ)
+            get_info_cache(self.short_sector, self.block_device.clone())
                 .read()
                 .read(self.short_offset, f)
         }
@@ -94,7 +94,7 @@ impl VFile {
 
     fn modify_long_dirent<V>(&self, index: usize, f: impl FnOnce(&mut LongDirEntry) -> V) -> V {
         let (sector, offset) = self.long_pos_vec[index];
-        get_info_cache(sector, self.block_device.clone(), CacheMode::READ)
+        get_info_cache(sector, self.block_device.clone())
             .write()
             .modify(offset, f)
     }
@@ -106,7 +106,7 @@ impl VFile {
             let mut rw = root_dirent.write();
             f(&mut rw)
         } else {
-            get_info_cache(self.short_sector, self.block_device.clone(), CacheMode::READ)
+            get_info_cache(self.short_sector, self.block_device.clone())
                 .write()
                 .modify(self.short_offset, f)
         }
@@ -148,10 +148,10 @@ impl VFile {
             if read_sz != DIRENT_SZ || long_ent.is_empty() {
                 return None;
             }
-            if long_ent.get_name_raw() == name_last && long_ent.ldir_attr() == ATTR_LONG_NAME {
+            if long_ent.get_name_raw() == name_last && long_ent.attr() == ATTR_LONG_NAME {
                 // 匹配：如果名一致，且第一字段为0x4*，获取该order，以及校验和
-                let mut order = long_ent.get_order();
-                let l_checksum = long_ent.get_checksum();
+                let mut order = long_ent.order();
+                let l_checksum = long_ent.check_sum();
                 if order & 0x40 == 0 || order == 0xE5 {
                     offset += step * DIRENT_SZ;
                     continue;
@@ -174,7 +174,7 @@ impl VFile {
                     if read_sz != DIRENT_SZ {
                         return None;
                     }
-                    if long_ent.get_name_raw() != name_vec[long_ent_num - 1 - i] || long_ent.ldir_attr() != ATTR_LONG_NAME {
+                    if long_ent.get_name_raw() != name_vec[long_ent_num - 1 - i] || long_ent.attr() != ATTR_LONG_NAME {
                         is_match = false;
                         break;
                     }
@@ -205,7 +205,7 @@ impl VFile {
                             short_sector,
                             short_offset,
                             long_pos_vec,
-                            short_ent.ldir_attr(),
+                            short_ent.attr(),
                             self.fs.clone(),
                             self.block_device.clone(),
                         ));
@@ -246,7 +246,7 @@ impl VFile {
                         short_sector,
                         short_offset,
                         long_pos_vec,
-                        short_ent.ldir_attr(),
+                        short_ent.attr(),
                         self.fs.clone(),
                         self.block_device.clone(),
                     ));
@@ -312,7 +312,7 @@ impl VFile {
         //println!("file: {}, newsz = {}", self.get_name(), new_size);
         //println!("try lock");
         let first_cluster = self.first_cluster();
-        let old_size = self.get_size();
+        let old_size = self.file_size();
         let manager_writer = self.fs.write();
         //println!("get lock");
         if new_size <= old_size {
@@ -325,7 +325,7 @@ impl VFile {
             if !self.is_dir() {
                 //self.size = new_size;
                 self.modify_short_dirent(|se: &mut ShortDirEntry| {
-                    se.set_size(new_size);
+                    se.set_file_size(new_size);
                 });
             }
             return;
@@ -360,7 +360,7 @@ impl VFile {
             }
             //self.size = new_size;
             self.modify_short_dirent(|se: &mut ShortDirEntry| {
-                se.set_size(new_size);
+                se.set_file_size(new_size);
             });
         } else {
             panic!("SD Card no space!!!");
@@ -500,7 +500,7 @@ impl VFile {
     //             let (_, long_ent_list, _) = unsafe { short_ent.as_bytes_mut().align_to_mut::<LongDirEntry>() };
     //             // DEBUG
     //             let mut long_ent = long_ent_list[0];
-    //             let mut order = long_ent.get_order(); //^ 0x40;
+    //             let mut order = long_ent.order(); //^ 0x40;
     //             if order & 0x40 == 0 {
     //                 offset += DIRENT_SZ;
     //                 continue;
@@ -540,12 +540,12 @@ impl VFile {
     //             if read_sz != DIRENT_SZ || long_ent.is_empty() || long_ent.is_deleted() {
     //                 return Some(list);
     //             }
-    //             list.push((name, long_ent.ldir_attr()));
+    //             list.push((name, long_ent.attr()));
     //             offset += DIRENT_SZ;
     //             continue;
     //         } else {
     //             // 短文件名
-    //             list.push((short_ent.get_name_lowercase(), short_ent.ldir_attr()));
+    //             list.push((short_ent.get_name_lowercase(), short_ent.attr()));
     //             offset += DIRENT_SZ;
     //             continue;
     //         }
@@ -585,14 +585,14 @@ impl VFile {
                 continue;
             }
             // 名称拼接
-            if long_ent.ldir_attr() != ATTR_LONG_NAME {
+            if long_ent.attr() != ATTR_LONG_NAME {
                 let (_, se_array, _) = unsafe { long_ent.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
                 let short_ent = se_array[0];
                 if !is_long {
                     name = short_ent.get_name_lowercase();
                 }
                 //println!("---{}", short_ent.get_name_lowercase());
-                let attribute = short_ent.ldir_attr();
+                let attribute = short_ent.attr();
                 let first_cluster = short_ent.first_cluster();
                 offset += DIRENT_SZ;
                 return Some((name, offset as u32, first_cluster, attribute));
@@ -614,7 +614,7 @@ impl VFile {
     //         let (_, _, _, _, _, _, ctime) = sde.get_creation_time();
     //         let (_, _, _, _, _, _, atime) = sde.get_accessed_time();
     //         let (_, _, _, _, _, _, mtime) = sde.get_modification_time();
-    //         let mut size = sde.get_size();
+    //         let mut size = sde.file_size();
     //         let first_clu = sde.first_cluster();
     //         if self.is_dir() {
     //             let fs_reader = self.fs.read();
@@ -658,15 +658,15 @@ impl VFile {
                 continue;
             }
             // 名称拼接
-            if long_ent.ldir_attr() != ATTR_LONG_NAME {
+            if long_ent.attr() != ATTR_LONG_NAME {
                 // 短文件名
                 let (_, se_array, _) = unsafe { long_ent.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
                 let short_ent = se_array[0];
                 if is_long {
                     is_long = false;
-                    list.push((name.clone(), short_ent.ldir_attr()));
+                    list.push((name.clone(), short_ent.attr()));
                 } else {
-                    list.push((short_ent.get_name_lowercase(), short_ent.ldir_attr()))
+                    list.push((short_ent.get_name_lowercase(), short_ent.attr()))
                 }
                 name.clear();
             } else {

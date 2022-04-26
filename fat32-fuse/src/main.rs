@@ -292,7 +292,7 @@ fn ufs_test() -> std::io::Result<()> {
         }
         let mut str1 = str.clone();
         filea.write_at(0, str.as_bytes());
-        println!("after write, size = {}", filea.get_size());
+        println!("after write, size = {}", filea.file_size());
         unsafe{
             filea.read_at(0, str1.as_bytes_mut());
         }

@@ -1,4 +1,4 @@
-use super::{get_block_cache, get_info_cache, set_start_sec, write_to_dev, BlockDevice, CacheMode, FSInfo, FatBS, FatExtBS, FAT};
+use super::{get_block_cache, get_info_cache, set_start_sec, write_to_dev, BlockDevice, FSInfo, FatBS, FatExtBS, FAT};
 use alloc::sync::Arc;
 //#[macro_use]
 use crate::{layout::*, VFile};
@@ -47,7 +47,7 @@ impl FAT32Manager {
     /* 打开现有的FAT32  */
     pub fn open(block_device: Arc<dyn BlockDevice>) -> Arc<RwLock<Self>> {
         // 读入分区偏移
-        let start_sector: u32 = get_info_cache(0, Arc::clone(&block_device), CacheMode::READ)
+        let start_sector: u32 = get_info_cache(0, Arc::clone(&block_device))
             .read()
             .read(0x1c6, |ssec_bytes: &[u8; 4]| {
                 //0x1c6可以看文档
@@ -65,7 +65,7 @@ impl FAT32Manager {
         set_start_sec(start_sector as usize);
 
         // 读入第一分区的 Boot Sector，get_info_cache方法中会自动加上分区偏移
-        let boot_sec: FatBS = get_info_cache(0, Arc::clone(&block_device), CacheMode::READ)
+        let boot_sec: FatBS = get_info_cache(0, Arc::clone(&block_device))
             .read()
             .read(0, |bs: &FatBS| {
                 // DEBUG
@@ -73,7 +73,7 @@ impl FAT32Manager {
             });
 
         // 读入 Extended Boot Sector
-        let ext_boot_sec: FatExtBS = get_info_cache(0, Arc::clone(&block_device), CacheMode::READ)
+        let ext_boot_sec: FatExtBS = get_info_cache(0, Arc::clone(&block_device))
             .read()
             .read(36, |ebs: &FatExtBS| {
                 *ebs // DEBUG
@@ -209,7 +209,7 @@ impl FAT32Manager {
     pub fn clear_cluster(&self, cluster_id: u32) {
         let start_sec = self.first_sector_of_cluster(cluster_id);
         for i in 0..self.sectors_per_cluster {
-            get_block_cache(start_sec + i as usize, self.block_device.clone(), CacheMode::WRITE)
+            get_block_cache(start_sec + i as usize, self.block_device.clone())
                 .write()
                 .modify(0, |blk: &mut [u8; 512]| {
                     for j in 0..512 {
