@@ -600,7 +600,6 @@ impl VFile {
                 is_long = true;
                 //order += 1;
                 name.insert_str(0, long_ent.get_name_format().as_str());
-                //println!("--{}", long_ent.get_name_format().as_str());
             }
             offset += DIRENT_SZ;
         }

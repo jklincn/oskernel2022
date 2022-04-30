@@ -637,11 +637,11 @@ pub struct LongDirEntry {
     ldir_ord: u8,              // 长文件名目录项的序列号，一个文件的第一个目录项序列号为 1，然后依次递增
     ldir_name1: [u8; 10],      // 5 characters
     ldir_attr: u8,             // 长文件名目录项标志，取值 0x0F
-    ldir_type: u8, // If zero, indicates a directory entry that is a sub-component of a long name.Non-zero implies other dirent types.
-    ldir_chksum: u8, // 根据对应短文件名计算出的校验值，用于长文件名与短文件名的匹配
-    ldir_name2: [u8; 12], // 6 characters
+    ldir_type: u8,             // 如果为零，则表示目录项是长文件名的一部分
+    ldir_chksum: u8,           // 根据对应短文件名计算出的校验值，用于长文件名与短文件名的匹配
+    ldir_name2: [u8; 12],      // 6 characters
     ldir_fst_clus_lo: [u8; 2], // 文件起始簇号，目前置 0
-    ldir_name3: [u8; 4], // 2 characters
+    ldir_name3: [u8; 4],       // 2 characters
 }
 
 impl From<&[u8]> for LongDirEntry {
@@ -818,7 +818,6 @@ impl LongDirEntry {
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         unsafe { core::slice::from_raw_parts_mut(self as *mut _ as usize as *mut u8, DIRENT_SZ) }
     }
-
 }
 
 // 常驻内存，不作一一映射
