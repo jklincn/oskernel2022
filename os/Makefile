@@ -60,8 +60,8 @@ fs-img: $(APPS)
 	@cd ../user && make build
 	@rm -f $(FS_IMG)
 	@cd ../fat32-fuse && ./qemu_fs.sh 
-	@cd ../fat32-fuse cargo build --release
-	@cd ../fat32-fuse cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
+	cd ../fat32-fuse && cargo build --release 
+	cd ../fat32-fuse && cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
 
 $(APPS):
 

@@ -605,6 +605,7 @@ impl VFile {
         let mut file_entry = LongDirEntry::new();
         let mut offset = 0;
         loop {
+            println!("offset : {}",offset);
             let read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
                 curr_ent.read_at(
                     offset,
@@ -616,6 +617,8 @@ impl VFile {
             });
             // 读取完了
             if read_size != DIRENT_SZ || file_entry.is_empty() {
+                println!("read_size : {}",read_size);
+                info!("read over!");
                 return Some(list);
             }
             // 文件被标记删除则跳过
@@ -626,12 +629,15 @@ impl VFile {
             }
             if file_entry.attr() != ATTR_LONG_NAME {
                 // 短文件名
+                info!("is short");
                 let (_, se_array, _) = unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
                 let short_entry = se_array[0];
+                println!("{:?}",short_entry);
                 list.push((short_entry.get_name_lowercase(), short_entry.attr()));
             } else {
                 // 长文件名
                 // 如果是长文件名目录项，则必是长文件名最后的那一段
+                info!("is long");
                 let mut name = String::new();
                 let order = file_entry.order() ^ 0x40;
                 for _ in 0..order {
@@ -652,6 +658,7 @@ impl VFile {
                 }
                 list.push((name.clone(), file_entry.attr()));
             }
+            offset += DIRENT_SZ;
         }
     }
 
