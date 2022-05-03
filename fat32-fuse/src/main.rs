@@ -127,7 +127,7 @@ fn fat32_pack() -> std::io::Result<()> {
     let fs_reader = fs_manager.read();
     //println!("{:X}",fs_reader.get_fat().read().get_next_cluster(2, block_file.clone()));
     //loop{}
-    let root_vfile = fs_reader.get_root_vfile(&fs_manager);
+    let root_vfile = fs_reader.create_root_vfile(&fs_manager);
     println!("first date sec = {}", fs_reader.first_data_sector());
     drop(fs_reader);
 
@@ -148,16 +148,12 @@ fn fat32_pack() -> std::io::Result<()> {
         let mut all_data: Vec<u8> = Vec::new();
         host_file.read_to_end(&mut all_data).unwrap();
         // create a file in easy-fs
-        println!("before create");
-        println!("{}",app);
         let o_vfile = root_vfile.create(app.as_str(), ATTR_ARCHIVE);
         if o_vfile.is_none(){
             continue;
         }
         let vfile = o_vfile.unwrap();
-        println!("after create");
         // write data to easy-fs
-        println!("file_len = {}", all_data.len());
         vfile.write_at(0, all_data.as_slice());
         fs_manager.read().cache_write_back();
     }
@@ -209,7 +205,7 @@ fn ufs_test() -> std::io::Result<()> {
     let simple_rwtest = |vfile: & VFile|{
         let greet_str = "hello world!\n";
         println!("*** simple r/w test");
-        println!("  name = {}",vfile.get_name());
+        println!("  name = {}",vfile.name());
         println!("  1: write file. wlen={}", vfile.write_at(0, greet_str.as_bytes()));
         let mut buffer = [0u8; 256];
         let len = vfile.read_at(0, &mut buffer);
@@ -226,7 +222,7 @@ fn ufs_test() -> std::io::Result<()> {
     let fs_reader = fs_manager.read();
     println!("{:X}",fs_reader.get_fat().read().get_next_cluster(2, block_file.clone()));
     //loop{}
-    let root_vfile = fs_reader.get_root_vfile(&fs_manager);
+    let root_vfile = fs_reader.create_root_vfile(&fs_manager);
     drop(fs_reader);
     let mut flist = root_vfile.ls_lite().unwrap();
     print_flist(&mut flist);

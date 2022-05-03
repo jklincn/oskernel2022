@@ -40,7 +40,7 @@ pub struct FatBS {
     bs_oem_name: [u8; 8],   // 建议值为“MSWIN4.1”
     bpb_bytes_per_sec: u16, // 每扇区的字节数
     bpb_sec_per_clus: u8,   // 每簇的扇区数
-    bpb_rsvd_sec_cnt: u16,  // 保留扇区的数目
+    bpb_rsvd_sec_cnt: u16,  // 保留扇区的数目，通过它能获得第一个FAT表所在的扇区
     bpb_num_fats: u8,       // FAT数
     bpb_root_ent_cnt: u16,  // 对于FAT12和FAT16此域包含根目录中目录的个数（每项长度为32字节），对于FAT32，此项必须为0。
     bpb_tot_sec16: u16,     // 早期版本中16bit的总扇区，对于FAT32，此域必为0。
@@ -62,15 +62,7 @@ impl FatBS {
     pub fn fat_num(&self) -> u32 {
         self.bpb_num_fats as u32
     }
-    pub fn total_sectors(&self) -> u32 {
-        if self.bpb_tot_sec16 == 0 {
-            self.bpb_tot_sec32
-        } else {
-            self.bpb_tot_sec16 as u32
-        }
-    }
 
-    /*第一个FAT表所在的扇区*/
     pub fn first_fat_sector(&self) -> u32 {
         self.bpb_rsvd_sec_cnt as u32
     }
@@ -114,7 +106,7 @@ FSI_LeadSig	    0	4    Value 0x41615252
 FSI_Reserved1	4	480 保留
 FSI_StrucSig	484	4    Value 0x61417272
 FSI_Free_Count	488	4   包含卷上最近已知的空闲簇计数。如果值是0xFFFFFFFF，那么空闲计数是未知的，必须计算。
-FSI_Nxt_Free	492	4   空闲簇的起始号
+FSI_Nxt_Free	492	4   最后被分配的簇号，起始空闲簇号应该是下一个簇
 FSI_Reserved2	496	12  保留
 FSI_TrailSig	508	4   Trail signature (0xAA550000)
  */
@@ -147,7 +139,7 @@ impl FSInfo {
     }
 
     /*读取空闲簇数*/
-    pub fn read_free_clusters(&self, block_device: Arc<dyn BlockDevice>) -> u32 {
+    pub fn free_clusters(&self, block_device: Arc<dyn BlockDevice>) -> u32 {
         get_info_cache(self.sector_num as usize, block_device)
             .read()
             .read(488, |&free_cluster_count: &u32| free_cluster_count)
@@ -162,15 +154,15 @@ impl FSInfo {
             });
     }
 
-    /*读取起始空闲簇号*/
-    pub fn first_free_cluster(&self, block_device: Arc<dyn BlockDevice>) -> u32 {
+    /*读取最后被分配的簇号*/
+    pub fn next_free_cluster(&self, block_device: Arc<dyn BlockDevice>) -> u32 {
         get_info_cache(self.sector_num as usize, block_device)
             .read()
             .read(492, |&start_cluster: &u32| start_cluster)
     }
 
-    /*写入起始空闲簇号*/
-    pub fn write_first_free_cluster(&self, start_cluster: u32, block_device: Arc<dyn BlockDevice>) {
+    /*写入最后被分配的簇号*/
+    pub fn write_next_free_cluster(&self, start_cluster: u32, block_device: Arc<dyn BlockDevice>) {
         //println!("sector_num = {}, start_c = {}", self.sector_num, start_cluster);
         get_info_cache(self.sector_num as usize, block_device)
             .write()
@@ -187,18 +179,18 @@ impl FSInfo {
 #[allow(unused)]
 pub struct ShortDirEntry {
     dir_name: [u8; 8],      // 短文件名
-    dir_extension: [u8; 3], //扩展名
+    dir_extension: [u8; 3], // 扩展名
     dir_attr: u8,           // 文件属性
-    dir_ntres: u8,          // Reserved for use by Windows NT
-    dir_crt_time_tenth: u8, // Millisecond stamp at file creation time
-    dir_crt_time: u16,      // Time file was created
-    dir_crt_date: u16,      // Date file was created
-    dir_lst_acc_date: u16,  // Last access date
-    dir_fst_clus_hi: u16,   // High word of this entry’s first cluster number (always 0 for a FAT12 or FAT16 volume).
-    dir_wrt_time: u16,      // Time of last write
-    dir_wrt_date: u16,      // Date of last write
-    dir_fst_clus_lo: u16,   // Low word of this entry’s first cluster number
-    dir_file_size: u32,     // 32-bit DWORD holding this file’s size in bytes
+    dir_ntres: u8,          // 保留给 Windows NT 使用
+    dir_crt_time_tenth: u8, // 文件创建的时间戳
+    dir_crt_time: u16,      // 文件创建的时间
+    dir_crt_date: u16,      // 文件创建的日期
+    dir_lst_acc_date: u16,  // 上一次访问日期
+    dir_fst_clus_hi: u16,   // 文件起始簇号的高 16位
+    dir_wrt_time: u16,      // 上一次写入的时间
+    dir_wrt_date: u16,      // 上一次写入的日期
+    dir_fst_clus_lo: u16,   // 文件起始簇号的低 16位
+    dir_file_size: u32,     // 文件大小（以字节为单位）
 }
 
 impl ShortDirEntry {
@@ -425,10 +417,10 @@ impl ShortDirEntry {
         let fat_reader = fat.read();
         let bytes_per_sector = manager_reader.bytes_per_sector() as usize;
         let bytes_per_cluster = manager_reader.bytes_per_cluster() as usize;
-        let cluster_index = manager_reader.cluster_of_offset(offset);
-        let current_cluster = fat_reader.get_cluster_at(self.first_cluster(), cluster_index, Arc::clone(block_device));
+        let cluster_index = offset / bytes_per_cluster;
+        let current_cluster = fat_reader.get_cluster_at(self.first_cluster(), cluster_index as u32, Arc::clone(block_device));
         let current_sector = manager_reader.first_sector_of_cluster(current_cluster)
-            + (offset - cluster_index as usize * bytes_per_cluster) / bytes_per_sector;
+            + (offset - cluster_index * bytes_per_cluster) / bytes_per_sector;
         (current_cluster, current_sector, offset % bytes_per_sector)
     }
 
@@ -821,44 +813,37 @@ impl LongDirEntry {
 }
 
 // 常驻内存，不作一一映射
-#[allow(unused)]
 #[derive(Clone, Copy)]
 pub struct FAT {
     fat1_sector: u32, // FAT1的起始扇区
     fat2_sector: u32, // FAT2的起始扇区
-    n_sectors: u32,   // FAT表大小（扇区数量）
-    n_entry: u32,     //表项数量
 }
 
-// TODO: 防越界处理（虽然可能这辈子都遇不到）
 impl FAT {
-    pub fn new(fat1_sector: u32, fat2_sector: u32, n_sectors: u32, n_entry: u32) -> Self {
+    pub fn new(fat1_sector: u32, fat2_sector: u32) -> Self {
         Self {
             fat1_sector,
             fat2_sector,
-            n_sectors,
-            n_entry,
         }
     }
 
     /// 计算簇号对应表项所在的扇区和偏移
     fn calculate_pos(&self, cluster: u32) -> (u32, u32, u32) {
-        // 返回sector号和offset
+        // 返回 sector号和 offset
         // 前为FAT1的扇区号，后为FAT2的扇区号，最后为offset
-        // DEBUG
         let fat1_sec = self.fat1_sector + cluster / FATENTRY_PER_SEC;
         let fat2_sec = self.fat2_sector + cluster / FATENTRY_PER_SEC;
         let offset = 4 * (cluster % FATENTRY_PER_SEC);
         (fat1_sec, fat2_sec, offset)
     }
 
-    /// 获取可用簇的簇号
-    pub fn next_free_cluster(&self, current_cluster: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
-        // DEBUG
+    /// 获取一个空闲簇的簇号
+    pub fn get_free_cluster(&self, current_cluster: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
+        // 下一个簇才是空闲的
         let mut curr_cluster = current_cluster + 1;
+        // 寻找空闲的簇，因为簇号分配是离散的而不是连续的，因此不能保证最后一个被分配的簇的下一个簇就是空闲的
         loop {
-            #[allow(unused)]
-            let (fat1_sec, fat2_sec, offset) = self.calculate_pos(curr_cluster);
+            let (fat1_sec, _, offset) = self.calculate_pos(curr_cluster);
             // 查看当前cluster的表项
             let entry_val = get_info_cache(fat1_sec as usize, block_device.clone())
                 .read()
@@ -869,6 +854,7 @@ impl FAT {
                 curr_cluster += 1;
             }
         }
+        // A FAT32 FAT entry is actually only a 28-bit entry. The high 4 bits of a FAT32 FAT entry are reserved.
         curr_cluster & 0x0FFFFFFF
     }
 
@@ -878,7 +864,6 @@ impl FAT {
         // 及时使用备用表
         // 无效或未使用返回0
         let (fat1_sec, fat2_sec, offset) = self.calculate_pos(cluster);
-        //println!("fat1_sec={} offset = {}", fat1_sec, offset);
         let fat1_rs = get_info_cache(fat1_sec as usize, block_device.clone())
             .read()
             .read(offset as usize, |&next_cluster: &u32| next_cluster);
@@ -896,15 +881,9 @@ impl FAT {
         }
     }
 
-    pub fn set_end(&self, cluster: u32, block_device: Arc<dyn BlockDevice>) {
-        self.set_next_cluster(cluster, END_CLUSTER, block_device);
-    }
-
     /// 设置当前簇的下一个簇
     pub fn set_next_cluster(&self, cluster: u32, next_cluster: u32, block_device: Arc<dyn BlockDevice>) {
         // 同步修改两个FAT
-        // 注意设置末尾项为 0x0FFFFFF8
-        //assert_ne!(next_cluster, 0);
         let (fat1_sec, fat2_sec, offset) = self.calculate_pos(cluster);
         get_info_cache(fat1_sec as usize, block_device.clone())
             .write()
@@ -918,16 +897,15 @@ impl FAT {
             });
     }
 
+    pub fn set_next_end(&self, cluster: u32, block_device: Arc<dyn BlockDevice>) {
+        self.set_next_cluster(cluster, END_CLUSTER, block_device);
+    }
+
     /// 获取某个簇链的第i个簇(i为参数)
     pub fn get_cluster_at(&self, start_cluster: u32, index: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
-        // 如果有异常，返回0
-        //println!("** get_cluster_at index = {}",index);
         let mut cluster = start_cluster;
-        #[allow(unused)]
-        for i in 0..index {
-            //print!("in fat curr cluster = {}", cluster);
+        for _ in 0..index {
             cluster = self.get_next_cluster(cluster, block_device.clone());
-            //println!(", next cluster = {:X}", cluster);
             if cluster == 0 {
                 break;
             }
@@ -941,8 +919,6 @@ impl FAT {
         assert_ne!(start_cluster, 0);
         loop {
             let next_cluster = self.get_next_cluster(curr_cluster, block_device.clone());
-            //println!("in fianl cl {};{}", curr_cluster, next_cluster);
-            //assert_ne!(next_cluster, 0);
             if next_cluster >= END_CLUSTER || next_cluster == 0 {
                 return curr_cluster & 0x0FFFFFFF;
             } else {
@@ -958,8 +934,6 @@ impl FAT {
         loop {
             v_cluster.push(curr_cluster & 0x0FFFFFFF);
             let next_cluster = self.get_next_cluster(curr_cluster, block_device.clone());
-            //println!("in all, curr = {}, next = {}", curr_cluster, next_cluster);
-            //assert_ne!(next_cluster, 0);
             if next_cluster >= END_CLUSTER || next_cluster == 0 {
                 return v_cluster;
             } else {
@@ -978,7 +952,6 @@ impl FAT {
         loop {
             count += 1;
             let next_cluster = self.get_next_cluster(curr_cluster, block_device.clone());
-            //println!("next_cluster = {:X}",next_cluster);
             if next_cluster >= END_CLUSTER || next_cluster > 0xF000000 {
                 return count;
             } else {

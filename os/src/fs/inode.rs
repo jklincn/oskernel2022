@@ -124,7 +124,7 @@ lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
         let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
         let manager_reader = fat32_manager.read();
-        Arc::new(manager_reader.get_root_vfile(&fat32_manager)) // 返回根目录
+        Arc::new(manager_reader.create_root_vfile(&fat32_manager)) // 返回根目录
     };
 }
 
