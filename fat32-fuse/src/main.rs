@@ -132,6 +132,7 @@ fn fat32_pack() -> std::io::Result<()> {
     drop(fs_reader);
 
     // 从host获取应用名
+    info!("get apps");
     let apps: Vec<_> = read_dir(src_path)
         .unwrap()
         .into_iter()
@@ -158,8 +159,8 @@ fn fat32_pack() -> std::io::Result<()> {
         fs_manager.read().cache_write_back();
     }
     // list apps
-
-    for app in root_vfile.ls_lite().unwrap() {
+    info!("get apps done!");
+    for app in root_vfile.ls().unwrap() {
         println!("{}", app.0);
     }
     Ok(())
@@ -175,7 +176,7 @@ fn ufs_test() -> std::io::Result<()> {
             .read(true)
             .write(true)
             .create(true)
-            .open("/dev/sdb1")?;    
+            .open("./fat32.img")?;    
         //dev/sdb1
         //f.set_len(102400*512);
         //let mut f = File::open("src/fat32c.img")?;
@@ -224,7 +225,7 @@ fn ufs_test() -> std::io::Result<()> {
     //loop{}
     let root_vfile = fs_reader.create_root_vfile(&fs_manager);
     drop(fs_reader);
-    let mut flist = root_vfile.ls_lite().unwrap();
+    let mut flist = root_vfile.ls().unwrap();
     print_flist(&mut flist);
     root_vfile.create("hello2", ATTR_ARCHIVE).unwrap();
     fs_manager.read().cache_write_back();
@@ -240,7 +241,7 @@ fn ufs_test() -> std::io::Result<()> {
         "hello world!\n",
         core::str::from_utf8(&buffer[..len]).unwrap(),
     );
-    let mut flist = root_vfile.ls_lite().unwrap();
+    let mut flist = root_vfile.ls().unwrap();
     print_flist(&mut flist);
     //simple_rwtest(&hello);
 
@@ -249,11 +250,11 @@ fn ufs_test() -> std::io::Result<()> {
     let dir0 = root_vfile.create("dir0", ATTR_DIRECTORY).unwrap();
     
     println!("list root:");
-    let mut flist = root_vfile.ls_lite().unwrap();
+    let mut flist = root_vfile.ls().unwrap();
     print_flist(&mut flist);
     
     println!("list dir0:");
-    let mut flist = dir0.ls_lite().unwrap();
+    let mut flist = dir0.ls().unwrap();
     print_flist(&mut flist);
     
     dir0.create("file1", ATTR_ARCHIVE).unwrap();

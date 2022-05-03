@@ -1,11 +1,15 @@
 #![no_std]
 extern crate alloc;
 
+#[macro_use]
+mod console;
+mod sbi;
 mod block_cache;
 mod block_dev;
 mod fat32_manager;
 mod layout;
 mod vfs;
+
 
 pub const BLOCK_SZ: usize = 512;
 pub use block_dev::BlockDevice;

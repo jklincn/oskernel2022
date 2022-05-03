@@ -238,13 +238,13 @@ impl FAT32Manager {
     }
 }
 
-/// 将长文件名拆分，并且补全0
+/// 将长文件名拆分，返回字符串数组
 pub fn long_name_split(name: &str) -> Vec<String> {
     let len = name.len() as u32; // 要有\0
     let name_bytes = name.as_bytes();
     let mut name_vec: Vec<String> = Vec::new();
     // 计算需要几个目录项，向上取整
-    // 以13个字符为单位进行切割，每一组占据一个目录项
+    // 以 13个字符为单位进行切割，每一组占据一个目录项
     let n_ent = (len + LONG_NAME_LEN - 1) / LONG_NAME_LEN;
     let mut temp_buffer = String::new();
     // 如果文件名结束但还有未使用的字节，则会在文件名后先填充两个字节的 0x00，然后开始使用 0xFF 填充
