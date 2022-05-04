@@ -130,12 +130,14 @@ lazy_static! {
 
 pub fn list_apps() {
     println!("/**** APPS ****");
+
     for app in ROOT_INODE.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
             println!("{}", app.0);
         }
     }
+
     println!("**************/")
 }
 

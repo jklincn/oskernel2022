@@ -77,58 +77,53 @@ fn fat32_pack() -> std::io::Result<()> {
     let target_path = matches.value_of("target").unwrap();
     println!("src_path = {}\ntarget_path = {}", src_path, target_path);
     
-    // // 打开U盘
-    // let block_file = Arc::new(BlockFile(Mutex::new({
-    //     let f = OpenOptions::new()
-    //         .read(true)
-    //         .write(true)
-    //         .create(true)
-    //         //.open("/dev/sdb")?;
-    //         .open("fat32.img")?;
-    //     f
-    // })));
+    // 打开U盘
+    let block_file = Arc::new(BlockFile(Mutex::new({
+        let f = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            //.open("/dev/sdb")?;
+            .open("fat32.img")?;
+        f
+    })));
     
-    // let fs_manager = FAT32Manager::open(block_file.clone());
-    // let fs_reader = fs_manager.read();
-    // let root_vfile = fs_reader.create_root_vfile(&fs_manager);
-    // println!("{:?}",root_vfile);
-    // println!("first date sec = {}", fs_reader.first_data_sector());
-    // drop(fs_reader);
+    let fs_manager = FAT32Manager::open(block_file.clone());
+    let fs_reader = fs_manager.read();
+    let root_vfile = fs_reader.create_root_vfile(&fs_manager);
+    println!("first date sec = {}", fs_reader.first_data_sector());
+    drop(fs_reader);
 
-    // // 从host获取应用名
-    // info!("get apps");
-    // let apps: Vec<_> = read_dir(src_path)
-    //     .unwrap()
-    //     .into_iter()
-    //     .map(|dir_entry| {
-    //         let mut name_with_ext = dir_entry.unwrap().file_name().into_string().unwrap();
-    //         // 丢弃后缀 从'.'到末尾(len-1)
-    //         name_with_ext.drain(name_with_ext.find('.').unwrap()..name_with_ext.len());
-    //         name_with_ext
-    //     })
-    //     .collect();
-    // for app in apps {
-    //     // load app data from host file system
-    //     let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
-    //     let mut all_data: Vec<u8> = Vec::new();
-    //     host_file.read_to_end(&mut all_data).unwrap();
-    //     // create a file in easy-fs
-    //     let o_vfile = root_vfile.create(app.as_str(), ATTR_ARCHIVE);
-    //     println!("{:?}",root_vfile);
-    //     if o_vfile.is_none(){
-    //         continue;
-    //     }
-    //     let vfile = o_vfile.unwrap();
-    //     // write data to easy-fs
-    //     vfile.write_at(0, all_data.as_slice());
-    //     fs_manager.read().cache_write_back();
-    // }
-    // // list apps
-    // info!("get apps done!");
-    // for app in root_vfile.ls().unwrap() {
-    //     println!("{}", app.0);
-    // }
-    // panic!("down");
+    // 从host获取应用名
+    let apps: Vec<_> = read_dir(src_path)
+        .unwrap()
+        .into_iter()
+        .map(|dir_entry| {
+            let mut name_with_ext = dir_entry.unwrap().file_name().into_string().unwrap();
+            // 丢弃后缀 从'.'到末尾(len-1)
+            name_with_ext.drain(name_with_ext.find('.').unwrap()..name_with_ext.len());
+            name_with_ext
+        })
+        .collect();
+    for app in apps {
+        // load app data from host file system
+        let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
+        let mut all_data: Vec<u8> = Vec::new();
+        host_file.read_to_end(&mut all_data).unwrap();
+        // create a file in easy-fs
+        let o_vfile = root_vfile.create(app.as_str(), ATTR_ARCHIVE);
+        if o_vfile.is_none(){
+            continue;
+        }
+        let vfile = o_vfile.unwrap();
+        // write data to easy-fs
+        vfile.write_at(0, all_data.as_slice());
+        fs_manager.read().cache_write_back();
+    }
+    // list apps
+    for app in root_vfile.ls().unwrap() {
+        println!("{}", app.0);
+    }
     Ok(())
 }
 
