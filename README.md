@@ -15,6 +15,7 @@
 | ✔    | SYSCALL_UNAME    | 160        |
 |      | SYSCALL_GET_TIME | 169        |
 |      | SYSCALL_GETPID   | 172        |
+|      | SYSCALL_GETPPID  | 173        |
 | ✔    | SYSCALL_FORK     | 220        |
 | ✔    | SYSCALL_EXEC     | 221        |
 | ✔    | SYSCALL_WAITPID  | 260        |
