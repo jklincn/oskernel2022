@@ -35,3 +35,9 @@ int exec(char* name) {
 int execve(const char* name, char* const argv[], char* const argp[]) {
     return syscall(SYSCALL_EXEC, name, argv, argp);
 }
+pid_t getpid(void){
+    return syscall(SYSCALL_GETPID);
+}
+pid_t getppid(void){
+    return syscall(SYSCALL_GETPPID);
+}
