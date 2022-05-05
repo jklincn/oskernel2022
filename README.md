@@ -14,7 +14,7 @@
 |      | SYSCALL_KILL     | 129        |
 | ✔    | SYSCALL_UNAME    | 160        |
 |      | SYSCALL_GET_TIME | 169        |
-|      | SYSCALL_GETPID   | 172        |
+| ✔    | SYSCALL_GETPID   | 172        |
 |      | SYSCALL_GETPPID  | 173        |
 | ✔    | SYSCALL_FORK     | 220        |
 | ✔    | SYSCALL_EXEC     | 221        |
@@ -44,7 +44,7 @@
 | 🛠    | clone.c   |
 | ✔    | execve.c  | SYSCALL_EXEC                  |
 | ✔    | exit.c    | SYSCALL_EXIT                  |
-| 🛠    | getpid.c  |
+| ✔    | getpid.c  | SYSCALL_GETPID                |
 |      | getppid.c |
 | 🛠    | sleep.c   |
 | 🛠    | yield.c   |
