@@ -12,7 +12,7 @@ CC := riscv64-unknown-elf-gcc -ffreestanding -nostdlib -g -mcmodel=medany -I ./i
 endif
 
 bin:
-	mkdir bin
+	@mkdir bin
 
 build: bin
-	$(foreach i_src, $(APPS), $(CC) $(i_src) $(LIB_DIR) -T $(LINKER_PATH) -o $(patsubst $(APP_DIR)/%.c,$(TARGET_DIR)/%,$(i_src));)
+	@$(foreach i_src, $(APPS), $(CC) $(i_src) $(LIB_DIR) -T $(LINKER_PATH) -o $(patsubst $(APP_DIR)/%.c,$(TARGET_DIR)/%,$(i_src));)
