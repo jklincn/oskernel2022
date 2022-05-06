@@ -64,14 +64,12 @@ typedef __builtin_va_list va_list;
 
 #define AT_FDCWD -100
 
-typedef struct
-{
-    uint64 sec;  // 自 Unix 纪元起的秒数
+typedef struct{
+    uint64 sec;  // 秒数
     uint64 usec; // 微秒数
 } TimeVal;
 
-typedef struct
-{
+typedef struct{
     uint64 dev;    // 文件所在磁盘驱动器号，不考虑
     uint64 ino;    // inode 文件所在 inode 编号
     uint32 mode;   // 文件类型
@@ -83,35 +81,35 @@ typedef unsigned int mode_t;
 typedef long int off_t;
 
 struct kstat {
-        uint64 st_dev;
-        uint64 st_ino;
-        mode_t st_mode;
-        uint32 st_nlink;
-        uint32 st_uid;
-        uint32 st_gid;
-        uint64 st_rdev;
-        unsigned long __pad;
-        off_t st_size;
-        uint32 st_blksize;
-        int __pad2;
-        uint64 st_blocks;
-        long st_atime_sec;
-        long st_atime_nsec;
-        long st_mtime_sec;
-        long st_mtime_nsec;
-        long st_ctime_sec;
-        long st_ctime_nsec;
-        unsigned __unused[2];
+    uint64 st_dev;
+    uint64 st_ino;
+    mode_t st_mode;
+    uint32 st_nlink;
+    uint32 st_uid;
+    uint32 st_gid;
+    uint64 st_rdev;
+    unsigned long __pad;
+    off_t st_size;
+    uint32 st_blksize;
+    int __pad2;
+    uint64 st_blocks;
+    long st_atime_sec;
+    long st_atime_nsec;
+    long st_mtime_sec;
+    long st_mtime_nsec;
+    long st_ctime_sec;
+    long st_ctime_nsec;
+    unsigned __unused[2];
 };
 
 
 
 struct linux_dirent64 {
-        uint64        d_ino;
-        int64         d_off;
-        unsigned short  d_reclen;
-        unsigned char   d_type;
-        char            d_name[];
+    uint64        d_ino;
+    int64         d_off;
+    unsigned short  d_reclen;
+    unsigned char   d_type;
+    char            d_name[];
 };
 
 // for mmap
