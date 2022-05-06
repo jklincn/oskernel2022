@@ -18,7 +18,7 @@ use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
     suspend_current_and_run_next, SignalFlags,
 };
-use crate::timer::get_time_ms;
+use crate::timer::{TimeVal, get_TimeVal};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -39,9 +39,17 @@ pub fn sys_yield() -> isize {
     0
 }
 
-/// 获取CPU上电时间（单位：ms）
-pub fn sys_get_time() -> isize {
-    get_time_ms() as isize
+/// ### 获取CPU上电时间 秒+微秒
+/// syscall_id：169
+/// - 输入参数
+///     - `ts`：`TimeVal` 结构体在用户空间的地址
+///     - `tz`：表示时区，这里无需考虑，始终为0
+/// - 功能：内核根据时钟周期数和时钟频率换算系统运行时间，并写入到用户地址空间
+/// - 返回值：正确执行返回 0，出现错误返回 -1。
+pub fn sys_get_time(buf: *const u8) -> isize {
+    let token = current_user_token();
+    *translated_refmut(token, buf as *mut TimeVal) = get_TimeVal();
+    0
 }
 
 /// 获取当前正在运行程序的 PID
@@ -184,7 +192,7 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
 pub fn sys_uname(buf: *const u8) -> isize {
     let token = current_user_token();
     let uname = UTSNAME.exclusive_access();
-    *translated_refmut(token, buf as *mut Utsname) = Utsname{
+    *translated_refmut(token, buf as *mut Utsname) = Utsname {
         sysname:uname.sysname,
         nodename:uname.nodename,
         release: uname.release,
