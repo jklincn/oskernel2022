@@ -18,7 +18,7 @@ use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
     suspend_current_and_run_next, SignalFlags,
 };
-use crate::timer::{TimeVal, get_TimeVal};
+use crate::timer::{TimeVal, get_TimeVal, get_time_ms};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -36,6 +36,24 @@ pub fn sys_exit(exit_code: i32) -> ! {
 /// - syscall ID：124
 pub fn sys_yield() -> isize {
     suspend_current_and_run_next();
+    0
+}
+
+/// ### sleep 给定时长（TimeVal格式）
+/// - 返回值：总是返回 0。
+/// - syscall ID：101
+pub fn sys_nanosleep(buf: *const u8) -> isize {
+    let tic = get_time_ms();
+
+    let token = current_user_token();
+    let len_timeval = translated_ref(token, buf as *const TimeVal);
+    let len = len_timeval.sec * 1000 + len_timeval.usec / 1000;
+    loop {
+        let toc = get_time_ms();
+        if toc - tic >= len {
+            break;
+        }
+    };
     0
 }
 
