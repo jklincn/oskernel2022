@@ -39,15 +39,15 @@
 | 🛠    | pipe.c   |
 
 #### 进程相关
-| 完成 | 测试用例  | 简单描述                      |
-| ---- | --------- | ----------------------------- |
-| ✔    | fork.c    | SYSCALL_FORK、SYSCALL_WAITPID |
+| 完成 | 测试用例  | 简单描述                            |
+| ---- | --------- | ----------------------------------- |
+| ✔    | fork.c    | SYSCALL_FORK、SYSCALL_WAITPID       |
 | 🛠    | clone.c   |
-| ✔    | execve.c  | SYSCALL_EXEC                  |
-| ✔    | exit.c    | SYSCALL_EXIT                  |
-| ✔    | getpid.c  | SYSCALL_GETPID                |
+| ✔    | execve.c  | SYSCALL_EXEC                        |
+| ✔    | exit.c    | SYSCALL_EXIT                        |
+| ✔    | getpid.c  | SYSCALL_GETPID                      |
 |      | getppid.c |
-| ✔    | sleep.c   |
+| ✔    | sleep.c   | SYSCALL_NANOSLEEP、SYSCALL_GET_TIME |
 | 🛠    | yield.c   |
 | 🛠    | wait.c    |
 | 🛠    | waitpid.c |
