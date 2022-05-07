@@ -62,3 +62,6 @@ int sleep(unsigned long long time) {
 int times(void* mytimes){
     return syscall(SYSCALL_TIMES, mytimes);
 }
+int dup(int fd) {
+    return syscall(SYSCALL_DUP, fd);
+}
