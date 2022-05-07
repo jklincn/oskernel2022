@@ -35,3 +35,27 @@ int exec(char* name) {
 int execve(const char* name, char* const argv[], char* const argp[]) {
     return syscall(SYSCALL_EXEC, name, argv, argp);
 }
+pid_t getpid(void){
+    return syscall(SYSCALL_GETPID);
+}
+pid_t getppid(void){
+    return syscall(SYSCALL_GETPPID);
+}
+int64 get_time(){
+    TimeVal time;
+    int err = sys_get_time(&time, 0);
+    if (err == 0){
+        return ((time.sec & 0xffff) * 1000 + time.usec / 1000);
+    }
+    else{
+        return -1;
+    }
+}
+int sys_get_time(TimeVal* ts, int tz){
+    return syscall(SYSCALL_GET_TIME, ts, tz);
+}
+int sleep(unsigned long long time) {
+    TimeVal tv = { .sec = time, .usec = 0 };
+    if (syscall(SYSCALL_NANOSLEEP, &tv, &tv)) return tv.sec;
+    return 0;
+}
