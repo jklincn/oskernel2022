@@ -15,7 +15,15 @@ K210_BOOTLOADER_SIZE := 131072
 # Binutils
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
 
+<<<<<<< HEAD
 build: env $(KERNEL_BIN) initproc
+=======
+# Disassembly
+DISASM ?= -x
+
+#build: env switch-check $(KERNEL_BIN) fs-img 
+build: env switch-check $(KERNEL_BIN)
+>>>>>>> fs/jk
 
 initproc:
 	@cd ../user && make build

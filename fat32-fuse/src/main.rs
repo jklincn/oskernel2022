@@ -10,6 +10,7 @@ use simple_fat32::{
 #[allow(unused)]
 use std::fs::{File, OpenOptions, read_dir};
 use std::io::{Read, Write, Seek, SeekFrom};
+use std::panic;
 use std::sync::Mutex;
 #[allow(unused)]
 use std::sync::Arc;
@@ -19,43 +20,6 @@ use clap::{Arg, App};
 const BLOCK_SZ: usize = 512;
 
 struct BlockFile(Mutex<File>);
-
-/**
- * 红色 91
- * 绿色 92
- * 黄色 93
- * 蓝色 94
- */
-#[allow(unused)]
-macro_rules! color_text {
-    ($text:expr, $color:expr) => {{
-        format_args!("\x1b[{}m{}\x1b[0m", $color, $text)
-    }};
-}
-
-macro_rules! error{
-    ($info:expr) => {
-        println!("{}",color_text!($info,91));
-    }
-}
-
-macro_rules! debug{
-    ($info:expr) => {
-        println!("{}",color_text!($info,92));
-    }
-}
-
-macro_rules! warn{
-    ($info:expr) => {
-        println!("{}",color_text!($info,93));
-    }
-}
-
-macro_rules! info{
-    ($info:expr) => {
-        println!("{}",color_text!($info,94));
-    }
-}
 
 impl BlockDevice for BlockFile {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
@@ -75,6 +39,12 @@ impl BlockDevice for BlockFile {
         assert_eq!(file.write(buf).unwrap(), BLOCK_SZ, "Not a complete block!");
     }
     fn handle_irq(&self) { unimplemented!(); }
+}
+
+macro_rules! color_text {
+    ($text:expr, $color:expr) => {{
+        format_args!("\x1b[{}m{}\x1b[0m", $color, $text)
+    }};
 }
 
 fn main() {
@@ -120,9 +90,7 @@ fn fat32_pack() -> std::io::Result<()> {
     
     let fs_manager = FAT32Manager::open(block_file.clone());
     let fs_reader = fs_manager.read();
-    //println!("{:X}",fs_reader.get_fat().read().get_next_cluster(2, block_file.clone()));
-    //loop{}
-    let root_vfile = fs_reader.get_root_vfile(&fs_manager);
+    let root_vfile = fs_reader.create_root_vfile(&fs_manager);
     println!("first date sec = {}", fs_reader.first_data_sector());
     drop(fs_reader);
 
@@ -143,32 +111,19 @@ fn fat32_pack() -> std::io::Result<()> {
         let mut all_data: Vec<u8> = Vec::new();
         host_file.read_to_end(&mut all_data).unwrap();
         // create a file in easy-fs
-        println!("before create");
-        println!("{}",app);
         let o_vfile = root_vfile.create(app.as_str(), ATTR_ARCHIVE);
         if o_vfile.is_none(){
             continue;
         }
         let vfile = o_vfile.unwrap();
-        println!("after create");
         // write data to easy-fs
-        println!("file_len = {}", all_data.len());
         vfile.write_at(0, all_data.as_slice());
         fs_manager.read().cache_write_back();
     }
     // list apps
-
-    for app in root_vfile.ls_lite().unwrap() {
+    for app in root_vfile.ls().unwrap() {
         println!("{}", app.0);
     }
-
-    error!("error");
-    info!("info");
-    warn!("warn");
-    debug!("debug");
-
-
-    
     Ok(())
 }
 
@@ -182,7 +137,7 @@ fn ufs_test() -> std::io::Result<()> {
             .read(true)
             .write(true)
             .create(true)
-            .open("/dev/sdb1")?;    
+            .open("./fat32.img")?;    
         //dev/sdb1
         //f.set_len(102400*512);
         //let mut f = File::open("src/fat32c.img")?;
@@ -212,7 +167,7 @@ fn ufs_test() -> std::io::Result<()> {
     let simple_rwtest = |vfile: & VFile|{
         let greet_str = "hello world!\n";
         println!("*** simple r/w test");
-        println!("  name = {}",vfile.get_name());
+        println!("  name = {}",vfile.name());
         println!("  1: write file. wlen={}", vfile.write_at(0, greet_str.as_bytes()));
         let mut buffer = [0u8; 256];
         let len = vfile.read_at(0, &mut buffer);
@@ -229,9 +184,9 @@ fn ufs_test() -> std::io::Result<()> {
     let fs_reader = fs_manager.read();
     println!("{:X}",fs_reader.get_fat().read().get_next_cluster(2, block_file.clone()));
     //loop{}
-    let root_vfile = fs_reader.get_root_vfile(&fs_manager);
+    let root_vfile = fs_reader.create_root_vfile(&fs_manager);
     drop(fs_reader);
-    let mut flist = root_vfile.ls_lite().unwrap();
+    let mut flist = root_vfile.ls().unwrap();
     print_flist(&mut flist);
     root_vfile.create("hello2", ATTR_ARCHIVE).unwrap();
     fs_manager.read().cache_write_back();
@@ -247,7 +202,7 @@ fn ufs_test() -> std::io::Result<()> {
         "hello world!\n",
         core::str::from_utf8(&buffer[..len]).unwrap(),
     );
-    let mut flist = root_vfile.ls_lite().unwrap();
+    let mut flist = root_vfile.ls().unwrap();
     print_flist(&mut flist);
     //simple_rwtest(&hello);
 
@@ -256,11 +211,11 @@ fn ufs_test() -> std::io::Result<()> {
     let dir0 = root_vfile.create("dir0", ATTR_DIRECTORY).unwrap();
     
     println!("list root:");
-    let mut flist = root_vfile.ls_lite().unwrap();
+    let mut flist = root_vfile.ls().unwrap();
     print_flist(&mut flist);
     
     println!("list dir0:");
-    let mut flist = dir0.ls_lite().unwrap();
+    let mut flist = dir0.ls().unwrap();
     print_flist(&mut flist);
     
     dir0.create("file1", ATTR_ARCHIVE).unwrap();
@@ -295,7 +250,7 @@ fn ufs_test() -> std::io::Result<()> {
         }
         let mut str1 = str.clone();
         filea.write_at(0, str.as_bytes());
-        println!("after write, size = {}", filea.get_size());
+        println!("after write, size = {}", filea.file_size());
         unsafe{
             filea.read_at(0, str1.as_bytes_mut());
         }

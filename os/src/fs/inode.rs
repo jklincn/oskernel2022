@@ -70,21 +70,25 @@ impl OSInode {
 }
 
 lazy_static! {
-    /// - 全局 `根目录索引节点` 变量
-    /// - 创建过程中先打开文件系统，然后获取根目录索引节点
-    pub static ref ROOT_INODE: Arc<Inode> = {
-        let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
-        Arc::new(EasyFileSystem::root_inode(&efs))
+    pub static ref ROOT_INODE: Arc<VFile> = {
+        let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
+        let manager_reader = fat32_manager.read();
+        Arc::new(manager_reader.create_root_vfile(&fat32_manager)) // 返回根目录
     };
 }
 
 /// 打印应用程序列表
 pub fn list_apps() {
     println!("/**** APPS ****");
-    for app in ROOT_INODE.ls() {
-        println!("{}", app);
+
+    for app in ROOT_INODE.ls().unwrap() {
+        if app.1 & ATTR_DIRECTORY == 0 {
+            // 如果不是目录
+            println!("{}", app.0);
+        }
     }
-    println!("**************/");
+
+    println!("**************/")
 }
 
 bitflags! {
