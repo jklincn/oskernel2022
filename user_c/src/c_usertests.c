@@ -2,9 +2,9 @@
 #include "unistd.h"
 #include "stdlib.h"
 
-#define PROG_NUM 8
+#define PROG_NUM 9
 
-char* prog_name[PROG_NUM] = { "c_uname", "c_fork", "c_exit", "c_exec", "c_getpid" , "c_sleep", "c_gettimeofday", "c_getppid" };
+char* prog_name[PROG_NUM] = { "c_uname", "c_fork", "c_exit", "c_exec", "c_getpid" , "c_sleep", "c_gettimeofday", "user_shell", "c_getppid" };
 
 int main() {
     for (int t = 0; t < PROG_NUM; t++) {
