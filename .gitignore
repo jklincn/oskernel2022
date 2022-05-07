@@ -16,3 +16,4 @@ tools/
 pushall.sh
 Cargo.lock
 target
+.vscode/*
