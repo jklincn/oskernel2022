@@ -59,3 +59,6 @@ int sleep(unsigned long long time) {
     if (syscall(SYSCALL_NANOSLEEP, &tv, &tv)) return tv.sec;
     return 0;
 }
+int times(void* mytimes){
+    return syscall(SYSCALL_TIMES, mytimes);
+}

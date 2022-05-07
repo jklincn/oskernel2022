@@ -27,6 +27,19 @@ pub struct  TimeVal {
     pub usec:usize,
 }
 
+#[allow(non_camel_case_types)]
+/// ### Linux 间隔计数
+/// - `tms_utime`：用户态时间
+/// - `tms_stime`：内核态时间
+/// - `tms_cutime`：已回收子进程的用户态时间
+/// - `tms_cstime`：已回收子进程的内核态时间
+pub struct tms {    /// 用户态时间
+    pub tms_utime:isize,    /// 内核态时间
+    pub tms_stime:isize,    /// 已回收子进程的用户态时间
+    pub tms_cutime:isize,   /// 已回收子进程的内核态时间
+    pub tms_cstime:isize,
+}
+
 /// ### 取得当前 `mtime` 计数器的值
 /// - `mtime`: 统计处理器自上电以来经过了多少个内置时钟的时钟周期,64bit
 pub fn get_time() -> usize {
