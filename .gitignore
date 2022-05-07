@@ -1,10 +1,11 @@
-.idea/*
-os/target/*
-os/.idea/*
+.idea
+Cargo.lock
+target
 os/src/link_app.S
 os/src/linker.ld
 os/last-*
 os/Cargo.lock
+user/build
 user/target/*
 user/.idea/*
 user/Cargo.lock
@@ -14,6 +15,6 @@ easy-fs-fuse/Cargo.lock
 easy-fs-fuse/target/*
 tools/
 pushall.sh
-Cargo.lock
-target
-.vscode/*
+user_c/bin/*
+.vscode
+.gdb_history

@@ -1,7 +1,21 @@
+/// # 进程控制模块
+/// `os/src/syscall/process.rs`
+/// ## 实现功能
+/// ```
+/// pub fn sys_exit(exit_code: i32) -> !
+/// pub fn sys_yield() -> isize
+/// pub fn sys_get_time() -> isize
+/// pub fn sys_getpid() -> isize
+/// pub fn sys_fork() -> isize
+/// pub fn sys_exec(path: *const u8) -> isize
+/// pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize
+/// ```
+//
+
 use crate::fs::{open_file, OpenFlags};
 use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
-    current_process, current_task, current_user_token, exit_current_and_run_next, pid2process,
+    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
     suspend_current_and_run_next, SignalFlags,
 };
 use crate::timer::get_time_ms;
@@ -9,60 +23,79 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+pub use crate::task::{Utsname, UTSNAME};
+
+/// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
     panic!("Unreachable in sys_exit!");
 }
 
+/// ### 应用主动交出 CPU 所有权进入 Ready 状态并切换到其他应用
+/// - 返回值：总是返回 0。
+/// - syscall ID：124
 pub fn sys_yield() -> isize {
     suspend_current_and_run_next();
     0
 }
 
+/// 获取CPU上电时间（单位：ms）
 pub fn sys_get_time() -> isize {
     get_time_ms() as isize
 }
 
+/// 获取当前正在运行程序的 PID
 pub fn sys_getpid() -> isize {
-    current_task().unwrap().process.upgrade().unwrap().getpid() as isize
+    current_task().unwrap().pid.0 as isize
 }
 
+/// ### 当前进程 fork 出来一个子进程。
+/// - 返回值：对于子进程返回 0，对于当前进程则返回子进程的 PID 。
+/// - syscall ID：220
 pub fn sys_fork() -> isize {
-    let current_process = current_process();
-    let new_process = current_process.fork();
-    let new_pid = new_process.getpid();
+    let current_task = current_task().unwrap();
+    let new_task = current_task.fork();
+    let new_pid = new_task.pid.0;
     // modify trap context of new_task, because it returns immediately after switching
-    let new_process_inner = new_process.inner_exclusive_access();
-    let task = new_process_inner.tasks[0].as_ref().unwrap();
-    let trap_cx = task.inner_exclusive_access().get_trap_cx();
+    let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
     // we do not have to move to next instruction since we have done it before
-    // for child process, fork returns 0
+    // trap_handler 已经将当前进程 Trap 上下文中的 sepc 向后移动了 4 字节，
+    // 使得它回到用户态之后，会从发出系统调用的 ecall 指令的下一条指令开始执行
+
+    // 对于子进程，返回值是0
     trap_cx.x[10] = 0;
+    // 将 fork 到的进程加入任务调度器
+    add_task(new_task);
+    // 对于父进程，返回值是子进程的 PID
     new_pid as isize
 }
 
+/// ### 将当前进程的地址空间清空并加载一个特定的可执行文件，返回用户态后开始它的执行。
+/// - 参数：
+///     - `path` 给出了要加载的可执行文件的名字
+///     - `args` 数组中的每个元素都是一个命令行参数字符串的起始地址，以地址为0表示参数尾
+/// - 返回值：如果出错的话（如找不到名字相符的可执行文件）则返回 -1，否则返回参数个数 `argc`。
+/// - syscall ID：221
 pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
     let token = current_user_token();
+    // 读取到用户空间的应用程序名称（路径）
     let path = translated_str(token, path);
     let mut args_vec: Vec<String> = Vec::new();
     loop {
         let arg_str_ptr = *translated_ref(token, args);
-        if arg_str_ptr == 0 {
-            // 没有更多参数
+        if arg_str_ptr == 0 {   // 读到下一参数地址为0表示参数结束
             break;
-        }
+        }                       // 否则从用户空间取出参数，压入向量
         args_vec.push(translated_str(token, arg_str_ptr as *const u8));
         unsafe {
             args = args.add(1);
         }
     }
-    // 首先调用 open_file 函数，以只读的方式在内核中打开应用文件并获取它对应的 OSInode
     if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
-        let all_data = app_inode.read_all(); // 将该文件的数据全部读到一个向量 all_data 中
-        let process = current_process();
+        let all_data = app_inode.read_all();
+        let task = current_task().unwrap();
         let argc = args_vec.len();
-        // 将获取到的 args_vec 传入进去
-        process.exec(all_data.as_slice(), args_vec);
+        task.exec(all_data.as_slice(), args_vec);
         // return argc because cx.x[10] will be covered with it later
         argc as isize
     } else {
@@ -70,13 +103,21 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
     }
 }
 
-/// If there is not a child process whose pid is same as given, return -1.
-/// Else if there is a child process but it is still running, return -2.
+/// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
+/// - 参数：
+///     - pid 表示要等待的子进程的进程 ID，如果为 -1 的话表示等待任意一个子进程；
+///     - exit_code 表示保存子进程返回值的地址，如果这个地址为 0 的话表示不必保存。
+/// - 返回值：
+///     - 如果要等待的子进程不存在则返回 -1；
+///     - 否则如果要等待的子进程均未结束则返回，则放权等待；
+///     - 否则返回结束的子进程的进程 ID。
+/// - syscall ID：260
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
-    let process = current_process();
-    // find a child process
+    let task = current_task().unwrap();
+    // ---- access current TCB exclusively
+    let inner = task.inner_exclusive_access();
 
-    let mut inner = process.inner_exclusive_access();
+    // 根据pid参数查找有没有符合要求的进程
     if !inner
         .children
         .iter()
@@ -85,31 +126,46 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         return -1;
         // ---- release current PCB
     }
-    let pair = inner.children.iter().enumerate().find(|(_, p)| {
-        // ++++ temporarily access child PCB exclusively
-        p.inner_exclusive_access().is_zombie && (pid == -1 || pid as usize == p.getpid())
-        // ++++ release child PCB
-    });
-    if let Some((idx, _)) = pair {
-        let child = inner.children.remove(idx);
-        // confirm that child will be deallocated after being removed from children list
-        assert_eq!(Arc::strong_count(&child), 1);
-        let found_pid = child.getpid();
-        // ++++ temporarily access child PCB exclusively
-        let exit_code = child.inner_exclusive_access().exit_code;
-        // ++++ release child PCB
-        *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
-        found_pid as isize
-    } else {
-        -2
+    drop(inner);
+
+    loop{
+        let mut inner = task.inner_exclusive_access();
+        // 查找所有符合PID要求的处于僵尸状态的进程，如果有的话还需要同时找出它在当前进程控制块子进程向量中的下标
+        let pair = inner.children.iter().enumerate().find(|(_, p)| {
+            // ++++ temporarily access child PCB lock exclusively
+            p.inner_exclusive_access().is_zombie() && (pid == -1 || pid as usize == p.getpid())
+            // ++++ release child PCB
+        });
+        
+        if let Some((idx, _)) = pair {
+            // 将子进程从向量中移除并置于当前上下文中
+            let child = inner.children.remove(idx);
+            // 确认这是对于该子进程控制块的唯一一次强引用，即它不会出现在某个进程的子进程向量中，
+            // 更不会出现在处理器监控器或者任务管理器中。当它所在的代码块结束，这次引用变量的生命周期结束，
+            // 将导致该子进程进程控制块的引用计数变为 0 ，彻底回收掉它占用的所有资源，
+            // 包括：内核栈和它的 PID 还有它的应用地址空间存放页表的那些物理页帧等等
+            assert_eq!(Arc::strong_count(&child), 1);
+            // 收集的子进程信息返回
+            let found_pid = child.getpid();
+            // ++++ temporarily access child TCB exclusively
+            let exit_code = child.inner_exclusive_access().exit_code;
+            // ++++ release child PCB
+            // 将子进程的退出码写入到当前进程的应用地址空间中
+            *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
+            return found_pid as isize;
+        } else {
+            // 如果找不到的话则放权等待
+            drop(inner);        // 手动释放 TaskControlBlock 全局可变部分
+            suspend_current_and_run_next();
+        }
+        // ---- release current PCB lock automatically
     }
-    // ---- release current PCB automatically
 }
 
 pub fn sys_kill(pid: usize, signal: u32) -> isize {
-    if let Some(process) = pid2process(pid) {
+    if let Some(task) = pid2task(pid) {
         if let Some(flag) = SignalFlags::from_bits(signal) {
-            process.inner_exclusive_access().signals |= flag;
+            task.inner_exclusive_access().signals |= flag;
             0
         } else {
             -1
@@ -117,4 +173,24 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
     } else {
         -1
     }
+}
+
+/// ### 获取系统utsname参数
+/// - 参数
+///     - `buf`：用户空间存放utsname结构体的缓冲区
+/// - 返回值
+///     - 0表示正常
+/// - syscall_ID: 160
+pub fn sys_uname(buf: *const u8) -> isize {
+    let token = current_user_token();
+    let uname = UTSNAME.exclusive_access();
+    *translated_refmut(token, buf as *mut Utsname) = Utsname{
+        sysname:uname.sysname,
+        nodename:uname.nodename,
+        release: uname.release,
+        version: uname.version,
+        machine: uname.machine,
+        domainname: uname.domainname,
+    };
+    0
 }

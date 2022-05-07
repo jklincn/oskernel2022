@@ -1,4 +1,10 @@
+/// # 设备驱动层
+/// `os/src/drivers/mod.rs`
+/// ```
+/// pub use block::BLOCK_DEVICE
+/// ```
+//
+
 pub mod block;
-pub mod plic;
 
 pub use block::BLOCK_DEVICE;

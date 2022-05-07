@@ -1,9 +1,7 @@
-mod condvar;
-mod mutex;
-mod semaphore;
+/// ### 允许在单核处理器上将引用做全局变量使用
+/// `os/src/sync/mod.rs`
+//
+
 mod up;
 
-pub use condvar::Condvar;
-pub use mutex::{Mutex, MutexBlocking, MutexSpin};
-pub use semaphore::Semaphore;
 pub use up::UPSafeCell;

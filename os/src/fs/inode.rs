@@ -1,57 +1,60 @@
+/// # 内核索引节点层
+/// `os/src/fs/inode.rs`
+/// ```
+/// pub struct OSInode
+/// pub struct OSInodeInner
+/// pub struct OpenFlags
+/// 
+/// pub static ref ROOT_INODE
+/// 
+/// pub fn list_apps()
+/// pub fn open_file()
+/// ```
+//
+
 use super::File;
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
+use crate::sync::UPSafeCell;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
-use alloc::{string::String, sync::Arc};
 use bitflags::*;
+use easy_fs::{EasyFileSystem, Inode};
 use lazy_static::*;
-use simple_fat32::{FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
-use spin::Mutex;
 
-pub const SEEK_SET: i32 = 0; /* set to offset bytes.  */
-pub const SEEK_CUR: i32 = 1; /* set to its current location plus offset bytes.  */
-pub const SEEK_END: i32 = 2; /* set to the size of the file plus offset bytes.  */
-/*  Adjust the file offset to the next location in the file
-greater than or equal to offset containing data.  If
-offset points to data, then the file offset is set to
-offset */
-pub const SEEK_DATA: i32 = 3;
-/*  Adjust the file offset to the next hole in the file
-greater than or equal to offset.  If offset points into
-the middle of a hole, then the file offset is set to
-offset.  If there is no hole past offset, then the file
-offset is adjusted to the end of the file (i.e., there is
-an implicit hole at the end of any file). */
-pub const SEEK_HOLE: i32 = 4;
-
-#[derive(PartialEq, Copy, Clone, Debug)]
-pub enum DiskInodeType {
-    File,
-    Directory,
-}
-
-/// 表示进程中一个被打开的常规文件或目录
+/// ### 由文件系统提供的 Inode 进行封装得到的 **内核索引节点**
+/// - `readable` / `writable`：读写权限
+/// - `inner::offset`：读写偏移量
+/// - `inner::inode:：文件系统索引节点
+/// ```
+/// pub fn new()
+/// pub fn read_all()
+/// ```
 pub struct OSInode {
-    readable: bool, // 该文件是否允许通过 sys_read 进行读
-    writable: bool, // 该文件是否允许通过 sys_write 进行写
-    inner: Mutex<OSInodeInner>,
+    readable: bool,
+    writable: bool,
+    inner: UPSafeCell<OSInodeInner>,
 }
 
-pub struct OSInodeInner {
-    offset: usize, // 偏移量
-    inode: Arc<VFile>,
+/// ### 内核索引节点内部可变部分
+/// - `offset`：读写偏移量
+/// - `inode`：文件系统索引节点
+pub struct OSInodeInner {   /// 读写偏移量
+    offset: usize,      /// 文件系统索引节点
+    inode: Arc<Inode>,
 }
 
 impl OSInode {
-    pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
+    pub fn new(readable: bool, writable: bool, inode: Arc<Inode>) -> Self {
         Self {
             readable,
             writable,
-            inner: Mutex::new(OSInodeInner { offset: 0, inode }),
+            inner: unsafe { UPSafeCell::new(OSInodeInner { offset: 0, inode }) },
         }
     }
+    /// 读取整个文件到向量
     pub fn read_all(&self) -> Vec<u8> {
-        let mut inner = self.inner.lock();
+        let mut inner = self.inner.exclusive_access();
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
         loop {
@@ -64,95 +67,40 @@ impl OSInode {
         }
         v
     }
-
-    pub fn is_dir(&self) -> bool {
-        let inner = self.inner.lock();
-        inner.inode.is_dir()
-    }
-
-    /* this func will not influence the file offset
-     * @parm: if offset == -1, file offset will be used
-     */
-    pub fn read_vec(&self, offset: isize, len: usize) -> Vec<u8> {
-        let mut inner = self.inner.lock();
-        let mut len = len;
-        let ori_off = inner.offset;
-        if offset >= 0 {
-            inner.offset = offset as usize;
-        }
-        let mut buffer = [0u8; 512];
-        let mut v: Vec<u8> = Vec::new();
-        loop {
-            let rlen = inner.inode.read_at(inner.offset, &mut buffer);
-            if rlen == 0 {
-                break;
-            }
-            inner.offset += rlen;
-            v.extend_from_slice(&buffer[..rlen.min(len)]);
-            if len > rlen {
-                len -= rlen;
-            } else {
-                break;
-            }
-        }
-        if offset >= 0 {
-            inner.offset = ori_off;
-        }
-        v
-    }
-
-    pub fn write_all(&self, str_vec: &Vec<u8>) -> usize {
-        let mut inner = self.inner.lock();
-        let mut remain = str_vec.len();
-        let mut base = 0;
-        loop {
-            let len = remain.min(512);
-            inner.inode.write_at(inner.offset, &str_vec.as_slice()[base..base + len]);
-            inner.offset += len;
-            base += len;
-            remain -= len;
-            if remain == 0 {
-                break;
-            }
-        }
-        return base;
-    }
 }
 
-// 这里在实例化的时候进行文件系统的打开
 lazy_static! {
-    pub static ref ROOT_INODE: Arc<VFile> = {
-        let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
-        let manager_reader = fat32_manager.read();
-        Arc::new(manager_reader.get_root_vfile(&fat32_manager)) // 返回根目录
+    /// - 全局 `根目录索引节点` 变量
+    /// - 创建过程中先打开文件系统，然后获取根目录索引节点
+    pub static ref ROOT_INODE: Arc<Inode> = {
+        let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
+        Arc::new(EasyFileSystem::root_inode(&efs))
     };
 }
 
+/// 打印应用程序列表
 pub fn list_apps() {
     println!("/**** APPS ****");
-    for app in ROOT_INODE.ls_lite().unwrap() {
-        if app.1 & ATTR_DIRECTORY == 0 {
-            // 如果不是目录
-            println!("{}", app.0);
-        }
+    for app in ROOT_INODE.ls() {
+        println!("{}", app);
     }
-    println!("**************/")
+    println!("**************/");
 }
 
-// 定义一份打开文件的标志
 bitflags! {
     pub struct OpenFlags: u32 {
-        const RDONLY = 0;   // 只读
-        const WRONLY = 1 << 0; // 只写
-        const RDWR = 1 << 1; // 可读可写
-        const CREATE = 1 << 9; // 创建
-        const TRUNC = 1 << 10; // 若文件存在则清空文件内容
+        const RDONLY = 0;
+        const WRONLY = 1 << 0;
+        const RDWR = 1 << 1;
+        const CREATE = 1 << 9;
+        const TRUNC = 1 << 10;
     }
 }
 
 impl OpenFlags {
-    /// Do not check validity for simplicity
-    /// Return (readable, writable)
+    /// ### 根据标志的情况返回要打开的文件是否允许读写
+    /// - 简单起见，这里假设标志自身一定合法
+    /// - 返回 (readable, writable) 二元组
     pub fn read_write(&self) -> (bool, bool) {
         if self.is_empty() {
             (true, false)
@@ -164,27 +112,22 @@ impl OpenFlags {
     }
 }
 
-/// 根据文件名打开一个根目录下的文件
+/// 通过文件名和文件读写标志从 `ROOT_INODE` 对应文件系统中打开一个文件
 pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-    let path1 = String::from("./");
-    let path2 = String::from(name);
-    let path = path1 + &path2;
-    let mut pathv: Vec<&str> = path.split('/').collect();
-
     let (readable, writable) = flags.read_write();
-    if flags.contains(OpenFlags::CREATE) {
-        if let Some(inode) = ROOT_INODE.find_vfile_bypath(pathv.clone()) {
-            // 如果文件已经存在，则清空文件的内容
-            inode.remove();
-        } //非常奇怪的一个点
-        {
-            // 创建文件
+    if flags.contains(OpenFlags::CREATE) {  // 权限中包含 CREATE，才能创建文件
+        if let Some(inode) = ROOT_INODE.find(name) {
+            // clear size       // 文件存在，直接清空
+            inode.clear();
+            Some(Arc::new(OSInode::new(readable, writable, inode)))
+        } else {
+            // create file      // 文件不存在，创建
             ROOT_INODE
-                .create(name, ATTR_ARCHIVE)
+                .create(name)
                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
         }
-    } else {
-        ROOT_INODE.find_vfile_bypath(pathv).map(|inode| {
+    } else {    // 权限中不包含 CREATE
+        ROOT_INODE.find(name).map(|inode| {
             if flags.contains(OpenFlags::TRUNC) {
                 inode.clear();
             }
@@ -193,7 +136,6 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     }
 }
 
-// 为 OSInode 实现 File Trait
 impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable
@@ -202,7 +144,7 @@ impl File for OSInode {
         self.writable
     }
     fn read(&self, mut buf: UserBuffer) -> usize {
-        let mut inner = self.inner.lock();
+        let mut inner = self.inner.exclusive_access();
         let mut total_read_size = 0usize;
         for slice in buf.buffers.iter_mut() {
             let read_size = inner.inode.read_at(inner.offset, *slice);
@@ -215,7 +157,7 @@ impl File for OSInode {
         total_read_size
     }
     fn write(&self, buf: UserBuffer) -> usize {
-        let mut inner = self.inner.lock();
+        let mut inner = self.inner.exclusive_access();
         let mut total_write_size = 0usize;
         for slice in buf.buffers.iter() {
             let write_size = inner.inode.write_at(inner.offset, *slice);

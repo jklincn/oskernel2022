@@ -1,18 +1,22 @@
-mod inode;
-mod pipe;
-mod stdio;
+/// # 内核文件系统接口
+/// `os/src/fs/mod.rs`
+//
 
-/// UserBuffer 是我们在 mm 子模块中定义的应用地址空间中的一段缓冲区（即内存）的抽象，本质上是一个 &[u8]
+mod inode;  // 内核索引节点层
+mod stdio;  // 标准输入输出接口
+mod pipe;   // 管道模块
+
 use crate::mm::UserBuffer;
 
-/// 一切皆是文件
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
     fn writable(&self) -> bool;
+    /// read 指的是从文件中读取数据放到缓冲区中，最多将缓冲区填满，并返回实际读取的字节数
     fn read(&self, buf: UserBuffer) -> usize;
+    /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
 }
 
 pub use inode::{list_apps, open_file, OSInode, OpenFlags};
-pub use pipe::{make_pipe, Pipe};
 pub use stdio::{Stdin, Stdout};
+pub use pipe::{make_pipe, Pipe};

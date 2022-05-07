@@ -45,7 +45,7 @@ SECTIONS
 
     . = ALIGN(4K);
     ebss = .;
-    ekernel = .;
+    ekernel = .;    /*内核空间结束标记，以下空间均作为空闲内存以多级页表的方式管理*/
 
     /DISCARD/ : {
         *(.eh_frame)
