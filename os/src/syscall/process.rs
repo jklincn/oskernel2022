@@ -18,7 +18,7 @@ use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
     suspend_current_and_run_next, SignalFlags,
 };
-use crate::timer::{TimeVal, get_TimeVal, get_time_ms};
+use crate::timer::{TimeVal, tms, get_TimeVal, get_time_ms};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -67,6 +67,18 @@ pub fn sys_nanosleep(buf: *const u8) -> isize {
 pub fn sys_get_time(buf: *const u8) -> isize {
     let token = current_user_token();
     *translated_refmut(token, buf as *mut TimeVal) = get_TimeVal();
+    0
+}
+
+pub fn sys_times(buf: *const u8) -> isize {
+    let sec = get_time_ms() as isize * 1000;
+    let token = current_user_token();
+    *translated_refmut(token, buf as *mut tms) = tms {
+        tms_stime:sec,
+        tms_utime:sec,
+        tms_cstime:sec,
+        tms_cutime:sec,
+    };
     0
 }
 
