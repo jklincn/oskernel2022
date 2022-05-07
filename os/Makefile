@@ -15,21 +15,13 @@ K210_BOOTLOADER_SIZE := 131072
 # Binutils
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
 
-<<<<<<< HEAD
 build: env $(KERNEL_BIN) initproc
-=======
-# Disassembly
-DISASM ?= -x
-
-#build: env switch-check $(KERNEL_BIN) fs-img 
-build: env switch-check $(KERNEL_BIN)
->>>>>>> fs/jk
 
 initproc:
 	@cd ../user && make build
 
 env:
-	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
+	rustup target add $(TARGET)
 #	cargo install cargo-binutils --vers =0.3.3
 #	rustup component add rust-src
 	rustup component add llvm-tools-preview

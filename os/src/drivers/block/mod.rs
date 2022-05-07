@@ -12,7 +12,7 @@ pub use virtio_blk::VirtIOBlock;
 pub use sdcard::SDCardWrapper;
 
 use alloc::sync::Arc;
-use easy_fs::BlockDevice;
+use simple_fat32::BlockDevice;
 use lazy_static::*;
 use crate::board::BlockDeviceImpl;
 
