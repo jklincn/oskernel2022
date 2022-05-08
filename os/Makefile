@@ -18,7 +18,7 @@ OBJCOPY := rust-objcopy --binary-architecture=riscv64
 build: env $(KERNEL_BIN) initproc
 
 initproc:
-	@cd ../user && make build
+	@cd ../user_c && make build
 
 env:
 	rustup target add $(TARGET)
