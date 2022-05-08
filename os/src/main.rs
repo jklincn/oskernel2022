@@ -33,6 +33,7 @@ mod trap;   // 提供 Trap 管理
 
 use core::arch::global_asm;
 global_asm!(include_str!("entry.asm")); // 代码的第一条语句，执行指定的汇编文件，汇编程序再调用Rust实现的内核
+global_asm!(include_str!("buildin_app.S")); // 将 c_usertests 程序放入内核区内存空间
 
 // 通过宏将 rust_main 标记为 #[no_mangle] 以避免编译器对它的名字进行混淆，不然在链接的时候，
 // entry.asm 将找不到 main.rs 提供的外部符号 rust_main 从而导致链接失败

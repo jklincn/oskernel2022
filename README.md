@@ -13,6 +13,7 @@
 | ✔    | SYSCALL_NANOSLEEP | 101        |
 | ✔    | SYSCALL_YIELD     | 124        |
 |      | SYSCALL_KILL      | 129        |
+| 未完善| SYSCALL_TIMES     | 153        |
 | ✔    | SYSCALL_UNAME     | 160        |
 | ✔    | SYSCALL_GET_TIME  | 169        |
 | ✔    | SYSCALL_GETPID    | 172        |
@@ -67,8 +68,8 @@
 |      | unlink.c |
 
 #### 系统信息
-| 完成 | 测试用例       | 简单描述         |
-| ---- | -------------- | ---------------- |
-| ✔    | uname.c        | SYSCALL_UNAME    |
-| 🛠    | times.c        |
-| ✔    | gettimeofday.c | SYSCALL_GET_TIME |
+| 完成     | 测试用例       | 简单描述                                          |
+| -------- | -------------- | ------------------------------------------------- |
+| ✔        | uname.c        | SYSCALL_UNAME                                     |
+| ✔ 未完善 | times.c        | 目前实现的方案只是将CPU上电时间写到四个成员变量中 |
+| ✔        | gettimeofday.c | SYSCALL_GET_TIME                                  |
