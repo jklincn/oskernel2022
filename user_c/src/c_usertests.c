@@ -4,10 +4,10 @@
 
 #define PROG_NUM 11
 
-char* prog_name[] = { "uname", "fork", "exit", "execve", "getpid" , "sleep", "gettimeofday", "dup", "times", "user_shell", "c_getppid" };
+//char* prog_name[] = { "uname", "fork", "exit", "execve", "getpid" , "sleep", "gettimeofday", "dup", "times", "user_shell", "c_getppid" };
+char* prog_name[] = { "fork", "exit", "execve", "getpid" , "sleep", "gettimeofday","times", "user_shell", "c_getppid","uname","dup" };
 
 int main() {
-    printf(COLOR_LIGHT_GREEN"enter c_usertests\n"COLOR_NONE);
     for (int t = 0; t < PROG_NUM; t++) {
         int npid = fork();
         assert(npid >= 0);
