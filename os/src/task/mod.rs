@@ -85,9 +85,24 @@ lazy_static! {
     /// ### 初始进程的进程控制块
     /// - 引用计数类型，数据存放在内核堆中
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
-        let inode = open_file("initproc", OpenFlags::RDONLY).unwrap();
-        let v = inode.read_all();
-        TaskControlBlock::new(v.as_slice())
+        // 从文件系统中读取 initproc 程序的 elf 数据加载
+        // let inode = open_file("initproc", OpenFlags::RDONLY).unwrap();
+        // let v = inode.read_all();
+        // TaskControlBlock::new(v.as_slice())
+
+        extern "C" {
+            fn _num_app();
+        }
+        let num_app_ptr = _num_app as usize as *const usize;
+        let num_app = unsafe { num_app_ptr.read_volatile() }; 
+        let app_start = unsafe { core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1) };
+
+        TaskControlBlock::new( unsafe{
+            core::slice::from_raw_parts(
+                app_start[0] as *const u8, 
+                app_start[1] - app_start[0]
+            ) } 
+        )
     });
 }
 
