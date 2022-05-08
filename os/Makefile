@@ -8,6 +8,8 @@ KERNEL_BIN := $(KERNEL_ELF).bin
 BOOTLOADER := ../bootloader/rustsbi-k210.bin
 K210_BOOTLOADER_SIZE := 131072
 
+BOARD ?= qemu
+
 # Run K210
 #K210-SERIALPORT	= /dev/ttyUSB0
 #K210-BURNER	= ../tools/kflash.py
@@ -41,5 +43,15 @@ submit: build
 	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
 	@mv $(BOOTLOADER).copy ../os.bin
 
+run: run-inner
+
+run-inner: build
+	@qemu-system-riscv64 \
+		-machine virt \
+		-nographic \
+		-bios ../bootloader/rustsbi-qemu.bin \
+		-device loader,file=$(KERNEL_BIN),addr=0x80200000 \
+		-drive file=../fat32-fuse/fat32.img,if=none,format=raw,id=x0 \
+        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 .PHONY: build env kernel

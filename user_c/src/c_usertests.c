@@ -7,6 +7,7 @@
 char* prog_name[] = { "uname", "fork", "exit", "execve", "getpid" , "sleep", "gettimeofday", "dup", "times", "user_shell", "c_getppid" };
 
 int main() {
+    printf(COLOR_LIGHT_GREEN"enter c_usertests\n"COLOR_NONE);
     for (int t = 0; t < PROG_NUM; t++) {
         int npid = fork();
         assert(npid >= 0);
