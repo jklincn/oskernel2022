@@ -33,6 +33,7 @@ $(KERNEL_BIN): kernel
 
 
 kernel:
+	@cargo clean
 	@echo Platform: $(BOARD)
 	@cp src/linker-$(BOARD).ld src/linker.ld
 	@cargo build --release --offline --features "board_$(BOARD)"
