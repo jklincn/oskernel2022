@@ -15,6 +15,7 @@ void test_pipe(void)
     char buf[128] = {0};
     int ret = pipe(fd);
     assert(ret != -1);
+    printf("read:%d write:%d\n");
     const char *data = "  Write to pipe successfully.\n";
     cpid = fork();
     printf("cpid: %d\n", cpid);

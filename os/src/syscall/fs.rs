@@ -115,6 +115,7 @@ pub fn sys_pipe(pipe: *mut usize, flag: usize) -> isize {
     inner.fd_table[read_fd] = Some(pipe_read);
     let write_fd = inner.alloc_fd();
     inner.fd_table[write_fd] = Some(pipe_write);
+    println!("read_fd:{},write fd:{}",read_fd,write_fd);
     *translated_refmut(token, pipe) = read_fd;
     *translated_refmut(token, unsafe { pipe.add(1) }) = write_fd;
     0
