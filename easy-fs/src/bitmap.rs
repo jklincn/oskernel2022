@@ -58,7 +58,6 @@ impl Bitmap {
                     None
                 }
             });
-
             if pos.is_some() {
                 return pos;
             }

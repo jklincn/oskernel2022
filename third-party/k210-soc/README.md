@@ -1,1 +1,0 @@
-From [here](https://github.com/laanwj/k210-sdk-stuff/tree/master/rust/k210-shared/src/soc).

@@ -1,99 +1,68 @@
+/// # VirtIO 总线架构下的块设备
+/// `os/src/drivers/block/virtio_blk.rs`
+/// ```
+/// pub struct VirtIOBlock
+/// pub fn virtio_dma_alloc ()
+/// pub fn virtio_dma_dealloc ()
+/// pub fn virtio_phys_to_virt ()
+/// pub fn virtio_virt_to_phys ()
+/// ```
+//
+
 use super::BlockDevice;
 use crate::mm::{
     frame_alloc, frame_dealloc, kernel_token, FrameTracker, PageTable, PhysAddr, PhysPageNum,
     StepByOne, VirtAddr,
 };
-use crate::sync::{UPSafeCell, Condvar};
-use lazy_static::*;
-use virtio_drivers::{VirtIOBlk, VirtIOHeader, BlkResp, RespStatus};
-use crate::DEV_NON_BLOCKING_ACCESS;
-use alloc::collections::BTreeMap;
+use crate::sync::UPSafeCell;
 use alloc::vec::Vec;
+use lazy_static::*;
+use virtio_drivers::{VirtIOBlk, VirtIOHeader};
 
 #[allow(unused)]
 const VIRTIO0: usize = 0x10001000;
 
-/// 将 virtio-drivers crate 提供的 VirtIO 块设备抽象 VirtIOBlk 包装为我们自己的 VirtIOBlock
-pub struct VirtIOBlock {
-    virtio_blk: UPSafeCell<VirtIOBlk<'static>>,
-    condvars: BTreeMap<u16, Condvar>,
-}
-
-// 在 VirtIO 架构下，需要在公共区域中放置一种叫做 VirtQueue 的环形队列，CPU 可以向此环形队列中向 VirtIO 设备提交请求，也可以从队列中取得请求的结果
 lazy_static! {
     static ref QUEUE_FRAMES: UPSafeCell<Vec<FrameTracker>> = unsafe { UPSafeCell::new(Vec::new()) };
 }
 
+/// ### VirtIO 总线架构下的块设备
+/// 将 `virtio-drivers` crate 提供的 VirtIO 块设备抽象 `VirtIOBlk` 包装为我们自己的 `VirtIOBlock` ，
+/// 实质上只是加上了一层互斥锁，生成一个新的类型来实现 easy-fs 需要的 `BlockDevice` Trait
+/// ```
+/// fn read_block()
+/// fn write_block()
+/// pub fn new()
+/// ```
+pub struct VirtIOBlock(UPSafeCell<VirtIOBlk<'static>>);
+
 impl BlockDevice for VirtIOBlock {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
-        let nb = *DEV_NON_BLOCKING_ACCESS.exclusive_access();
-        if nb {
-            let mut blk = self.virtio_blk.exclusive_access();
-            let mut resp = BlkResp::default();
-            let token = unsafe {
-                blk.read_block_nb(block_id, buf, &mut resp).unwrap()
-            };
-            drop(blk);
-            self.condvars.get(&token).unwrap().wait();
-            assert_eq!(resp.status(), RespStatus::Ok, "Error when reading VirtIOBlk");
-        } else {
-            self.virtio_blk
-                .exclusive_access()
-                .read_block(block_id, buf)
-                .expect("Error when reading VirtIOBlk");
-        }
+        self.0
+            .exclusive_access()
+            .read_block(block_id, buf)
+            .expect("Error when reading VirtIOBlk");
     }
     fn write_block(&self, block_id: usize, buf: &[u8]) {
-        let nb = *DEV_NON_BLOCKING_ACCESS.exclusive_access();
-        if nb {
-            let mut blk = self.virtio_blk.exclusive_access();
-            let mut resp = BlkResp::default();
-            let token = unsafe {
-                blk.write_block_nb(block_id, buf, &mut resp).unwrap()
-            };
-            drop(blk);
-            self.condvars.get(&token).unwrap().wait();
-            assert_eq!(resp.status(), RespStatus::Ok, "Error when writing VirtIOBlk");
-        } else {
-            self.virtio_blk
-                .exclusive_access()
-                .write_block(block_id, buf)
-                .expect("Error when writing VirtIOBlk");
-        }
+        self.0
+            .exclusive_access()
+            .write_block(block_id, buf)
+            .expect("Error when writing VirtIOBlk");
     }
-    fn handle_irq(&self) {
-        let mut blk = self.virtio_blk.exclusive_access(); 
-        while let Ok(token) = blk.pop_used() {
-            self.condvars.get(&token).unwrap().signal();
-        }
-    }
+    fn handle_irq(&self) { todo!() }
 }
 
 impl VirtIOBlock {
+    #[allow(unused)]
     pub fn new() -> Self {
         unsafe {
-            let virtio_blk = UPSafeCell::new(
+            Self(UPSafeCell::new(
+                // VirtIOHeader 实际上就代表以 MMIO 方式访问 VirtIO 设备所需的一组设备寄存器
                 VirtIOBlk::new(&mut *(VIRTIO0 as *mut VirtIOHeader)).unwrap(),
-            );
-            let mut condvars = BTreeMap::new();
-            let channels = virtio_blk.exclusive_access().virt_queue_size();
-            for i in 0..channels {
-                let condvar = Condvar::new(); 
-                condvars.insert(i, condvar);
-            }
-            Self {
-                virtio_blk,
-                condvars,
-            }
+            ))
         }
     }
 }
-
-/**
- * 对于 VirtQueue 的使用涉及到物理内存的分配和回收，但这并不在 VirtIO 驱
- * 动 virtio-drivers 的职责范围之内，因此它声明了数个相关的接口，需要库的
- * 使用者自己来实现
- */
 
 #[no_mangle]
 pub extern "C" fn virtio_dma_alloc(pages: usize) -> PhysAddr {

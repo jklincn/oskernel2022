@@ -1,7 +1,6 @@
 [package]
 name = "os"
 version = "0.1.0"
-authors = ["Yifan Wu <shinbokuow@163.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -13,10 +12,10 @@ bitflags = "1.3.2"
 xmas-elf = "0.7.0"
 spin = "0.7.1"
 simple-fat32 = { path = "../simple-fat32" }
-riscv = { git = "https://github.com/rust-embedded/riscv", features = ["inline-asm"]}
+riscv = { git = "https://github.com/rcore-os/riscv", features = ["inline-asm"] }
 virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers" }
-k210-pac = { git = "https://github.com/riscv-rust/k210-pac" }
-k210-hal = { git = "https://github.com/riscv-rust/k210-hal" }
+k210-pac = { git = "https://github.com/wyfcyx/k210-pac" }
+k210-hal = { git = "https://github.com/wyfcyx/k210-hal" }
 k210-soc = { git = "https://github.com/wyfcyx/k210-soc" }
 
 [features]

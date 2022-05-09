@@ -1,3 +1,10 @@
+/// # 块设备驱动层
+/// `os/src/drivers/block/mod.rs`
+/// ```
+/// pub static ref BLOCK_DEVICE
+/// ```
+//
+
 mod sdcard;
 mod virtio_blk;
 
@@ -7,11 +14,8 @@ pub use sdcard::SDCardWrapper;
 use alloc::sync::Arc;
 use simple_fat32::BlockDevice;
 use lazy_static::*;
-use crate::board::BlockDeviceImpl; // qemu 是 VirtIOBlock ，board 是 SDCardWrapper
+use crate::board::BlockDeviceImpl;
 
-
-
-// 全局实例化为 BLOCK_DEVICE
 lazy_static! {
     pub static ref BLOCK_DEVICE: Arc<dyn BlockDevice> = Arc::new(BlockDeviceImpl::new());
 }

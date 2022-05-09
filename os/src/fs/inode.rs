@@ -124,18 +124,20 @@ lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
         let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
         let manager_reader = fat32_manager.read();
-        Arc::new(manager_reader.get_root_vfile(&fat32_manager)) // 返回根目录
+        Arc::new(manager_reader.create_root_vfile(&fat32_manager)) // 返回根目录
     };
 }
 
 pub fn list_apps() {
     println!("/**** APPS ****");
-    for app in ROOT_INODE.ls_lite().unwrap() {
+
+    for app in ROOT_INODE.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
             println!("{}", app.0);
         }
     }
+
     println!("**************/")
 }
 

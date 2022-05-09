@@ -1,111 +1,61 @@
 # Building
-TARGET := riscv64gc-unknown-none-elf
+TARGET := riscv64imac-unknown-none-elf
 MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
-DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-#FS_IMG := ../user/target/$(TARGET)/$(MODE)/fs.img
-FS_IMG := ../fat32-fuse/fat32.img
-SDCARD := /dev/sdb
-APPS := ../user/src/bin/*
 
 # BOARD
-BOARD ?= qemu
-SBI ?= rustsbi
-BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
+BOOTLOADER := ../bootloader/rustsbi-k210.bin
 K210_BOOTLOADER_SIZE := 131072
 
-# KERNEL ENTRY
-ifeq ($(BOARD), qemu)
-	KERNEL_ENTRY_PA := 0x80200000
-else ifeq ($(BOARD), k210)
-	KERNEL_ENTRY_PA := 0x80020000
-endif
+BOARD ?= qemu
 
 # Run K210
-K210-SERIALPORT	= /dev/ttyUSB0
-K210-BURNER	= ../tools/kflash.py
+#K210-SERIALPORT	= /dev/ttyUSB0
+#K210-BURNER	= ../tools/kflash.py
 
 # Binutils
-OBJDUMP := rust-objdump --arch-name=riscv64
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
 
-# Disassembly
-DISASM ?= -x
+build: env initproc $(KERNEL_BIN) 
 
-build: env switch-check $(KERNEL_BIN) fs-img 
-
-switch-check:
-ifeq ($(BOARD), qemu)
-	(which last-qemu) || (rm -f last-k210 && touch last-qemu && make clean)
-else ifeq ($(BOARD), k210)
-	(which last-k210) || (rm -f last-qemu && touch last-k210 && make clean)
-endif
+initproc:
+	@cd ../user_c && make build
 
 env:
-	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
+	rustup target add $(TARGET)
 #	cargo install cargo-binutils --vers =0.3.3
-	rustup component add rust-src
+#	rustup component add rust-src
 	rustup component add llvm-tools-preview
-
-sdcard: fs-img
-	@echo "Are you sure write to $(SDCARD) ? [y/N] " && read ans && [ $${ans:-N} = y ]
-	@sudo dd if=/dev/zero of=$(SDCARD) bs=1048576 count=32
-	@sudo dd if=$(FS_IMG) of=$(SDCARD)
 
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
-fs-img: $(APPS)
-	@cd ../user && make build
-	@rm -f $(FS_IMG)
-	@cd ../fat32-fuse && ./qemu_fs.sh && cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
-
-$(APPS):
 
 kernel:
+	@cargo clean
 	@echo Platform: $(BOARD)
 	@cp src/linker-$(BOARD).ld src/linker.ld
-	@cargo build --release --features "board_$(BOARD)"
+	@cargo build --release --offline --features "board_$(BOARD)"
 	@rm src/linker.ld
 
-clean:
-	@cargo clean
-
-disasm: kernel
-	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
-
-disasm-vim: kernel
-	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) > $(DISASM_TMP)
-	@vim $(DISASM_TMP)
-	@rm $(DISASM_TMP)
+submit: build
+	@cp $(BOOTLOADER) $(BOOTLOADER).copy
+	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
+	@mv $(BOOTLOADER).copy ../os.bin
 
 run: run-inner
-# 为虚拟机添加一块虚拟硬盘，内容为我们之前通过 easy-fs-fuse 工具打包的包含应用 ELF 的 easy-fs 镜像，并命名为 x0
-# 将硬盘 x0 作为一个 VirtIO 总线中的一个块设备接入到虚拟机系统中。 virtio-mmio-bus.0 表示 VirtIO 总线通过 MMIO 进行控制，且该块设备在总线中的编号为 0 。
-run-inner: build
-ifeq ($(BOARD),qemu)
+
+copy_to_fs: 
+	cd ../fat32-fuse && sudo mount fat32.img fs && sudo cp ../user_c/bin/* fs/ && sudo umount fs
+
+run-inner: build copy_to_fs
 	@qemu-system-riscv64 \
 		-machine virt \
 		-nographic \
-		-bios $(BOOTLOADER) \
-		-device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) \
-		-drive file=$(FS_IMG),if=none,format=raw,id=x0 \
+		-bios ../bootloader/rustsbi-qemu.bin \
+		-device loader,file=$(KERNEL_BIN),addr=0x80200000 \
+		-drive file=../fat32-fuse/fat32.img,if=none,format=raw,id=x0 \
         -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
-else
-	(which $(K210-BURNER)) || (cd .. && git clone https://github.com/sipeed/kflash.py.git && mv kflash.py tools)
-	@cp $(BOOTLOADER) $(BOOTLOADER).copy
-	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
-	@mv $(BOOTLOADER).copy $(KERNEL_BIN)
-	@sudo chmod 777 $(K210-SERIALPORT)
-	python3 $(K210-BURNER) -p $(K210-SERIALPORT) -b 1500000 $(KERNEL_BIN)
-	python3 -m serial.tools.miniterm --eol LF --dtr 0 --rts 0 --filter direct $(K210-SERIALPORT) 115200
-endif
 
-debug: build
-	@tmux new-session -d \
-		"qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) -s -S" && \
-		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
-		tmux -2 attach-session -d
-
-.PHONY: build env kernel clean disasm disasm-vim run-inner switch-check fs-img
+.PHONY: build env kernel

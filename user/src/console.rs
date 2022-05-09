@@ -1,11 +1,16 @@
-use core::fmt::{self, Write};
-
-const STDIN: usize = 0;
-const STDOUT: usize = 1;
+/// # 控制台模块
+/// `user/src/main.rs`
+//
 
 use super::{read, write};
+use core::fmt::{self, Write};
 
-struct Stdout;
+/// 类单元结构体，用于格式化输出
+struct Stdout;      
+
+/// 传入参数1代表标准输出，输出到屏幕
+const STDOUT: usize = 1;
+const STDIN: usize = 0;
 
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
@@ -32,6 +37,7 @@ macro_rules! println {
     }
 }
 
+/// 从标准输入中获取一个字符
 pub fn getchar() -> u8 {
     let mut c = [0u8; 1];
     read(STDIN, &mut c);

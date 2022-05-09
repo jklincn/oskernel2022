@@ -1,11 +1,19 @@
+/// # 标准输入输出接口
+/// `os/src/fs/stdio.rs`
+/// ```
+/// pub struct Stdin
+/// pub struct Stdout
+/// ```
+//
+
 use super::File;
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
 
-pub struct Stdin; // 只读文件
+pub struct Stdin;
 
-pub struct Stdout; // 只写文件
+pub struct Stdout;
 
 impl File for Stdin {
     fn readable(&self) -> bool {

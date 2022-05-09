@@ -2,6 +2,10 @@
 #![allow(non_camel_case_types)]
 #![allow(unused)]
 
+/// # K210平台 MircoSD 支持
+/// `os/src/drivers/block/sdcard.rs`
+//
+
 use super::BlockDevice;
 use crate::sync::UPSafeCell;
 use core::convert::TryInto;
@@ -761,5 +765,5 @@ impl BlockDevice for SDCardWrapper {
             .write_sector(buf, block_id as u32)
             .unwrap();
     }
-    fn handle_irq(&self) { unimplemented!(); }
+    fn handle_irq(&self) { todo!() }
 }

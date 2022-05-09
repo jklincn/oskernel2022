@@ -1,29 +1,67 @@
+/// # 地址数据类型
+/// `os/src/mm/address.rs`
+/// ## 实现功能
+/// ```
+/// pub struct PhysAddr(pub usize);     // 物理地址 56bit
+/// pub struct PhysPageNum(pub usize);  // 物理页号 44bit
+/// pub struct VirtAddr(pub usize);     // 虚拟地址 39bit
+/// pub struct VirtPageNum(pub usize);  // 虚拟页号 27bit
+/// ```
+//
+
 use super::PageTableEntry;
 use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
 use core::fmt::{self, Debug, Formatter};
 
+/// 物理地址宽度：56bit
 const PA_WIDTH_SV39: usize = 56;
+/// 虚拟地址宽度：39bit
 const VA_WIDTH_SV39: usize = 39;
-const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;  // 44 bit
-const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;  // 27 bit
+/// 物理页号宽度：44bit
+const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;
+/// 虚拟页号宽度：27bit
+const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
 
+/// ### 物理地址 56bit
+/// ```
+/// PhysAddr::floor(&self) -> PhysPageNum
+/// PhysAddr::ceil(&self) -> PhysPageNum
+/// PhysAddr::page_offset(&self) -> usize
+/// PhysAddr::aligned(&self) -> bool
+/// PhysAddr::get_mut<T>(&self) -> &'static mut T
+/// ```
 #[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct PhysAddr(pub usize);  // 物理地址
+pub struct PhysAddr(pub usize);
 
+/// ### 虚拟地址 39bit
+/// ```
+/// VirtAddr::floor(&self) -> PhysPageNum
+/// VirtAddr::ceil(&self) -> PhysPageNum
+/// VirtAddr::page_offset(&self) -> usize
+/// VirtAddr::aligned(&self) -> bool
+/// ```
 #[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct VirtAddr(pub usize);  // 虚拟地址
+pub struct VirtAddr(pub usize);
 
+/// ### 物理页号 44bit
+/// ```
+/// PhysPageNum::get_pte_array(&self) -> &'static mut [PageTableEntry]
+/// PhysPageNum::get_bytes_array(&self) -> &'static mut [u8]
+/// PhysPageNum::get_mut<T>(&self) -> &'static mut T
+/// ```
 #[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct PhysPageNum(pub usize);  // 物理页号
+pub struct PhysPageNum(pub usize);
 
+/// ### 虚拟页号 27bit
+/// ```
+/// VirtPageNum::indexes(&self) -> [usize; 3]
+/// ```
 #[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct VirtPageNum(pub usize);  // 虚拟页号
-
-/// Debugging
+pub struct VirtPageNum(pub usize);
 
 impl Debug for VirtAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -46,27 +84,32 @@ impl Debug for PhysPageNum {
     }
 }
 
-/// 类型转换
 /// T: {PhysAddr, VirtAddr, PhysPageNum, VirtPageNum}
 /// T -> usize: T.0
 /// usize -> T: usize.into()
+/// 当我们为类型 U 实现了 From<T> Trait 之后，可以使用 U::from(_: T) 来从一个 T 类型的实例来构造一个 U 类型的实例
+/// 当我们为类型 U 实现了 Into<T> Trait 之后，对于一个 U 类型的实例 u ，可以使用 u.into() 来将其转化为一个类型为 T 的实例
 
 impl From<usize> for PhysAddr {
+    /// 取 `usize` 的低56位作为物理地址
     fn from(v: usize) -> Self {
         Self(v & ((1 << PA_WIDTH_SV39) - 1))
     }
 }
 impl From<usize> for PhysPageNum {
+    /// 取 `usize` 的低44位作为物理页号
     fn from(v: usize) -> Self {
         Self(v & ((1 << PPN_WIDTH_SV39) - 1))
     }
 }
 impl From<usize> for VirtAddr {
+    /// 取 `usize` 的低39位作为虚拟地址
     fn from(v: usize) -> Self {
         Self(v & ((1 << VA_WIDTH_SV39) - 1))
     }
 }
 impl From<usize> for VirtPageNum {
+    /// 取 `usize` 的低27位作为虚拟页号
     fn from(v: usize) -> Self {
         Self(v & ((1 << VPN_WIDTH_SV39) - 1))
     }
@@ -93,15 +136,15 @@ impl From<VirtPageNum> for usize {
 }
 
 impl VirtAddr {
-    /// 虚拟地址转虚拟页号（下取整）
+    /// 从虚拟地址计算虚拟页号（下取整）
     pub fn floor(&self) -> VirtPageNum {
         VirtPageNum(self.0 / PAGE_SIZE)
     }
-    /// 虚拟地址转虚拟页号（上取整）
+    /// 从虚拟地址计算虚拟页号（下取整）
     pub fn ceil(&self) -> VirtPageNum {
         VirtPageNum((self.0 - 1 + PAGE_SIZE) / PAGE_SIZE)
     }
-    /// 从虚拟地址获取页内偏移（虚拟地址的低12位）
+    /// 从虚拟地址获取页内偏移（物理地址的低12位）
     pub fn page_offset(&self) -> usize {
         self.0 & (PAGE_SIZE - 1)
     }
@@ -110,27 +153,23 @@ impl VirtAddr {
         self.page_offset() == 0
     }
 }
-
-/// 虚拟地址转虚拟页号，仅适用于虚拟地址与页面大小对齐情况，若不对齐，则需要使用上述的 floor 与 ceil 方法
 impl From<VirtAddr> for VirtPageNum {
     fn from(v: VirtAddr) -> Self {
         assert_eq!(v.page_offset(), 0);
         v.floor()
     }
 }
-
-/// 虚拟页号转虚拟地址
 impl From<VirtPageNum> for VirtAddr {
     fn from(v: VirtPageNum) -> Self {
         Self(v.0 << PAGE_SIZE_BITS)
     }
 }
 impl PhysAddr {
-    /// 物理地址转物理页号（下取整）
+    /// 从物理地址计算物理页号（下取整）
     pub fn floor(&self) -> PhysPageNum {
         PhysPageNum(self.0 / PAGE_SIZE)
     }
-    /// 物理地址转物理页号（上取整）
+    /// 从物理地址计算物理页号（上取整）
     pub fn ceil(&self) -> PhysPageNum {
         PhysPageNum((self.0 - 1 + PAGE_SIZE) / PAGE_SIZE)
     }
@@ -142,16 +181,24 @@ impl PhysAddr {
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
+    /// 获取一个大小为 T 的不可变切片
+    pub fn get_ref<T>(&self) -> &'static T {
+        unsafe { (self.0 as *const T).as_ref().unwrap() }
+    }
+    /// 获取一个大小为 T 的可变切片
+    pub fn get_mut<T>(&self) -> &'static mut T {
+        unsafe { (self.0 as *mut T).as_mut().unwrap() }
+    }
 }
-
-/// 物理地址转物理页号，仅适用于物理地址与页面大小对齐情况，若不对齐，则需要使用上述的 floor 与 ceil 方法
 impl From<PhysAddr> for PhysPageNum {
     fn from(v: PhysAddr) -> Self {
+        // 对于物理地址与页面大小不对其的情况不能使用类型转换，panic
         assert_eq!(v.page_offset(), 0);
         v.floor()
     }
 }
-/// 物理页号转物理地址
+
+// 从物理页号转换到物理地址只需左移 PAGE_SIZE_BITS 大小
 impl From<PhysPageNum> for PhysAddr {
     fn from(v: PhysPageNum) -> Self {
         Self(v.0 << PAGE_SIZE_BITS)
@@ -164,30 +211,25 @@ impl VirtPageNum {
         let mut vpn = self.0;
         let mut idx = [0usize; 3];
         for i in (0..3).rev() {
-            idx[i] = vpn & 511;
+            idx[i] = vpn & 511; // 取出低9位
             vpn >>= 9;
         }
         idx
     }
 }
 
-impl PhysAddr {
-    /// 获得引用
-    pub fn get_ref<T>(&self) -> &'static T {
-        unsafe { (self.0 as *const T).as_ref().unwrap() }
-    }
-    /// 获得可变引用
-    pub fn get_mut<T>(&self) -> &'static mut T {
-        unsafe { (self.0 as *mut T).as_mut().unwrap() }
-    }
-}
+// 在实现方面，都是先把物理页号转为物理地址 PhysAddr ，然后再转成 usize 形式的物理地址。
+// 接着，我们直接将它转为裸指针用来访问物理地址指向的物理内存。
+// 在返回值类型上附加了静态生命周期泛型 'static ，这是为了绕过 Rust 编译器的借用检查，
+// 实质上可以将返回的类型也看成一个裸指针，因为它也只是标识数据存放的位置以及类型。
+// 但与裸指针不同的是，无需通过 unsafe 的解引用访问它指向的数据，而是可以像一个正常的可变引用一样直接访问
 impl PhysPageNum {
-    /// 64bit * 512，返回一个包含512个页表项的可变引用
+    /// 根据自己的PPN取出当前节点的页表项数组
     pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
         let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
     }
-    /// 8bit * 4096，返回一个包含4096个字节的可变引用，以字节为粒度对物理页帧上的数据进行访问
+    /// 返回一个字节数组的可变引用，可以以字节为粒度对物理页帧上的数据进行访问
     pub fn get_bytes_array(&self) -> &'static mut [u8] {
         let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut u8, 4096) }
@@ -195,19 +237,24 @@ impl PhysPageNum {
     /// 获取一个恰好放在一个物理页帧开头的类型为 T 的数据的可变引用
     pub fn get_mut<T>(&self) -> &'static mut T {
         let pa: PhysAddr = (*self).into();
-        pa.get_mut()
+        unsafe { (pa.0 as *mut T).as_mut().unwrap() }
     }
 }
 
-
-///---------------------------------------下面是实现 VPNRange 类型--------------------------------------
-
-/// 定义一个 StepByOne trait
 pub trait StepByOne {
     fn step(&mut self);
 }
+impl StepByOne for VirtPageNum {
+    fn step(&mut self) {
+        self.0 += 1;
+    }
+}
+impl StepByOne for PhysPageNum {
+    fn step(&mut self) {
+        self.0 += 1;
+    }
+}
 
-/// 范围泛型
 #[derive(Copy, Clone)]
 pub struct SimpleRange<T>
 where
@@ -231,8 +278,6 @@ where
         self.r
     }
 }
-
-/// 为范围泛型实现转换为范围迭代器 trait（定义在 core::iter 中）
 impl<T> IntoIterator for SimpleRange<T>
 where
     T: StepByOne + Copy + PartialEq + PartialOrd + Debug,
@@ -243,8 +288,6 @@ where
         SimpleRangeIterator::new(self.l, self.r)
     }
 }
-
-/// 范围迭代器泛型
 pub struct SimpleRangeIterator<T>
 where
     T: StepByOne + Copy + PartialEq + PartialOrd + Debug,
@@ -260,8 +303,6 @@ where
         Self { current: l, end: r }
     }
 }
-
-/// 为范围迭代器泛型实现迭代器 trait（定义在 core::iter 中）
 impl<T> Iterator for SimpleRangeIterator<T>
 where
     T: StepByOne + Copy + PartialEq + PartialOrd + Debug,
@@ -277,18 +318,4 @@ where
         }
     }
 }
-
-/// 为虚拟页号实现 StepByOne trait，此时虚拟页号已经实现了 SimpleRange 所要求的五个 trait
-impl StepByOne for VirtPageNum {
-    fn step(&mut self) {
-        self.0 += 1;
-    }
-}
-/// 为物理页号实现 StepByOne trait，此时物理页号已经实现了 SimpleRange 所要求的五个 trait
-impl StepByOne for PhysPageNum {
-    fn step(&mut self) {
-        self.0 += 1;
-    }
-}
-
 pub type VPNRange = SimpleRange<VirtPageNum>;

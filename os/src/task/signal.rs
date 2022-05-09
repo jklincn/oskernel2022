@@ -1,11 +1,19 @@
+/// # 进程状态标志
+/// `os/src/task/signal.rs`
+/// ```
+/// pub struct SignalFlags
+/// ```
+//
+
 use bitflags::*;
 
 bitflags! {
-    pub struct SignalFlags: u32 {
-        const SIGINT    = 1 << 2;
-        const SIGILL    = 1 << 4;
-        const SIGABRT   = 1 << 6;
-        const SIGFPE    = 1 << 8;
+    /// 进程状态标志
+    pub struct SignalFlags: u32 {   /// - Killed
+        const SIGINT    = 1 << 2;   /// - Illegal Instruction
+        const SIGILL    = 1 << 4;   /// - Aborted
+        const SIGABRT   = 1 << 6;   /// - Erroneous Arithmetic Operation
+        const SIGFPE    = 1 << 8;   /// - Segmentation Fault
         const SIGSEGV   = 1 << 11;
     }
 }
