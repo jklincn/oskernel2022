@@ -65,3 +65,11 @@ int times(void* mytimes){
 int dup(int fd) {
     return syscall(SYSCALL_DUP, fd);
 }
+
+int close(int fd) {
+    return syscall(SYSCALL_CLOSE, fd);
+}
+
+int pipe(int *fd) {
+    return syscall(SYSCALL_PIPE, fd, 0);
+}

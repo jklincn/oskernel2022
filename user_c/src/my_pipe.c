@@ -24,7 +24,11 @@ void test_pipe(void)
         close(fd[1]);
         printf("cpid: %d close 1\n", cpid);
         while (read(fd[0], buf, 1) > 0)
+        {
+            printf(">0\n");
             write(STDOUT, buf, 1);
+        }
+
         printf("cpid: %d write buf\n", cpid);
         write(STDOUT, "\n", 1);
         printf("cpid: %d write \\n\n", cpid);
