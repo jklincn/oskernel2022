@@ -21,11 +21,11 @@ int main() {
             waitpid(npid, &child_return, 0);
             printf(COLOR_YELLOW"%s\t"COLOR_NONE, prog_name[t]);
             if (child_return != 0) {
-                printf(COLOR_LIGHT_RED"TEST ERROR:%s return code:%d\n"COLOR_NONE, prog_name[t], child_return);
+                printf(COLOR_LIGHT_RED"TEST ERROR:%s return code:%d"COLOR_NONE"\n", prog_name[t], child_return);
                 return -t;
             }
             else{
-                printf(COLOR_LIGHT_GREEN"OK\n"COLOR_NONE);
+                printf(COLOR_LIGHT_GREEN"OK"COLOR_NONE"\n");
             }
         }
     }
