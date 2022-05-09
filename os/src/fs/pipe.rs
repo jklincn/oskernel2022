@@ -4,11 +4,10 @@
 /// pub struct Pipe
 /// enum RingBufferStatus
 /// pub struct PipeRingBuffer
-/// 
+///
 /// pub fn make_pipe()
 /// ```
 //
-
 use super::File;
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
@@ -136,6 +135,11 @@ impl PipeRingBuffer {
     pub fn all_write_ends_closed(&self) -> bool {
         self.write_end.as_ref().unwrap().upgrade().is_none()
     }
+
+    /// 通过管道缓冲区写端弱指针判断管道的所有写端都被关闭
+    pub fn write_ends_count(&self) -> usize {
+        self.write_end.as_ref().unwrap().weak_count()
+    }
 }
 
 /// 创建一个管道并返回管道的读端和写端 (read_end, write_end)
@@ -161,11 +165,14 @@ impl File for Pipe {
         loop {
             let mut ring_buffer = self.buffer.exclusive_access();
             let loop_read = ring_buffer.available_read();
+            //println!("loop_read:{}", loop_read);
             if loop_read == 0 {
+               // println!("write ends counts:{}", ring_buffer.write_ends_count());
                 if ring_buffer.all_write_ends_closed() {
                     return read_size;
                 }
                 drop(ring_buffer);
+                //println!("continue");
                 suspend_current_and_run_next();
                 continue;
             }
