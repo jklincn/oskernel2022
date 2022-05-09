@@ -20,7 +20,7 @@ mod switch; // 任务上下文切换模块
 mod task;   // 进程控制块
 mod info;   // 系统信息模块
 
-use crate::fs::{open_file, OpenFlags};
+use crate::fs::{open, OpenFlags};
 use alloc::sync::Arc;
 use lazy_static::*;
 use manager::fetch_task;
@@ -86,7 +86,7 @@ lazy_static! {
     /// - 引用计数类型，数据存放在内核堆中
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
         // 从文件系统中读取 initproc 程序的 elf 数据加载
-        // let inode = open_file("initproc", OpenFlags::RDONLY).unwrap();
+        // let inode = open_file("initproc", OpenFlags::O_RDONLY).unwrap();
         // let v = inode.read_all();
         // TaskControlBlock::new(v.as_slice())
 

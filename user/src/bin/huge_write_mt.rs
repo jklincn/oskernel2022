@@ -22,7 +22,7 @@ fn worker(size_kib: usize) {
 
 #[no_mangle]
 pub fn main(argc: usize, argv: &[&str]) -> i32 {
-    let f = open("testf\0", OpenFlags::CREATE | OpenFlags::WRONLY);
+    let f = open("testf\0", OpenFlags::O_CREATE | OpenFlags::O_WRONLY);
     if f < 0 {
         panic!("Open test file failed!");
     }

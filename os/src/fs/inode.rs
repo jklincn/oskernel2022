@@ -144,11 +144,14 @@ pub fn list_apps() {
 // 定义一份打开文件的标志
 bitflags! {
     pub struct OpenFlags: u32 {
-        const RDONLY = 0;   // 只读
-        const WRONLY = 1 << 0; // 只写
-        const RDWR = 1 << 1; // 可读可写
-        const CREATE = 1 << 9; // 创建
-        const TRUNC = 1 << 10; // 若文件存在则清空文件内容
+        const O_RDONLY = 00000000;   // 只读
+        const O_WRONLY = 00000001; // 只写
+        const O_RDWR = 00000002; // 可读可写
+        const O_CREATE = 00000100; // 创建
+        const O_TRUNC = 00001000; // 若文件存在则清空文件内容
+        const O_LARGEFILE  = 00100000;
+        const O_DIRECTROY = 00200000;
+        const O_CLOEXEC = 02000000;
     }
 }
 
@@ -158,7 +161,7 @@ impl OpenFlags {
     pub fn read_write(&self) -> (bool, bool) {
         if self.is_empty() {
             (true, false)
-        } else if self.contains(Self::WRONLY) {
+        } else if self.contains(Self::O_WRONLY) {
             (false, true)
         } else {
             (true, true)
@@ -166,28 +169,59 @@ impl OpenFlags {
     }
 }
 
-/// 根据文件名打开一个根目录下的文件
-pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-    let path1 = String::from("./");
-    let path2 = String::from(name);
-    let path = path1 + &path2;
-    let mut pathv: Vec<&str> = path.split('/').collect();
+// /// 根据文件名打开一个根目录下的文件
+// pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+//     let (readable, writable) = flags.read_write();
+//     // 如果带有创建标志
+//     if flags.contains(OpenFlags::O_CREATE) {
+//         if let Some(inode) = ROOT_INODE.find(name) {
+//             // 如果已存在，则清空内容
+//             inode.clear();
+//             // 新建一个 OSInode 返回
+//             Some(Arc::new(OSInode::new(readable, writable, inode)))
+//         } else {
+//             // 如果不存在，则在根目录下创建一个 VFile，再生成一个 OSInode 返回
+//             ROOT_INODE
+//                 .create(name)
+//                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
+//         }
+//     } else {
+//         // 如果没有创建标志，则直接寻找
+//         ROOT_INODE.find(name).map(|inode| {
+//             if flags.contains(OpenFlags::O_TRUNC) {
+//                 inode.clear();
+//             }
+//             Arc::new(OSInode::new(readable, writable, inode))
+//         })
+//     }
+// }
 
+
+pub fn open(pathname: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+    let mut pathv: Vec<&str> = pathname.split('/').collect();
+    // 找到上一级目录
+    let upper_inode = {
+        let mut tmp_pathv = pathv.clone();
+        tmp_pathv.pop();
+        ROOT_INODE.find_vfile_bypath(tmp_pathv).unwrap()
+    };
     let (readable, writable) = flags.read_write();
-    if flags.contains(OpenFlags::CREATE) {
+    if flags.contains(OpenFlags::O_CREATE) {
         if let Some(inode) = ROOT_INODE.find_vfile_bypath(pathv.clone()) {
-            // 如果文件已经存在，则清空文件的内容
-            inode.remove();
-        } //非常奇怪的一个点
-        {
-            // 创建文件
-            ROOT_INODE
+            // 文件存在则直接返回
+            Some(Arc::new(OSInode::new(readable, writable, inode)))
+        } else {
+            // 文件不存在则创建返回
+            let name = pathv.pop().unwrap();
+            // 注意这边默认创建类型是 ATTR_ARCHIVE，即文件
+            // 因为 open("./mnt",O_CREATE) 是分不清 mnt 到底是目录还是文件，创建文件参见 SYS_mkdirat
+            upper_inode
                 .create(name, ATTR_ARCHIVE)
                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
         }
     } else {
-        ROOT_INODE.find_vfile_bypath(pathv).map(|inode| {
-            if flags.contains(OpenFlags::TRUNC) {
+        upper_inode.find_vfile_bypath(pathv).map(|inode| {
+            if flags.contains(OpenFlags::O_TRUNC) {
                 inode.clear();
             }
             Arc::new(OSInode::new(readable, writable, inode))

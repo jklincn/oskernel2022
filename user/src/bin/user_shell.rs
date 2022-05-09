@@ -135,7 +135,7 @@ pub fn main() -> i32 {
                                 // 输入重定向
                                 if !input.is_empty() {
                                     // 尝试打开输入文件 input 到 input_fd 中
-                                    let input_fd = open(input.as_str(), OpenFlags::RDONLY);
+                                    let input_fd = open(input.as_str(), OpenFlags::O_RDONLY);
                                     if input_fd == -1 {
                                         println!("Error when opening file {}", input);
                                         return -4;
@@ -152,7 +152,7 @@ pub fn main() -> i32 {
                                 if !output.is_empty() {
                                     let output_fd = open(
                                         output.as_str(),
-                                        OpenFlags::CREATE | OpenFlags::WRONLY,
+                                        OpenFlags::O_CREATE | OpenFlags::O_WRONLY,
                                     );
                                     if output_fd == -1 {
                                         println!("Error when opening file {}", output);

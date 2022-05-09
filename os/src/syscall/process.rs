@@ -12,7 +12,7 @@
 /// ```
 //
 
-use crate::fs::{open_file, OpenFlags};
+use crate::fs::{open, OpenFlags};
 use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
@@ -129,7 +129,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
             args = args.add(1);
         }
     }
-    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+    if let Some(app_inode) = open(path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
         let task = current_task().unwrap();
         let argc = args_vec.len();
