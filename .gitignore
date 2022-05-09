@@ -15,12 +15,9 @@ easy-fs-fuse/Cargo.lock
 easy-fs-fuse/target/*
 tools/
 pushall.sh
-<<<<<<< HEAD
 Cargo.lock
 target
-=======
 user_c/bin/*
 .vscode
 .gdb_history
 os.bin
->>>>>>> local_test
