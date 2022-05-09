@@ -106,7 +106,7 @@ pub fn sys_close(fd: usize) -> isize {
 /// 内核需要按顺序将管道读端和写端的文件描述符写入到数组中。
 /// - 返回值：如果出现了错误则返回 -1，否则返回 0 。可能的错误原因是：传入的地址不合法。
 /// - syscall ID：59
-pub fn sys_pipe(pipe: *mut usize, flag: usize) -> isize {
+pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
     let mut inner = task.inner_exclusive_access();
@@ -116,8 +116,8 @@ pub fn sys_pipe(pipe: *mut usize, flag: usize) -> isize {
     let write_fd = inner.alloc_fd();
     inner.fd_table[write_fd] = Some(pipe_write);
     println!("read_fd:{},write fd:{}",read_fd,write_fd);
-    *translated_refmut(token, pipe) = read_fd;
-    *translated_refmut(token, unsafe { pipe.add(1) }) = write_fd;
+    *translated_refmut(token, pipe) = read_fd as u32;
+    *translated_refmut(token, unsafe { pipe.add(1) }) = write_fd as u32;
     0
 }
 

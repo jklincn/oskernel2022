@@ -15,34 +15,35 @@ void test_pipe(void)
     char buf[128] = {0};
     int ret = pipe(fd);
     assert(ret != -1);
-    printf("read:%d write:%d\n");
+    printf("read:%d write:%d\n",fd[0],fd[1]);
     const char *data = "  Write to pipe successfully.\n";
     cpid = fork();
     printf("cpid: %d\n", cpid);
     if (cpid > 0)
     {
-        printf("cpid: %d close enter\n", cpid);
+        //printf("cpid: %d close enter\n", cpid);
         close(fd[1]);
-        printf("cpid: %d close 1\n", cpid);
+        // printf("cpid: %d close 1\n", cpid);
         while (read(fd[0], buf, 1) > 0)
         {
-            printf(">0\n");
             write(STDOUT, buf, 1);
         }
 
-        printf("cpid: %d write buf\n", cpid);
+        // printf("cpid: %d write buf\n", cpid);
         write(STDOUT, "\n", 1);
         printf("cpid: %d write \\n\n", cpid);
         close(fd[0]);
+        printf("cpid: %d close 0 \\n\n", cpid);
         wait(NULL);
+        printf("wait done\n");
     }
     else
     {
-        printf("cpid: %d close enter\n", cpid);
+        // printf("cpid: %d close enter\n", cpid);
         close(fd[0]);
-        printf("cpid: %d close 0\n", cpid);
+        // printf("cpid: %d close 0\n", cpid);
         write(fd[1], data, strlen(data));
-        printf("cpid: %d write\n", cpid);
+        // printf("cpid: %d write\n", cpid);
         close(fd[1]);
         printf("cpid: %d close 1\n", cpid);
         exit(0);
