@@ -196,31 +196,46 @@ impl OpenFlags {
 //     }
 // }
 
-
-pub fn open(pathname: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-    let mut pathv: Vec<&str> = pathname.split('/').collect();
-    // 找到上一级目录
-    let upper_inode = {
-        let mut tmp_pathv = pathv.clone();
-        tmp_pathv.pop();
-        ROOT_INODE.find_vfile_bypath(tmp_pathv).unwrap()
+//
+pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType) -> Option<Arc<OSInode>> {
+    // DEBUG: 相对路径
+    let cur_inode = {
+        if work_path == "/" {
+            ROOT_INODE.clone()
+        } else {
+            let wpath: Vec<&str> = work_path.split('/').collect();
+            ROOT_INODE.find_vfile_bypath(wpath).unwrap()
+        }
     };
+    let mut pathv: Vec<&str> = path.split('/').collect();
+    //println!("[open] pathv = {:?}", pathv);
+    // print!("\n");
+    // shell应当保证此处输入的path不为空
     let (readable, writable) = flags.read_write();
     if flags.contains(OpenFlags::O_CREATE) {
-        if let Some(inode) = ROOT_INODE.find_vfile_bypath(pathv.clone()) {
-            // 文件存在则直接返回
-            Some(Arc::new(OSInode::new(readable, writable, inode)))
-        } else {
-            // 文件不存在则创建返回
+        if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+            // clear size
+            inode.remove();
+        }
+        {
+            // create file
             let name = pathv.pop().unwrap();
-            // 注意这边默认创建类型是 ATTR_ARCHIVE，即文件
-            // 因为 open("./mnt",O_CREATE) 是分不清 mnt 到底是目录还是文件，创建文件参见 SYS_mkdirat
-            upper_inode
-                .create(name, ATTR_ARCHIVE)
-                .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
+            if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+                let attribute = {
+                    match type_ {
+                        DiskInodeType::Directory => ATTR_DIRECTORY,
+                        DiskInodeType::File => ATTR_ARCHIVE,
+                    }
+                };
+                temp_inode
+                    .create(name, attribute)
+                    .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
+            } else {
+                None
+            }
         }
     } else {
-        upper_inode.find_vfile_bypath(pathv).map(|inode| {
+        cur_inode.find_vfile_bypath(pathv).map(|inode| {
             if flags.contains(OpenFlags::O_TRUNC) {
                 inode.clear();
             }
@@ -260,5 +275,49 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+
+    fn create(&self, path: &str, type_: DiskInodeType) -> Option<Arc<OSInode>> {
+        let inner = self.inner.lock();
+        let cur_inode = inner.inode.clone();
+        if !cur_inode.is_dir() {
+            println!("[create]:{} is not a directory!", path);
+            return None;
+        }
+        let mut pathv: Vec<&str> = path.split('/').collect();
+        let (readable, writable) = (true, true);
+        if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+            // already exists, clear
+            inode.remove();
+        }
+        {
+            // create file
+            let name = pathv.pop().unwrap();
+            if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+                let attribute = {
+                    match type_ {
+                        DiskInodeType::Directory => ATTR_DIRECTORY,
+                        DiskInodeType::File => ATTR_ARCHIVE,
+                    }
+                };
+                temp_inode
+                    .create(name, attribute)
+                    .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
+            } else {
+                None
+            }
+        }
+    }
+
+    fn find(&self, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+        let inner = self.inner.lock();
+        let mut pathv: Vec<&str> = path.split('/').collect();
+        let vfile = inner.inode.find_vfile_bypath(pathv);
+        if vfile.is_none() {
+            return None;
+        } else {
+            let (readable, writable) = flags.read_write();
+            return Some(Arc::new(OSInode::new(readable, writable, vfile.unwrap())));
+        }
     }
 }

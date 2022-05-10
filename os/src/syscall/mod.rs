@@ -24,7 +24,7 @@
 //
 
 const SYSCALL_DUP:      usize = 24;
-const SYSCALL_OPEN:     usize = 56;
+const SYSCALL_OPENAT:     usize = 56;
 const SYSCALL_CLOSE:    usize = 57;
 const SYSCALL_PIPE:     usize = 59;
 const SYSCALL_READ:     usize = 63;
@@ -48,10 +48,10 @@ use fs::*;
 use process::*;
 
 /// 系统调用分发函数
-pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
     match syscall_id {
         SYSCALL_DUP =>      sys_dup(args[0]),
-        SYSCALL_OPEN =>     {println!("flags:{}",args[1] as u32); sys_open(args[0] as *const u8, args[1] as u32)},
+        SYSCALL_OPENAT =>   sys_openat(args[0] as isize, args[1] as *const u8, args[2] as u32, args[3] as u32),
         SYSCALL_CLOSE =>    sys_close(args[0]),
         SYSCALL_PIPE =>     sys_pipe(args[0] as *mut u32,args[1]),
         SYSCALL_READ =>     sys_read(args[0], args[1] as *const u8, args[2]),

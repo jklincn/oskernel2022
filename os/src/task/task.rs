@@ -77,6 +77,7 @@ pub struct TaskControlBlockInner {
     pub exit_code: i32,             /// 文件描述符表
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
     pub signals: SignalFlags,
+    pub current_path: String,
 }
 
 impl TaskControlBlockInner {
@@ -102,6 +103,10 @@ impl TaskControlBlockInner {
             self.fd_table.push(None);
             self.fd_table.len() - 1
         }
+    }
+
+    pub fn get_work_path(&self)->String{
+        self.current_path.clone()
     }
 }
 
@@ -146,6 +151,7 @@ impl TaskControlBlock {
                         Some(Arc::new(Stdout)),
                     ],
                     signals: SignalFlags::empty(),
+                    current_path:String::from("/"),
                 })
             },
         };
@@ -258,6 +264,7 @@ impl TaskControlBlock {
                     exit_code: 0,
                     fd_table: new_fd_table,
                     signals: SignalFlags::empty(),
+                    current_path: parent_inner.current_path.clone(),
                 })
             },
         });

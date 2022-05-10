@@ -14,6 +14,8 @@ use crate::sync::UPSafeCell;
 use alloc::sync::{Arc, Weak};
 
 use crate::task::suspend_current_and_run_next;
+pub use super::{list_apps, open, OSInode, OpenFlags,DiskInodeType};
+
 
 /// ### 管道
 /// 由 读 `readable` / 写 `writable` 权限和 缓冲区 `buffer` 组成，用以分别表示管道的写端和读端
@@ -212,4 +214,12 @@ impl File for Pipe {
             }
         }
     }
+    fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>{
+        unreachable!("pipe not implement create");
+    }
+
+    fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>{
+        unreachable!("pipe not implement find");
+    }
+
 }

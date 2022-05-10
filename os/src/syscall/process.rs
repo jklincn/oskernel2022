@@ -12,7 +12,7 @@
 /// ```
 //
 
-use crate::fs::{open, OpenFlags};
+use crate::fs::{open, OpenFlags,DiskInodeType};
 use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
@@ -129,9 +129,12 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
             args = args.add(1);
         }
     }
-    if let Some(app_inode) = open(path.as_str(), OpenFlags::O_RDONLY) {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+
+    if let Some(app_inode) = open(inner.current_path.as_str(),path.as_str(), OpenFlags::O_RDONLY, DiskInodeType::File) {
         let all_data = app_inode.read_all();
-        let task = current_task().unwrap();
+        drop(inner);
         let argc = args_vec.len();
         task.exec(all_data.as_slice(), args_vec);
         // return argc because cx.x[10] will be covered with it later
