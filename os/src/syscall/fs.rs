@@ -92,7 +92,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     let token = current_user_token();
     // 这里传入的地址为用户的虚地址，因此要使用用户的虚地址进行映射
     let path = translated_str(token, path);
-    println!("sys_openat: path = {}", path);
+    //println!("sys_openat: path = {}", path);
 
     let mut inner = task.inner_exclusive_access();
 
