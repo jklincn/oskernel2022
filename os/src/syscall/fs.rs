@@ -1,3 +1,5 @@
+use core::mem::size_of;
+
 /// # 文件读写模块
 /// `os/src/syscall/fs.rs`
 /// ## 实现功能
@@ -8,10 +10,10 @@
 /// pub fn sys_close(fd: usize) -> isize
 /// ```
 //
-use crate::fs::{make_pipe, open, DiskInodeType, OpenFlags, MNT_TABLE,ch_dir};
+use crate::fs::{ch_dir, make_pipe, open, DiskInodeType, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
-use alloc::{sync::Arc, vec::Vec, string::String};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
@@ -298,11 +300,11 @@ pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
     }
 }
 
-pub fn sys_getdents64(fd:isize, buf: *mut u8, len:usize)->isize{
+pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
     unimplemented!();
 }
 
-pub fn sys_chdir(path: *const u8) -> isize{
+pub fn sys_chdir(path: *const u8) -> isize {
     //print_core_info();
     let token = current_user_token();
     let task = current_task().unwrap();
@@ -322,19 +324,19 @@ pub fn sys_chdir(path: *const u8) -> isize{
             work_path.push('/');
             work_path.push_str(path.as_str());
             let mut path_vec: Vec<&str> = work_path.as_str().split('/').collect();
-            let mut new_pathv: Vec<&str> = Vec::new(); 
-            for i in 0..path_vec.len(){
+            let mut new_pathv: Vec<&str> = Vec::new();
+            for i in 0..path_vec.len() {
                 if path_vec[i] == "" || path_vec[i] == "." {
                     continue;
                 }
                 if path_vec[i] == ".." {
                     new_pathv.pop();
                     continue;
-                } 
+                }
                 new_pathv.push(path_vec[i]);
             }
             let mut new_wpath = String::new();
-            for i in 0..new_pathv.len(){
+            for i in 0..new_pathv.len() {
                 new_wpath.push('/');
                 new_wpath.push_str(new_pathv[i]);
             }
@@ -345,7 +347,29 @@ pub fn sys_chdir(path: *const u8) -> isize{
             inner.current_path = new_wpath.clone();
         }
         new_ino_id
-    }else{
+    } else {
         new_ino_id
+    }
+}
+
+pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Kstat>());
+    let inner = task.inner_exclusive_access();
+    // 使用UserBuffer结构，以便于跨页读写
+    let mut userbuf = UserBuffer::new(buf_vec);
+    let mut kstat = Kstat::new();
+
+    let fd_usz = fd as usize;
+    if fd_usz >= inner.fd_table.len() && fd_usz > FD_LIMIT {
+        return -1;
+    }
+    if let Some(file) = &inner.fd_table[fd_usz] {
+        file.get_fstat(&mut kstat);
+        userbuf.write(kstat.as_bytes());
+        return 0;
+    } else {
+        return -1;
     }
 }

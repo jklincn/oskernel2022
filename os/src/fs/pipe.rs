@@ -8,7 +8,7 @@
 /// pub fn make_pipe()
 /// ```
 //
-use super::File;
+use super::{File, Kstat};
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
 use alloc::sync::{Arc, Weak};
@@ -215,11 +215,14 @@ impl File for Pipe {
         }
     }
     fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>{
-        unreachable!("pipe not implement create");
+        panic!("pipe not implement create");
     }
 
     fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>{
-        unreachable!("pipe not implement find");
+        panic!("pipe not implement find");
     }
 
+    fn get_fstat(&self, kstat:&mut Kstat){
+        panic!("pipe not implement get_fstat");
+    }
 }

@@ -284,6 +284,9 @@ impl ShortDirEntry {
         self.dir_attr
     }
 
+    pub fn size(&self) -> u32 {
+        self.dir_file_size
+    }
     // pub fn get_creation_time(&self) -> (u32, u32, u32, u32, u32, u32, u64) {
     //     // year-month-day-Hour-min-sec-long_sec
     //     let year: u32 = ((self.dir_crt_date & 0xFE00) >> 9) as u32 + 1980;

@@ -6,6 +6,7 @@ mod inode;  // 内核索引节点层
 mod stdio;  // 标准输入输出接口
 mod pipe;   // 管道模块
 mod mount;  // 挂载模块
+mod stat;
 
 use crate::mm::UserBuffer;
 use alloc::sync::Arc;
@@ -21,6 +22,8 @@ pub trait File: Send + Sync {
     fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>;
 
     fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>;
+
+    fn get_fstat(&self, kstat:&mut Kstat);
 }
 
 
@@ -28,3 +31,4 @@ pub use inode::{list_apps, open, OSInode, OpenFlags,DiskInodeType,ch_dir};
 pub use stdio::{Stdin, Stdout};
 pub use pipe::{make_pipe, Pipe};
 pub use mount::MNT_TABLE;
+pub use stat::Kstat;

@@ -321,6 +321,92 @@ impl UserBuffer {
         }
         return len;
     }
+
+    pub fn clear( &mut self ){
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                (*sub_buff)[j] = 0;
+            }
+        }
+    }
+
+    pub fn write_at(&mut self, offset:usize, buff: &[u8])->isize{
+        let len = buff.len();
+        if offset + len > self.len() {
+            return -1
+        }
+        let mut head = 0; // offset of slice in UBuffer
+        let mut current = 0; // current offset of buff
+    
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            if head + sblen < offset {
+                continue;
+            } else if head < offset {
+                for j in (offset - head)..sblen {
+                    (*sub_buff)[j] = buff[current];
+                    current += 1;
+                    if current == len {
+                        return len as isize;
+                    }
+                }
+            } else {  //head + sblen > offset and head > offset
+                for j in 0..sblen {
+                    (*sub_buff)[j] = buff[current];
+                    current += 1;
+                    if current == len {
+                        return len as isize;
+                    }
+                }
+            }
+            head += sblen;
+        }
+    
+        //for b in self.buffers.iter_mut() {
+        //    if offset > head && offset < head + b.len() {
+        //        (**b)[offset - head] = char;
+        //        //b.as_mut_ptr()
+        //    } else {
+        //        head += b.len();
+        //    }
+        //}
+        0
+    }
+
+    // 将UserBuffer的数据读入一个Buffer，返回读取长度
+    pub fn read(&self, buff:&mut [u8])->usize{
+        let len = self.len().min(buff.len());
+        let mut current = 0;
+        for sub_buff in self.buffers.iter() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                buff[current] = (*sub_buff)[j];
+                current += 1;
+                if current == len {
+                    return len;
+                }
+            }
+        }
+        return len;
+    }
+
+    // TODO: 把vlen去掉    
+    pub fn read_as_vec(&self, vec: &mut Vec<u8>, vlen:usize)->usize{
+        let len = self.len();
+        let mut current = 0;
+        for sub_buff in self.buffers.iter() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                vec.push( (*sub_buff)[j] );
+                current += 1;
+                if current == len {
+                    return len;
+                }
+            }
+        }
+        return len;
+    }
 }
 
 impl IntoIterator for UserBuffer {

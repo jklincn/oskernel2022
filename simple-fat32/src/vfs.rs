@@ -749,6 +749,25 @@ impl VFile {
         return all_clusters.len();
     }
 
+    pub fn stat(&self)->( i64, i64, i64, i64, u64 ){
+        self.read_short_dirent(|short_entry:&ShortDirEntry|{
+            // let (_,_,_,_,_,_,ctime) = short_entry.get_creation_time();
+            // let (_,_,_,_,_,_,atime) = short_entry.get_accessed_time();
+            // let (_,_,_,_,_,_,mtime) = short_entry.get_modification_time();
+            let mut size = short_entry.size();
+            let first_cluster = short_entry.first_cluster();
+            if self.is_dir() {
+                let fs_reader = self.fs.read();
+                let fat = fs_reader.get_fat();
+                let fat_reader = fat.read();
+                let cluster_num = fat_reader.count_claster_num( first_cluster, self.block_device.clone());
+                size = cluster_num * fs_reader.bytes_per_cluster();
+            }
+            (size as i64, 0 as i64, 0 as i64, 0 as i64, first_cluster as u64)
+        })
+    }
+
+
     /* WAITING */
     #[allow(unused)]
     fn remove_file() {}

@@ -6,7 +6,7 @@
 /// ```
 //
 
-use super::File;
+use super::{File, Kstat};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
@@ -49,11 +49,15 @@ impl File for Stdin {
     }
 
     fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>{
-        unreachable!("Stdin not implement create");
+        panic!("Stdin not implement create");
     }
 
     fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>{
-        unreachable!("Stdin not implement find");
+        panic!("Stdin not implement find");
+    }
+
+    fn get_fstat(&self, kstat:&mut Kstat){
+        panic!("Stdin not implement get_fstat");
     }
 }
 
@@ -74,10 +78,14 @@ impl File for Stdout {
         user_buf.len()
     }
     fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>{
-        unreachable!("Stdout not implement create");
+        panic!("Stdout not implement create");
     }
 
     fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>{
-        unreachable!("Stdout not implement find");
+        panic!("Stdout not implement find");
+    }
+
+    fn get_fstat(&self, kstat:&mut Kstat){
+        panic!("Stdout not implement get_fstat");
     }
 }

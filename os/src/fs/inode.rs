@@ -1,8 +1,8 @@
-use super::File;
+use super::{File, Kstat};
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
-use alloc::{string::String, sync::Arc};
 use bitflags::*;
 use lazy_static::*;
 use simple_fat32::{FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
@@ -102,11 +102,10 @@ impl OSInode {
         return base;
     }
 
-    pub fn delete(&self)->usize{
+    pub fn delete(&self) -> usize {
         let inner = self.inner.lock();
         inner.inode.remove()
     }
-
 }
 
 // 这里在实例化的时候进行文件系统的打开
@@ -192,7 +191,7 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType)
                 None
             }
         }
-    } else if flags.contains(OpenFlags::O_DIRECTROY){
+    } else if flags.contains(OpenFlags::O_DIRECTROY) {
         if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
             inode.clear();
             Some(Arc::new(OSInode::new(readable, writable, inode)))
@@ -200,7 +199,6 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType)
             // create directory
             let name = pathv.pop().unwrap();
             if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-                
                 temp_inode
                     .create(name, ATTR_DIRECTORY)
                     .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
@@ -208,7 +206,7 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType)
                 None
             }
         }
-    }else{
+    } else {
         cur_inode.find_vfile_bypath(pathv).map(|inode| {
             if flags.contains(OpenFlags::O_TRUNC) {
                 inode.clear();
@@ -218,23 +216,23 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType)
     }
 }
 
-pub fn ch_dir(work_path: &str, path: &str) -> isize{
+pub fn ch_dir(work_path: &str, path: &str) -> isize {
     // 切换工作路径
     // 切换成功，返回inode_id，否则返回-1
     let cur_inode = {
-        if work_path == "/" || ( path.len() > 0 && path.chars().nth(0).unwrap() == '/' ) {
+        if work_path == "/" || (path.len() > 0 && path.chars().nth(0).unwrap() == '/') {
             ROOT_INODE.clone()
         } else {
-            let wpath:Vec<&str> = work_path.split('/').collect();
+            let wpath: Vec<&str> = work_path.split('/').collect();
             //println!("in cd, work_pathv = {:?}", wpath);
-            ROOT_INODE.find_vfile_bypath( wpath ).unwrap()
+            ROOT_INODE.find_vfile_bypath(wpath).unwrap()
         }
     };
-    let pathv:Vec<&str> = path.split('/').collect();
-    if let Some(tar_dir) = cur_inode.find_vfile_bypath(pathv){
+    let pathv: Vec<&str> = path.split('/').collect();
+    if let Some(tar_dir) = cur_inode.find_vfile_bypath(pathv) {
         // ! 当inode_id > 2^16 时，有溢出的可能（目前不会发生。。
         0
-    }else{
+    } else {
         -1
     }
 }
@@ -306,7 +304,7 @@ impl File for OSInode {
 
     fn find(&self, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         let inner = self.inner.lock();
-        let mut pathv: Vec<&str> = path.split('/').collect();
+        let pathv: Vec<&str> = path.split('/').collect();
         let vfile = inner.inode.find_vfile_bypath(pathv);
         if vfile.is_none() {
             return None;
@@ -314,5 +312,12 @@ impl File for OSInode {
             let (readable, writable) = flags.read_write();
             return Some(Arc::new(OSInode::new(readable, writable, vfile.unwrap())));
         }
+    }
+
+    fn get_fstat(&self, kstat: &mut Kstat) {
+        let inner = self.inner.lock();
+        let vfile = inner.inode.clone();
+        let (size, atime, mtime, ctime, ino) = vfile.stat(); // todo
+        kstat.init();
     }
 }
