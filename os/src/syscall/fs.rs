@@ -8,10 +8,11 @@
 /// pub fn sys_close(fd: usize) -> isize
 /// ```
 //
-use crate::fs::{make_pipe, open, DiskInodeType, OpenFlags,MNT_TABLE};
+use crate::fs::{make_pipe, open, DiskInodeType, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::sync::Arc;
+use simple_fat32::ATTR_ARCHIVE;
 
 const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
@@ -242,24 +243,23 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
 
 // buf：用于保存当前工作目录的字符串。当buf设为NULL，由系统来分配缓存区
 
-pub fn sys_getcwd(buf: *mut u8, len: usize)->isize{
+pub fn sys_getcwd(buf: *mut u8, len: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let buf_vec = translated_byte_buffer(token, buf, len);
     let inner = task.inner_exclusive_access();
-    
+
     if buf as usize == 0 {
         unimplemented!();
     } else {
         let mut userbuf = UserBuffer::new(buf_vec);
         let cwd = inner.current_path.as_bytes();
-        userbuf.write( cwd );
-        return buf as isize
+        userbuf.write(cwd);
+        return buf as isize;
     }
 }
 
-
-pub fn sys_mount( p_special:*const u8, p_dir:*const u8, p_fstype: *const u8, flags:usize, data: *const u8 )->isize{
+pub fn sys_mount(p_special: *const u8, p_dir: *const u8, p_fstype: *const u8, flags: usize, data: *const u8) -> isize {
     // TODO
     let token = current_user_token();
     let special = translated_str(token, p_special);
@@ -268,9 +268,33 @@ pub fn sys_mount( p_special:*const u8, p_dir:*const u8, p_fstype: *const u8, fla
     MNT_TABLE.lock().mount(special, dir, fstype, flags as u32)
 }
 
-pub fn sys_umount( p_special:*const u8, flags:usize )->isize{
+pub fn sys_umount(p_special: *const u8, flags: usize) -> isize {
     // TODO
     let token = current_user_token();
     let special = translated_str(token, p_special);
     MNT_TABLE.lock().umount(special, flags as u32)
+}
+
+pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
+    let task = current_task().unwrap();
+    let token = current_user_token();
+    // 这里传入的地址为用户的虚地址，因此要使用用户的虚地址进行映射
+    let path = translated_str(token, path);
+    let inner = task.inner_exclusive_access();
+
+    if fd == AT_FDCWD {
+        if let Some(file) = open(
+            inner.get_work_path().as_str(),
+            path.as_str(),
+            OpenFlags::from_bits(0).unwrap(),
+            DiskInodeType::File,
+        ) {
+            file.delete();
+            0
+        } else {
+            -1
+        }
+    } else {
+        unimplemented!();
+    }
 }

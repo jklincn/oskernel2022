@@ -102,6 +102,11 @@ impl OSInode {
         return base;
     }
 
+    pub fn delete(&self)->usize{
+        let inner = self.inner.lock();
+        inner.inode.remove()
+    }
+
 }
 
 // 这里在实例化的时候进行文件系统的打开
