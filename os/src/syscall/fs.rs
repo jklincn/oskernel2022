@@ -239,3 +239,21 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
         }
     }
 }
+
+// buf：用于保存当前工作目录的字符串。当buf设为NULL，由系统来分配缓存区
+
+pub fn sys_getcwd(buf: *mut u8, len: usize)->isize{
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let buf_vec = translated_byte_buffer(token, buf, len);
+    let inner = task.inner_exclusive_access();
+    
+    if buf as usize == 0 {
+        unimplemented!();
+    } else {
+        let mut userbuf = UserBuffer::new(buf_vec);
+        let cwd = inner.current_path.as_bytes();
+        userbuf.write( cwd );
+        return buf as isize
+    }
+}

@@ -8,22 +8,6 @@ use lazy_static::*;
 use simple_fat32::{FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
 
-pub const SEEK_SET: i32 = 0; /* set to offset bytes.  */
-pub const SEEK_CUR: i32 = 1; /* set to its current location plus offset bytes.  */
-pub const SEEK_END: i32 = 2; /* set to the size of the file plus offset bytes.  */
-/*  Adjust the file offset to the next location in the file
-greater than or equal to offset containing data.  If
-offset points to data, then the file offset is set to
-offset */
-pub const SEEK_DATA: i32 = 3;
-/*  Adjust the file offset to the next hole in the file
-greater than or equal to offset.  If offset points into
-the middle of a hole, then the file offset is set to
-offset.  If there is no hole past offset, then the file
-offset is adjusted to the end of the file (i.e., there is
-an implicit hole at the end of any file). */
-pub const SEEK_HOLE: i32 = 4;
-
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum DiskInodeType {
     File,

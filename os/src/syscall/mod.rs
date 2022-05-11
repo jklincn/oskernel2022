@@ -23,6 +23,7 @@
 /// ```
 //
 
+const SYSCALL_GETCWD:   usize = 17;
 const SYSCALL_DUP:      usize = 24;
 const SYSCALL_MKDIRAT:  usize = 34;
 const SYSCALL_OPENAT:   usize = 56;
@@ -51,6 +52,7 @@ use process::*;
 /// 系统调用分发函数
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
     match syscall_id {
+        SYSCALL_GETCWD =>   sys_getcwd(args[0] as *mut u8, args[1] as usize),
         SYSCALL_DUP =>      sys_dup(args[0]),
         SYSCALL_MKDIRAT =>  sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         SYSCALL_OPENAT =>   sys_openat(args[0] as isize, args[1] as *const u8, args[2] as u32, args[3] as u32),
@@ -72,3 +74,4 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }
 }
+
