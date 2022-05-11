@@ -5,6 +5,7 @@
 mod inode;  // 内核索引节点层
 mod stdio;  // 标准输入输出接口
 mod pipe;   // 管道模块
+mod mount;  // 挂载模块
 
 use crate::mm::UserBuffer;
 use alloc::sync::Arc;
@@ -26,3 +27,4 @@ pub trait File: Send + Sync {
 pub use inode::{list_apps, open, OSInode, OpenFlags,DiskInodeType};
 pub use stdio::{Stdin, Stdout};
 pub use pipe::{make_pipe, Pipe};
+pub use mount::MNT_TABLE;

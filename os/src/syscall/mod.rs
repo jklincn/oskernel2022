@@ -26,6 +26,8 @@
 const SYSCALL_GETCWD:   usize = 17;
 const SYSCALL_DUP:      usize = 24;
 const SYSCALL_MKDIRAT:  usize = 34;
+const SYSCALL_UMOUNT2:  usize = 39;
+const SYSCALL_MOUNT:    usize = 40;
 const SYSCALL_OPENAT:   usize = 56;
 const SYSCALL_CLOSE:    usize = 57;
 const SYSCALL_PIPE:     usize = 59;
@@ -55,6 +57,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GETCWD =>   sys_getcwd(args[0] as *mut u8, args[1] as usize),
         SYSCALL_DUP =>      sys_dup(args[0]),
         SYSCALL_MKDIRAT =>  sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
+        SYSCALL_UMOUNT2=>   sys_umount(args[0] as *const u8, args[1] as usize),
+        SYSCALL_MOUNT=>     sys_mount(args[0] as *const u8, args[1] as *const u8, args[2] as *const u8, args[3] as usize, args[4] as *const u8),
         SYSCALL_OPENAT =>   sys_openat(args[0] as isize, args[1] as *const u8, args[2] as u32, args[3] as u32),
         SYSCALL_CLOSE =>    sys_close(args[0]),
         SYSCALL_PIPE =>     sys_pipe(args[0] as *mut u32,args[1]),

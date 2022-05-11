@@ -8,7 +8,7 @@
 /// pub fn sys_close(fd: usize) -> isize
 /// ```
 //
-use crate::fs::{make_pipe, open, DiskInodeType, OSInode, OpenFlags};
+use crate::fs::{make_pipe, open, DiskInodeType, OpenFlags,MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::sync::Arc;
@@ -256,4 +256,21 @@ pub fn sys_getcwd(buf: *mut u8, len: usize)->isize{
         userbuf.write( cwd );
         return buf as isize
     }
+}
+
+
+pub fn sys_mount( p_special:*const u8, p_dir:*const u8, p_fstype: *const u8, flags:usize, data: *const u8 )->isize{
+    // TODO
+    let token = current_user_token();
+    let special = translated_str(token, p_special);
+    let dir = translated_str(token, p_dir);
+    let fstype = translated_str(token, p_fstype);
+    MNT_TABLE.lock().mount(special, dir, fstype, flags as u32)
+}
+
+pub fn sys_umount( p_special:*const u8, flags:usize )->isize{
+    // TODO
+    let token = current_user_token();
+    let special = translated_str(token, p_special);
+    MNT_TABLE.lock().umount(special, flags as u32)
 }
