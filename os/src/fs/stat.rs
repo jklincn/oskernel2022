@@ -50,6 +50,8 @@ impl Kstat {
     pub fn init(&mut self) {
         self.st_mode = 0o100777;
         self.st_blksize = 512;
+        self.st_nlink = 1;
+
     }
 
     pub fn as_bytes(&self) -> &[u8] {
