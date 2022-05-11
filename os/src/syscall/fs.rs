@@ -111,8 +111,6 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
         }
 
         if let Some(file) = &inner.fd_table[fd_usz] {
-
-
             // 需要新建文件
             if oflags.contains(OpenFlags::O_CREATE) {
                 if let Some(tar_f) = file.create(path.as_str(), DiskInodeType::File) {
@@ -123,7 +121,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                     return -1;
                 }
             }
-            
+
             // 需要新建目录
             if oflags.contains(OpenFlags::O_DIRECTROY) {
                 if let Some(tar_f) = file.create(path.as_str(), DiskInodeType::Directory) {
@@ -206,4 +204,38 @@ pub fn sys_dup(fd: usize) -> isize {
     let new_fd = inner.alloc_fd();
     inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd].as_ref().unwrap()));
     new_fd as isize
+}
+
+pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    let path = translated_str(token, path);
+    if dirfd == AT_FDCWD {
+        if let Some(_) = open(
+            inner.get_work_path().as_str(),
+            path.as_str(),
+            OpenFlags::O_CREATE,
+            DiskInodeType::Directory,
+        ) {
+            return 0;
+        } else {
+            return -1;
+        }
+    } else {
+        // DEBUG: 获取dirfd的OSInode
+        let fd_usz = dirfd as usize;
+        if fd_usz >= inner.fd_table.len() && fd_usz > FD_LIMIT {
+            return -1;
+        }
+        if let Some(file) = &inner.fd_table[fd_usz] {
+            if let Some(_) = file.create(path.as_str(), DiskInodeType::Directory) {
+                return 0;
+            } else {
+                return -1;
+            }
+        } else {
+            return -1;
+        }
+    }
 }

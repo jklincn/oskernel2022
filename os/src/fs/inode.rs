@@ -168,33 +168,6 @@ impl OpenFlags {
     }
 }
 
-// /// 根据文件名打开一个根目录下的文件
-// pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-//     let (readable, writable) = flags.read_write();
-//     // 如果带有创建标志
-//     if flags.contains(OpenFlags::O_CREATE) {
-//         if let Some(inode) = ROOT_INODE.find(name) {
-//             // 如果已存在，则清空内容
-//             inode.clear();
-//             // 新建一个 OSInode 返回
-//             Some(Arc::new(OSInode::new(readable, writable, inode)))
-//         } else {
-//             // 如果不存在，则在根目录下创建一个 VFile，再生成一个 OSInode 返回
-//             ROOT_INODE
-//                 .create(name)
-//                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
-//         }
-//     } else {
-//         // 如果没有创建标志，则直接寻找
-//         ROOT_INODE.find(name).map(|inode| {
-//             if flags.contains(OpenFlags::O_TRUNC) {
-//                 inode.clear();
-//             }
-//             Arc::new(OSInode::new(readable, writable, inode))
-//         })
-//     }
-// }
-
 //
 pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType) -> Option<Arc<OSInode>> {
     // DEBUG: 相对路径
