@@ -1,9 +1,9 @@
 #![no_std]
 extern crate alloc;
 
-// #[macro_use]
-// mod console;
-// mod sbi;
+#[macro_use]
+mod console;
+mod sbi;
 mod block_cache;
 mod block_dev;
 mod fat32_manager;

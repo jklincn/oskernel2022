@@ -117,6 +117,7 @@ impl OSInode {
         }
         return base;
     }
+
 }
 
 // 这里在实例化的时候进行文件系统的打开
@@ -144,14 +145,12 @@ pub fn list_apps() {
 // 定义一份打开文件的标志
 bitflags! {
     pub struct OpenFlags: u32 {
-        const O_RDONLY = 00000000;   // 只读
-        const O_WRONLY = 00000001; // 只写
-        const O_RDWR = 00000002; // 可读可写
-        const O_CREATE = 00000100; // 创建
-        const O_TRUNC = 00001000; // 若文件存在则清空文件内容
-        const O_LARGEFILE  = 00100000;
-        const O_DIRECTROY = 00200000;
-        const O_CLOEXEC = 02000000;
+        const O_RDONLY = 0;
+        const O_WRONLY = 1 << 0;
+        const O_RDWR = 1 << 1;
+        const O_CREATE = 1 << 6;
+        const O_TRUNC = 1 << 10;
+        const O_DIRECTROY = 1 << 21;
     }
 }
 
@@ -208,16 +207,13 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType)
         }
     };
     let mut pathv: Vec<&str> = path.split('/').collect();
-    //println!("[open] pathv = {:?}", pathv);
-    // print!("\n");
-    // shell应当保证此处输入的path不为空
+
     let (readable, writable) = flags.read_write();
     if flags.contains(OpenFlags::O_CREATE) {
         if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-            // clear size
-            inode.remove();
-        }
-        {
+            inode.clear();
+            Some(Arc::new(OSInode::new(readable, writable, inode)))
+        } else {
             // create file
             let name = pathv.pop().unwrap();
             if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
@@ -234,7 +230,23 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType)
                 None
             }
         }
-    } else {
+    } else if flags.contains(OpenFlags::O_DIRECTROY){
+        if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+            inode.clear();
+            Some(Arc::new(OSInode::new(readable, writable, inode)))
+        } else {
+            // create directory
+            let name = pathv.pop().unwrap();
+            if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+                
+                temp_inode
+                    .create(name, ATTR_DIRECTORY)
+                    .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
+            } else {
+                None
+            }
+        }
+    }else{
         cur_inode.find_vfile_bypath(pathv).map(|inode| {
             if flags.contains(OpenFlags::O_TRUNC) {
                 inode.clear();

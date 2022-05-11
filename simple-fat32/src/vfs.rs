@@ -1,3 +1,4 @@
+
 use super::{fat32_manager::*, get_info_cache, layout::*, BlockDevice};
 use alloc::string::{self, String};
 use alloc::sync::Arc;
@@ -267,8 +268,10 @@ impl VFile {
             return Some(Arc::new(self.clone()));
         }
         let mut current_vfile = self.clone();
+        //println!("len:{}",len);
         for i in 0..len {
             if path[i] == "" || path[i] == "." {
+                //println!("continue i={}",i);
                 continue;
             }
             if let Some(vfile) = current_vfile.find_vfile_byname(path[i]) {
@@ -277,6 +280,7 @@ impl VFile {
                 return None;
             }
         }
+        //println!("return current_vfile.name={}",current_vfile.name());
         Some(Arc::new(current_vfile))
     }
 
@@ -287,18 +291,13 @@ impl VFile {
     fn increase_size(&self, new_size: u32) {
         // TODO: return sth when cannot increase
         //println!("===================== in increase =======================");
-        //println!("file: {}, newsz = {}", self.name(), new_size);
-        //println!("try lock");
         let first_cluster = self.first_cluster();
         let old_size = self.file_size();
         let manager_writer = self.fs.write();
-        //println!("get lock");
         if new_size <= old_size {
-            //println!("oldsz > newsz");
             return;
         }
         let needed = manager_writer.cluster_num_needed(old_size, new_size, self.is_dir(), first_cluster);
-        //println!("needed = {}", needed);
         if needed == 0 {
             if !self.is_dir() {
                 //self.size = new_size;
@@ -309,17 +308,15 @@ impl VFile {
             return;
         }
 
-        //println!("first cluster = {} nxt = {}", first_cluster, manager_writer.get_fat().read().get_next_cluster(first_cluster, self.block_device.clone()));
+        // println!("first cluster = {} nxt = {}", first_cluster, manager_writer.get_fat().read().get_next_cluster(first_cluster, self.block_device.clone()));
         if let Some(cluster) = manager_writer.alloc_cluster(needed) {
-            //println!("*** cluster alloc = {}",cluster);
+            // println!("*** cluster alloc = {}",cluster);
             if first_cluster == 0 {
                 //未分配簇
                 drop(manager_writer);
                 self.modify_short_dirent(|se: &mut ShortDirEntry| {
                     se.set_first_cluster(cluster);
                 });
-                //println!("fc = {}",self.first_cluster());
-                //println!("================== increase end ====================");
             } else {
                 // 已经分配簇
                 //let fs_reader = self.fs.read();
@@ -336,7 +333,6 @@ impl VFile {
                 //println!("  finish set next cluster, cluster chain:{:?}", allc);
                 drop(manager_writer);
             }
-            //self.size = new_size;
             self.modify_short_dirent(|se: &mut ShortDirEntry| {
                 se.set_file_size(new_size);
             });
@@ -357,7 +353,6 @@ impl VFile {
     pub fn create(&self, name: &str, attribute: u8) -> Option<Arc<VFile>> {
         // 检测同名文件
         assert!(self.is_dir());
-
         let manager_reader = self.fs.read();
         let (name_, ext_) = split_name_ext(name);
         // 搜索空处
@@ -407,14 +402,13 @@ impl VFile {
             tmp_short_ent.initialize(&_name, &_ext, attribute);
             drop(manager_reader);
         }
+
         // 写短目录项（长文件名也是有短文件名目录项的）
         assert_eq!(self.write_at(dirent_offset, tmp_short_ent.as_bytes_mut()), DIRENT_SZ);
-
         // 这边的 if let 算是一个验证
         if let Some(vfile) = self.find_vfile_byname(name) {
             // 如果是目录类型，需要创建.和..
             if attribute & ATTR_DIRECTORY != 0 {
-                let manager_reader = self.fs.read();
                 let (_name, _ext) = short_name_format(".");
                 let mut self_dir = ShortDirEntry::new();
                 self_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
@@ -427,7 +421,6 @@ impl VFile {
                 par_dir.set_first_cluster(self.first_cluster());
                 vfile.write_at(DIRENT_SZ, par_dir.as_bytes_mut());
 
-                drop(manager_reader);
             }
             return Some(Arc::new(vfile));
         } else {

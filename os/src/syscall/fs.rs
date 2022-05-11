@@ -92,10 +92,9 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     let token = current_user_token();
     // 这里传入的地址为用户的虚地址，因此要使用用户的虚地址进行映射
     let path = translated_str(token, path);
-    //println!("sys_openat: path = {}", path);
 
     let mut inner = task.inner_exclusive_access();
-
+    // println!("dirfd:{},path:{},flags:{},mode:{}",dirfd,path,flags,mode);
     let oflags = OpenFlags::from_bits(flags).unwrap();
     if dirfd == AT_FDCWD {
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags, DiskInodeType::File) {
@@ -112,10 +111,9 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
         }
 
         if let Some(file) = &inner.fd_table[fd_usz] {
-            // unsafe { core::slice::from_raw_parts_mut(self as *mut _ as usize as *mut u8, DIRENT_SZ) }
-            //let oflags = OpenFlags::from_bits(flags).unwrap();
-            // 需要新建文件
 
+
+            // 需要新建文件
             if oflags.contains(OpenFlags::O_CREATE) {
                 if let Some(tar_f) = file.create(path.as_str(), DiskInodeType::File) {
                     let fd = inner.alloc_fd();
@@ -125,6 +123,18 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                     return -1;
                 }
             }
+            
+            // 需要新建目录
+            if oflags.contains(OpenFlags::O_DIRECTROY) {
+                if let Some(tar_f) = file.create(path.as_str(), DiskInodeType::Directory) {
+                    let fd = inner.alloc_fd();
+                    inner.fd_table[fd] = Some(tar_f);
+                    return fd as isize;
+                } else {
+                    return -1;
+                }
+            }
+
             // 正常打开文件
             if let Some(tar_f) = file.find(path.as_str(), oflags) {
                 let fd = inner.alloc_fd();
