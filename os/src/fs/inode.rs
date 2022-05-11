@@ -218,6 +218,27 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType)
     }
 }
 
+pub fn ch_dir(work_path: &str, path: &str) -> isize{
+    // 切换工作路径
+    // 切换成功，返回inode_id，否则返回-1
+    let cur_inode = {
+        if work_path == "/" || ( path.len() > 0 && path.chars().nth(0).unwrap() == '/' ) {
+            ROOT_INODE.clone()
+        } else {
+            let wpath:Vec<&str> = work_path.split('/').collect();
+            //println!("in cd, work_pathv = {:?}", wpath);
+            ROOT_INODE.find_vfile_bypath( wpath ).unwrap()
+        }
+    };
+    let pathv:Vec<&str> = path.split('/').collect();
+    if let Some(tar_dir) = cur_inode.find_vfile_bypath(pathv){
+        // ! 当inode_id > 2^16 时，有溢出的可能（目前不会发生。。
+        0
+    }else{
+        -1
+    }
+}
+
 // 为 OSInode 实现 File Trait
 impl File for OSInode {
     fn readable(&self) -> bool {

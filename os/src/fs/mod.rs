@@ -24,7 +24,7 @@ pub trait File: Send + Sync {
 }
 
 
-pub use inode::{list_apps, open, OSInode, OpenFlags,DiskInodeType};
+pub use inode::{list_apps, open, OSInode, OpenFlags,DiskInodeType,ch_dir};
 pub use stdio::{Stdin, Stdout};
 pub use pipe::{make_pipe, Pipe};
 pub use mount::MNT_TABLE;
