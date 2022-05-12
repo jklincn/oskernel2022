@@ -49,7 +49,10 @@ run: run-inner
 copy_to_fs: 
 	cd ../fat32-fuse && sudo mount fat32.img fs && sudo cp ../user_c/bin/* fs/ && sudo umount fs
 
-run-inner: build copy_to_fs
+new_fat32_img:
+	cd ../fat32-fuse && rm fat32.img && cp ~/fat32.img .
+
+run-inner: build new_fat32_img
 	@qemu-system-riscv64 \
 		-machine virt \
 		-nographic \

@@ -133,19 +133,19 @@ impl FSInfo {
             .read(484, |&sec_sig: &u32| sec_sig == STRUC_SIGNATURE)
     }
 
-    /*对签名进行校验*/
+    /// 对签名进行校验
     pub fn check_signature(&self, block_device: Arc<dyn BlockDevice>) -> bool {
         return self.check_lead_signature(block_device.clone()) && self.check_struc_signature(block_device.clone());
     }
 
-    /*读取空闲簇数*/
+    /// 读取空闲簇数
     pub fn free_clusters(&self, block_device: Arc<dyn BlockDevice>) -> u32 {
         get_info_cache(self.sector_num as usize, block_device)
             .read()
             .read(488, |&free_cluster_count: &u32| free_cluster_count)
     }
 
-    /*写入空闲块数*/
+    /// 写入空闲簇数
     pub fn write_free_clusters(&self, free_clusters: u32, block_device: Arc<dyn BlockDevice>) {
         get_info_cache(self.sector_num as usize, block_device)
             .write()
@@ -154,14 +154,14 @@ impl FSInfo {
             });
     }
 
-    /*读取最后被分配的簇号*/
+    /// 读取最后被分配的簇号
     pub fn next_free_cluster(&self, block_device: Arc<dyn BlockDevice>) -> u32 {
         get_info_cache(self.sector_num as usize, block_device)
             .read()
             .read(492, |&start_cluster: &u32| start_cluster)
     }
 
-    /*写入最后被分配的簇号*/
+    /// 写入最后被分配的簇号
     pub fn write_next_free_cluster(&self, start_cluster: u32, block_device: Arc<dyn BlockDevice>) {
         //println!("sector_num = {}, start_c = {}", self.sector_num, start_cluster);
         get_info_cache(self.sector_num as usize, block_device)
@@ -840,14 +840,15 @@ impl FAT {
         (fat1_sec, fat2_sec, offset)
     }
 
-    /// 获取一个空闲簇的簇号
+    /// 搜索下一个可用簇，仅在 FAT32Manager::alloc_cluster 中使用
+    /// alloc_cluster 保证了可以找到空闲的簇
     pub fn get_free_cluster(&self, current_cluster: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
-        // 下一个簇才是空闲的
+        // 跳过当前簇
         let mut curr_cluster = current_cluster + 1;
         // 寻找空闲的簇，因为簇号分配是离散的而不是连续的，因此不能保证最后一个被分配的簇的下一个簇就是空闲的
         loop {
             let (fat1_sec, _, offset) = self.calculate_pos(curr_cluster);
-            // 查看当前cluster的表项
+            // 查看当前簇的表项
             let entry_val = get_info_cache(fat1_sec as usize, block_device.clone())
                 .read()
                 .read(offset as usize, |&entry_val: &u32| entry_val);

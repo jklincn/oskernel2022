@@ -52,11 +52,13 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
+    // 文件描述符不合法
     if fd >= inner.fd_table.len() {
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
         let file = file.clone();
+        // 文件不可读
         if !file.readable() {
             return -1;
         }
