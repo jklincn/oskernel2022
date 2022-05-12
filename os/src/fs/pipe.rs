@@ -8,7 +8,7 @@
 /// pub fn make_pipe()
 /// ```
 //
-use super::{File, Kstat};
+use super::{File, Kstat, Dirent};
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
 use alloc::sync::{Arc, Weak};
@@ -224,5 +224,9 @@ impl File for Pipe {
 
     fn get_fstat(&self, kstat:&mut Kstat){
         panic!("pipe not implement get_fstat");
+    }
+
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        panic!("pipe not implement get_dirent");
     }
 }

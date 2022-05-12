@@ -6,7 +6,7 @@
 /// ```
 //
 
-use super::{File, Kstat};
+use super::{File, Kstat, Dirent};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
@@ -59,6 +59,10 @@ impl File for Stdin {
     fn get_fstat(&self, kstat:&mut Kstat){
         panic!("Stdin not implement get_fstat");
     }
+
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        panic!("Stdin not implement get_dirent");
+    }
 }
 
 impl File for Stdout {
@@ -87,5 +91,9 @@ impl File for Stdout {
 
     fn get_fstat(&self, kstat:&mut Kstat){
         panic!("Stdout not implement get_fstat");
+    }
+    
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        panic!("Stdout not implement get_dirent");
     }
 }

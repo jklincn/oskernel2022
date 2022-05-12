@@ -10,7 +10,7 @@ use core::mem::size_of;
 /// pub fn sys_close(fd: usize) -> isize
 /// ```
 //
-use crate::fs::{ch_dir, make_pipe, open, DiskInodeType, Kstat, OpenFlags, MNT_TABLE};
+use crate::fs::{ch_dir, make_pipe, open, Dirent, DiskInodeType, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::{string::String, sync::Arc, vec::Vec};
@@ -300,10 +300,6 @@ pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
     }
 }
 
-pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
-    unimplemented!();
-}
-
 pub fn sys_chdir(path: *const u8) -> isize {
     //print_core_info();
     let token = current_user_token();
@@ -369,6 +365,38 @@ pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
         file.get_fstat(&mut kstat);
         userbuf.write(kstat.as_bytes());
         return 0;
+    } else {
+        return -1;
+    }
+}
+
+pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let buf_vec = translated_byte_buffer(token, buf, len);
+    let inner = task.inner_exclusive_access();
+    let dent_len = size_of::<Dirent>();
+    let mut total_len: usize = 0;
+    // 使用UserBuffer结构，以便于跨页读写
+    let mut userbuf = UserBuffer::new(buf_vec);
+    let mut dirent = Dirent::new();
+    let fd_usz = fd as usize;
+    if fd_usz >= inner.fd_table.len() && fd_usz > FD_LIMIT {
+        return -1;
+    }
+    if let Some(file) = &inner.fd_table[fd_usz] {
+        loop {
+            if total_len + dent_len > len {
+                break;
+            }
+            if file.get_dirent(&mut dirent) > 0 {
+                userbuf.write_at(total_len, dirent.as_bytes());
+                total_len += dent_len;
+            } else {
+                break;
+            }
+        }
+        return total_len as isize; //warning
     } else {
         return -1;
     }

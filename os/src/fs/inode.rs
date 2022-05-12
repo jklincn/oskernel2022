@@ -1,4 +1,4 @@
-use super::{File, Kstat};
+use super::{Dirent, File, Kstat};
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
 use alloc::sync::Arc;
@@ -317,7 +317,22 @@ impl File for OSInode {
     fn get_fstat(&self, kstat: &mut Kstat) {
         let inner = self.inner.lock();
         let vfile = inner.inode.clone();
-        let (size, atime, mtime, ctime, ino) = vfile.stat(); // todo
+        // todo
+        let (size, atime, mtime, ctime, ino) = vfile.stat();
         kstat.init();
+    }
+
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
+        let mut inner = self.inner.lock();
+        let offset = inner.offset as u32;
+        if let Some((name, off, first_clu, attri)) = inner.inode.dirent_info(offset as usize) {
+            //println!("name = {}", name.as_str());
+            dirent.init(name.as_str());
+            inner.offset = off as usize;
+            let len = (name.len() + 8 * 4) as isize;
+            len
+        } else {
+            -1
+        }
     }
 }
