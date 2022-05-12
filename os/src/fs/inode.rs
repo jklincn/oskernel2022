@@ -224,7 +224,6 @@ pub fn ch_dir(work_path: &str, path: &str) -> isize {
             ROOT_INODE.clone()
         } else {
             let wpath: Vec<&str> = work_path.split('/').collect();
-            //println!("in cd, work_pathv = {:?}", wpath);
             ROOT_INODE.find_vfile_bypath(wpath).unwrap()
         }
     };
@@ -326,7 +325,6 @@ impl File for OSInode {
         let mut inner = self.inner.lock();
         let offset = inner.offset as u32;
         if let Some((name, off, first_clu, attri)) = inner.inode.dirent_info(offset as usize) {
-            //println!("name = {}", name.as_str());
             dirent.init(name.as_str());
             inner.offset = off as usize;
             let len = (name.len() + 8 * 4) as isize;

@@ -42,15 +42,5 @@ impl Dirent{
             )
         }
     }
-    
-    pub fn as_bytes_mut(&mut self) -> &mut [u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe {
-            core::slice::from_raw_parts_mut(
-                self as *mut _ as usize as *mut u8,
-                size,
-            )
-        }
-    }
 }
 

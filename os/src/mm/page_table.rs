@@ -272,7 +272,6 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
 }
 
 /// 根据 多级页表token (satp) 和 虚拟地址 获取大小为 T 的空间的不可变切片
-#[allow(unused)]
 pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
     let page_table = PageTable::from_token(token);
     page_table.translate_va(VirtAddr::from(ptr as usize)).unwrap().get_ref()
@@ -322,15 +321,6 @@ impl UserBuffer {
         return len;
     }
 
-    pub fn clear( &mut self ){
-        for sub_buff in self.buffers.iter_mut() {
-            let sblen = (*sub_buff).len();
-            for j in 0..sblen {
-                (*sub_buff)[j] = 0;
-            }
-        }
-    }
-
     pub fn write_at(&mut self, offset:usize, buff: &[u8])->isize{
         let len = buff.len();
         if offset + len > self.len() {
@@ -362,50 +352,7 @@ impl UserBuffer {
             }
             head += sblen;
         }
-    
-        //for b in self.buffers.iter_mut() {
-        //    if offset > head && offset < head + b.len() {
-        //        (**b)[offset - head] = char;
-        //        //b.as_mut_ptr()
-        //    } else {
-        //        head += b.len();
-        //    }
-        //}
         0
-    }
-
-    // 将UserBuffer的数据读入一个Buffer，返回读取长度
-    pub fn read(&self, buff:&mut [u8])->usize{
-        let len = self.len().min(buff.len());
-        let mut current = 0;
-        for sub_buff in self.buffers.iter() {
-            let sblen = (*sub_buff).len();
-            for j in 0..sblen {
-                buff[current] = (*sub_buff)[j];
-                current += 1;
-                if current == len {
-                    return len;
-                }
-            }
-        }
-        return len;
-    }
-
-    // TODO: 把vlen去掉    
-    pub fn read_as_vec(&self, vec: &mut Vec<u8>, vlen:usize)->usize{
-        let len = self.len();
-        let mut current = 0;
-        for sub_buff in self.buffers.iter() {
-            let sblen = (*sub_buff).len();
-            for j in 0..sblen {
-                vec.push( (*sub_buff)[j] );
-                current += 1;
-                if current == len {
-                    return len;
-                }
-            }
-        }
-        return len;
     }
 }
 
