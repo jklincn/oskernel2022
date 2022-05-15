@@ -469,8 +469,10 @@ impl ShortDirEntry {
             let mut end_current_block = (current_off / bytes_per_sector + 1) * bytes_per_sector;
             // 计算当前块的结束位置
             end_current_block = end_current_block.min(end);
+            // 设定读入区域
             let block_read_size = end_current_block - current_off;
             let dst = &mut buf[read_size..read_size + block_read_size];
+            // 进行读取
             get_block_cache(current_sector, Arc::clone(block_device))
                 .read()
                 .read(0, |data_block: &DataBlock| {
@@ -486,6 +488,7 @@ impl ShortDirEntry {
             // 更新索引参数
             current_off = end_current_block;
             if current_off % bytes_per_cluster == 0 {
+                // 该簇读完，寻找下一个簇
                 current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
                 if current_cluster >= END_CLUSTER {
                     break;
@@ -526,13 +529,11 @@ impl ShortDirEntry {
         let mut write_size = 0usize;
         let mut current_off = offset;
         loop {
-            // 将偏移量向上对齐扇区大小（一般是512
+            // 将偏移量向上对齐扇区大小
             let mut end_current_block = (current_off / bytes_per_sector + 1) * bytes_per_sector;
             end_current_block = end_current_block.min(end);
 
-            // 写
             let block_write_size = end_current_block - current_off;
-            //println!("write cache: current_sector = {}", current_sector);
             get_block_cache(current_sector, Arc::clone(block_device))
                 .write()
                 .modify(0, |data_block: &mut DataBlock| {

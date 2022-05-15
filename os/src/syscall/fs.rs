@@ -75,14 +75,16 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
 pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
+    let mut inner = task.inner_exclusive_access();
+    
+
+
     // 这里传入的地址为用户的虚地址，因此要使用用户的虚地址进行映射
     let path = translated_str(token, path);
-
-    let mut inner = task.inner_exclusive_access();
-    // println!("dirfd:{},path:{},flags:{},mode:{}",dirfd,path,flags,mode);
     let oflags = OpenFlags::from_bits(flags).unwrap();
     if dirfd == AT_FDCWD {
-        if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags, DiskInodeType::File) {
+        // 如果是当前工作目录
+        if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags) {
             let fd = inner.alloc_fd();
             inner.fd_table[fd] = Some(inode);
             fd as isize
@@ -90,15 +92,19 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
             -1
         }
     } else {
-        let fd_usz = dirfd as usize;
-        if fd_usz >= inner.fd_table.len() && fd_usz > FD_LIMIT {
+        
+        let dirfd = dirfd as usize;
+        // dirfd 不合法
+        if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
             return -1;
         }
 
-        if let Some(file) = &inner.fd_table[fd_usz] {
-            // 需要新建文件
+        if let Some(file) = &inner.fd_table[dirfd] {
+
+            
+
             if oflags.contains(OpenFlags::O_CREATE) {
-                if let Some(tar_f) = file.create(path.as_str(), DiskInodeType::File) {
+                if let Some(tar_f) = open(file.get_name().as_str(),path.as_str(),oflags) {
                     let fd = inner.alloc_fd();
                     inner.fd_table[fd] = Some(tar_f);
                     return fd as isize;
@@ -107,9 +113,20 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 }
             }
 
+
+            // if oflags.contains(OpenFlags::O_CREATE) {
+            //     if let Some(tar_f) = file.create(path.as_str(), DiskInodeType::File) {
+            //         let fd = inner.alloc_fd();
+            //         inner.fd_table[fd] = Some(tar_f);
+            //         return fd as isize;
+            //     } else {
+            //         return -1;
+            //     }
+            // }
+
             // 需要新建目录
             if oflags.contains(OpenFlags::O_DIRECTROY) {
-                if let Some(tar_f) = file.create(path.as_str(), DiskInodeType::Directory) {
+                if let Some(tar_f) = open(file.get_name().as_str(),path.as_str(),oflags) {
                     let fd = inner.alloc_fd();
                     inner.fd_table[fd] = Some(tar_f);
                     return fd as isize;
@@ -127,6 +144,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 return -1;
             }
         } else {
+            // dirfd 不存在
             return -1;
         }
     }
@@ -201,7 +219,6 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
             inner.get_work_path().as_str(),
             path.as_str(),
             OpenFlags::O_CREATE,
-            DiskInodeType::Directory,
         ) {
             return 0;
         } else {
@@ -209,11 +226,11 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
         }
     } else {
         // DEBUG: 获取dirfd的OSInode
-        let fd_usz = dirfd as usize;
-        if fd_usz >= inner.fd_table.len() && fd_usz > FD_LIMIT {
+        let dirfd = dirfd as usize;
+        if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
             return -1;
         }
-        if let Some(file) = &inner.fd_table[fd_usz] {
+        if let Some(file) = &inner.fd_table[dirfd] {
             if let Some(_) = file.create(path.as_str(), DiskInodeType::Directory) {
                 return 0;
             } else {
@@ -271,7 +288,6 @@ pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
             inner.get_work_path().as_str(),
             path.as_str(),
             OpenFlags::from_bits(0).unwrap(),
-            DiskInodeType::File,
         ) {
             file.delete();
             0
@@ -340,11 +356,11 @@ pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
     let mut userbuf = UserBuffer::new(buf_vec);
     let mut kstat = Kstat::new();
 
-    let fd_usz = fd as usize;
-    if fd_usz >= inner.fd_table.len() && fd_usz > FD_LIMIT {
+    let dirfd = fd as usize;
+    if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
         return -1;
     }
-    if let Some(file) = &inner.fd_table[fd_usz] {
+    if let Some(file) = &inner.fd_table[dirfd] {
         file.get_fstat(&mut kstat);
         userbuf.write(kstat.as_bytes());
         return 0;
@@ -363,11 +379,11 @@ pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
     // 使用UserBuffer结构，以便于跨页读写
     let mut userbuf = UserBuffer::new(buf_vec);
     let mut dirent = Dirent::new();
-    let fd_usz = fd as usize;
-    if fd_usz >= inner.fd_table.len() && fd_usz > FD_LIMIT {
+    let dirfd = fd as usize;
+    if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
         return -1;
     }
-    if let Some(file) = &inner.fd_table[fd_usz] {
+    if let Some(file) = &inner.fd_table[dirfd] {
         loop {
             if total_len + dent_len > len {
                 break;

@@ -11,7 +11,7 @@
 use super::{File, Kstat, Dirent};
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
-use alloc::sync::{Arc, Weak};
+use alloc::{sync::{Arc, Weak}, string::String};
 
 use crate::task::suspend_current_and_run_next;
 pub use super::{list_apps, open, OSInode, OpenFlags,DiskInodeType};
@@ -228,5 +228,9 @@ impl File for Pipe {
 
     fn get_dirent(&self, dirent: &mut Dirent) -> isize{
         panic!("pipe not implement get_dirent");
+    }
+
+    fn get_name(&self) -> String{
+        panic!("pipe not implement get_name");
     }
 }

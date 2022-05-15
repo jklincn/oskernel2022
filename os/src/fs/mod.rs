@@ -10,7 +10,7 @@ mod stat;
 mod dirent;
 
 use crate::mm::UserBuffer;
-use alloc::sync::Arc;
+use alloc::{sync::Arc, string::String};
 
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
@@ -27,6 +27,8 @@ pub trait File: Send + Sync {
     fn get_fstat(&self, kstat:&mut Kstat);
 
     fn get_dirent(&self, dirent: &mut Dirent)->isize;
+
+    fn get_name(&self) -> String;
 }
 
 

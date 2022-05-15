@@ -1,7 +1,7 @@
 use super::{Dirent, File, Kstat};
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
-use alloc::sync::Arc;
+use alloc::{sync::Arc, string::String};
 use alloc::vec::Vec;
 use bitflags::*;
 use lazy_static::*;
@@ -52,6 +52,12 @@ impl OSInode {
     pub fn is_dir(&self) -> bool {
         let inner = self.inner.lock();
         inner.inode.is_dir()
+    }
+
+    pub fn name(& self) -> String{
+        let mut name = String::new();
+        name.push_str(self.inner.lock().inode.name());
+        name
     }
 
     /* this func will not influence the file offset
@@ -156,9 +162,7 @@ impl OpenFlags {
     }
 }
 
-//
-pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType) -> Option<Arc<OSInode>> {
-    // DEBUG: 相对路径
+pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     let cur_inode = {
         if work_path == "/" {
             ROOT_INODE.clone()
@@ -168,39 +172,25 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, type_: DiskInodeType)
         }
     };
     let mut pathv: Vec<&str> = path.split('/').collect();
-
     let (readable, writable) = flags.read_write();
-    if flags.contains(OpenFlags::O_CREATE) {
+
+    if flags.contains(OpenFlags::O_CREATE) || flags.contains(OpenFlags::O_DIRECTROY) {
         if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+            // 如果文件已存在则清空
             inode.clear();
             Some(Arc::new(OSInode::new(readable, writable, inode)))
         } else {
-            // create file
-            let name = pathv.pop().unwrap();
-            if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-                let attribute = {
-                    match type_ {
-                        DiskInodeType::Directory => ATTR_DIRECTORY,
-                        DiskInodeType::File => ATTR_ARCHIVE,
-                    }
-                };
-                temp_inode
-                    .create(name, attribute)
-                    .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
-            } else {
-                None
+            // 设置创建类型
+            let mut create_type = 0;
+            if flags.contains(OpenFlags::O_CREATE) {
+                create_type = ATTR_ARCHIVE;
+            } else if flags.contains(OpenFlags::O_DIRECTROY) {
+                create_type = ATTR_DIRECTORY;
             }
-        }
-    } else if flags.contains(OpenFlags::O_DIRECTROY) {
-        if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-            inode.clear();
-            Some(Arc::new(OSInode::new(readable, writable, inode)))
-        } else {
-            // create directory
             let name = pathv.pop().unwrap();
             if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
                 temp_inode
-                    .create(name, ATTR_DIRECTORY)
+                    .create(name, create_type)
                     .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
             } else {
                 None
@@ -286,22 +276,20 @@ impl File for OSInode {
             // already exists, clear
             inode.remove();
         }
-        {
-            // create file
-            let name = pathv.pop().unwrap();
-            if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-                let attribute = {
-                    match type_ {
-                        DiskInodeType::Directory => ATTR_DIRECTORY,
-                        DiskInodeType::File => ATTR_ARCHIVE,
-                    }
-                };
-                temp_inode
-                    .create(name, attribute)
-                    .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
-            } else {
-                None
-            }
+        // create file
+        let name = pathv.pop().unwrap();
+        if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+            let attribute = {
+                match type_ {
+                    DiskInodeType::Directory => ATTR_DIRECTORY,
+                    DiskInodeType::File => ATTR_ARCHIVE,
+                }
+            };
+            temp_inode
+                .create(name, attribute)
+                .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
+        } else {
+            None
         }
     }
 
@@ -336,5 +324,9 @@ impl File for OSInode {
         } else {
             -1
         }
+    }
+    
+    fn get_name(&self) -> String{
+        self.name()
     }
 }
