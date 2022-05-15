@@ -2,8 +2,6 @@ use super::{BlockDevice, BLOCK_SZ};
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use lazy_static::*;
-#[allow(unused)]
-use riscv::register::time;
 use spin::RwLock; //读写锁
 
 pub struct BlockCache {
@@ -80,12 +78,6 @@ impl Drop for BlockCache {
     }
 }
 
-// 0-info扇区
-// 1-2 FAT1
-// 3-4 FAT2
-// 5-7 DirEntry
-// 8-19 DATA
-
 // 双缓存：数据块和索引块，Clock算法进行淘汰
 pub struct BlockCacheManager {
     start_sec: usize,
@@ -108,15 +100,6 @@ impl BlockCacheManager {
 
     pub fn set_start_sec(&mut self, new_start_sec: usize) {
         self.start_sec = new_start_sec;
-    }
-
-    // 读取指定id的块的缓存，如果不在队列里则返回None
-    pub fn read_block_cache(&self, block_id: usize) -> Option<Arc<RwLock<BlockCache>>> {
-        if let Some(pair) = self.queue.iter().find(|pair| pair.0 == block_id) {
-            Some(Arc::clone(&pair.1))
-        } else {
-            None
-        }
     }
 
     // 获取一个块缓存
@@ -148,44 +131,25 @@ impl BlockCacheManager {
     }
 }
 
-// 1034个数据缓存块
+// 1024个缓存块，即 512KB
 lazy_static! {
-    pub static ref DATA_BLOCK_CACHE_MANAGER: RwLock<BlockCacheManager> = RwLock::new(BlockCacheManager::new(1034));
+    pub static ref BLOCK_CACHE_MANAGER: RwLock<BlockCacheManager> = RwLock::new(BlockCacheManager::new(1024));
 }
 
-// 10个信息缓存块
-lazy_static! {
-    pub static ref INFO_CACHE_MANAGER: RwLock<BlockCacheManager> = RwLock::new(BlockCacheManager::new(10));
-}
-
-/* 仅用于访问文件数据块，不包括目录项 */
+/// 用于外部模块访问文件数据块
 pub fn get_block_cache(block_id: usize, block_device: Arc<dyn BlockDevice>) -> Arc<RwLock<BlockCache>> {
     // 这里的read是RWLock读写锁
-    let phy_blk_id = DATA_BLOCK_CACHE_MANAGER.read().start_sec() + block_id;
-    // 为了解决缓存一致性问题，但大概率不会出现
-    if let Some(blk) = INFO_CACHE_MANAGER.read().read_block_cache(phy_blk_id) {
-        return blk;
-    }
-    DATA_BLOCK_CACHE_MANAGER.write().get_block_cache(phy_blk_id, block_device)
+    let phy_blk_id = BLOCK_CACHE_MANAGER.read().start_sec() + block_id;
+    BLOCK_CACHE_MANAGER.write().get_block_cache(phy_blk_id, block_device)
 }
 
-/* 用于访问保留扇区，以及目录项 */
-pub fn get_info_cache(block_id: usize, block_device: Arc<dyn BlockDevice>) -> Arc<RwLock<BlockCache>> {
-    let phy_blk_id = INFO_CACHE_MANAGER.read().start_sec() + block_id;
-    if let Some(blk) = DATA_BLOCK_CACHE_MANAGER.read().read_block_cache(phy_blk_id) {
-        return blk;
-    }
-    INFO_CACHE_MANAGER.write().get_block_cache(phy_blk_id, block_device)
-}
 
 // 设置起始扇区
 pub fn set_start_sec(start_sec: usize) {
-    INFO_CACHE_MANAGER.write().set_start_sec(start_sec);
-    DATA_BLOCK_CACHE_MANAGER.write().set_start_sec(start_sec);
+    BLOCK_CACHE_MANAGER.write().set_start_sec(start_sec);
 }
 
 // 写回磁盘，会调用Drop
 pub fn write_to_dev() {
-    INFO_CACHE_MANAGER.write().drop_all();
-    DATA_BLOCK_CACHE_MANAGER.write().drop_all();
+    BLOCK_CACHE_MANAGER.write().drop_all();
 }

@@ -16,7 +16,7 @@ pub use block_dev::BlockDevice;
 pub use layout::ShortDirEntry;
 pub use vfs::VFile;
 //pub use layout::NAME_LENGTH_LIMIT;
-use block_cache::{get_block_cache, get_info_cache, set_start_sec, write_to_dev};
+use block_cache::{get_block_cache, set_start_sec, write_to_dev};
 pub use fat32_manager::FAT32Manager;
 pub use layout::*;
 

@@ -1,5 +1,5 @@
 
-use super::{fat32_manager::*, get_info_cache, layout::*, BlockDevice};
+use super::{fat32_manager::*,get_block_cache, layout::*, BlockDevice};
 use alloc::string::{self, String};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -74,7 +74,7 @@ impl VFile {
             let rr = root_dirent.read();
             f(&rr)
         } else {
-            get_info_cache(self.short_sector, self.block_device.clone())
+            get_block_cache(self.short_sector, self.block_device.clone())
                 .read()
                 .read(self.short_offset, f)
         }
@@ -82,7 +82,7 @@ impl VFile {
 
     fn modify_long_dirent<V>(&self, index: usize, f: impl FnOnce(&mut LongDirEntry) -> V) -> V {
         let (sector, offset) = self.long_pos_vec[index];
-        get_info_cache(sector, self.block_device.clone()).write().modify(offset, f)
+        get_block_cache(sector, self.block_device.clone()).write().modify(offset, f)
     }
 
     fn modify_short_dirent<V>(&self, f: impl FnOnce(&mut ShortDirEntry) -> V) -> V {
@@ -92,7 +92,7 @@ impl VFile {
             let mut rw = root_dirent.write();
             f(&mut rw)
         } else {
-            get_info_cache(self.short_sector, self.block_device.clone())
+            get_block_cache(self.short_sector, self.block_device.clone())
                 .write()
                 .modify(self.short_offset, f)
         }

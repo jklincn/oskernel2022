@@ -241,12 +241,15 @@ impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable
     }
+
     fn writable(&self) -> bool {
         self.writable
     }
+
     fn read(&self, mut buf: UserBuffer) -> usize {
         let mut inner = self.inner.lock();
         let mut total_read_size = 0usize;
+        // 这边要使用 iter_mut()，因为要将数据写入
         for slice in buf.buffers.iter_mut() {
             let read_size = inner.inode.read_at(inner.offset, *slice);
             if read_size == 0 {
@@ -257,6 +260,7 @@ impl File for OSInode {
         }
         total_read_size
     }
+
     fn write(&self, buf: UserBuffer) -> usize {
         let mut inner = self.inner.lock();
         let mut total_write_size = 0usize;

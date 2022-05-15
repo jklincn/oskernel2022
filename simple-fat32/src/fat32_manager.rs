@@ -1,4 +1,4 @@
-use super::{get_block_cache, get_info_cache, set_start_sec, write_to_dev, BlockDevice, FSInfo, FatBS, FatExtBS, FAT};
+use super::{get_block_cache, set_start_sec, write_to_dev, BlockDevice, FSInfo, FatBS, FatExtBS, FAT};
 use crate::{layout::*, VFile};
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -47,7 +47,7 @@ impl FAT32Manager {
     /* 打开现有的FAT32  */
     pub fn open(block_device: Arc<dyn BlockDevice>) -> Arc<RwLock<Self>> {
         // 读入分区偏移
-        let start_sector: u32 = get_info_cache(0, Arc::clone(&block_device))
+        let start_sector: u32 = get_block_cache(0, Arc::clone(&block_device))
             .read()
             .read(0x1c6, |ssec_bytes: &[u8; 4]| {
                 // 0x1c6可以看文档
@@ -64,10 +64,10 @@ impl FAT32Manager {
         set_start_sec(start_sector as usize);
 
         // 读入第一分区的 Boot Sector，get_info_cache方法中会自动加上分区偏移
-        let boot_sec: FatBS = get_info_cache(0, Arc::clone(&block_device)).read().read(0, |bs: &FatBS| *bs);
+        let boot_sec: FatBS = get_block_cache(0, Arc::clone(&block_device)).read().read(0, |bs: &FatBS| *bs);
 
         // 读入 Extended Boot Sector
-        let ext_boot_sec: FatExtBS = get_info_cache(0, Arc::clone(&block_device)).read().read(36, |ebs: &FatExtBS| *ebs);
+        let ext_boot_sec: FatExtBS = get_block_cache(0, Arc::clone(&block_device)).read().read(36, |ebs: &FatExtBS| *ebs);
 
         // 获取 FSINFO 结构所在扇区号（通常是1），创建 fsinfo
         let fsinfo = FSInfo::new(ext_boot_sec.fat_info_sec());
