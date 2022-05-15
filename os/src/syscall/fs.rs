@@ -76,7 +76,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     let task = current_task().unwrap();
     let token = current_user_token();
     let mut inner = task.inner_exclusive_access();
-    
+
     // 这里传入的地址为用户的虚地址，因此要使用用户的虚地址进行映射
     let path = translated_str(token, path);
     let oflags = OpenFlags::from_bits(flags).unwrap();
@@ -96,38 +96,16 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-             // 需要新建文件
-            if oflags.contains(OpenFlags::O_CREATE) {
-                if let Some(tar_f) = open(file.get_name().as_str(),path.as_str(),oflags) {
-                    let fd = inner.alloc_fd();
-                    inner.fd_table[fd] = Some(tar_f);
-                    return fd as isize;
-                } else {
-                    return -1;
-                }
-            }
-            // 需要新建目录
-            if oflags.contains(OpenFlags::O_DIRECTROY) {
-                if let Some(tar_f) = open(file.get_name().as_str(),path.as_str(),oflags) {
-                    let fd = inner.alloc_fd();
-                    inner.fd_table[fd] = Some(tar_f);
-                    return fd as isize;
-                } else {
-                    return -1;
-                }
-            }
-
-            // 正常打开文件
-            if let Some(tar_f) = open(file.get_name().as_str(),path.as_str(),oflags) {
+            if let Some(tar_f) = open(file.get_name().as_str(), path.as_str(), oflags) {
                 let fd = inner.alloc_fd();
                 inner.fd_table[fd] = Some(tar_f);
                 fd as isize
             } else {
-                return -1;
+                -1
             }
         } else {
-            // dirfd 不存在
-            return -1;
+            // dirfd 对应条目为 None
+            -1
         }
     }
 }
@@ -146,6 +124,7 @@ pub fn sys_close(fd: usize) -> isize {
     if inner.fd_table[fd].is_none() {
         return -1;
     }
+    // 把 fd 对应的值取走，变为 None
     inner.fd_table[fd].take();
     0
 }
@@ -196,30 +175,30 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     let path = translated_str(token, path);
+
+    // todo
+    _ = mode;
+
     if dirfd == AT_FDCWD {
-        if let Some(_) = open(
-            inner.get_work_path().as_str(),
-            path.as_str(),
-            OpenFlags::O_DIRECTROY,
-        ) {
-            return 0;
+        if let Some(_) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
+            0
         } else {
-            return -1;
+            -1
         }
     } else {
-        // DEBUG: 获取dirfd的OSInode
         let dirfd = dirfd as usize;
         if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-            if let Some(_) = open(file.get_name().as_str(),path.as_str(),OpenFlags::O_DIRECTROY) {
-                return 0;
+            if let Some(_) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
+                0
             } else {
-                return -1;
+                -1
             }
         } else {
-            return -1;
+            // dirfd 对应条目为 None
+            -1
         }
     }
 }
@@ -266,11 +245,7 @@ pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
     let inner = task.inner_exclusive_access();
 
     if fd == AT_FDCWD {
-        if let Some(file) = open(
-            inner.get_work_path().as_str(),
-            path.as_str(),
-            OpenFlags::from_bits(0).unwrap(),
-        ) {
+        if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::from_bits(0).unwrap()) {
             file.delete();
             0
         } else {

@@ -143,8 +143,6 @@ bitflags! {
 }
 
 impl OpenFlags {
-    /// Do not check validity for simplicity
-    /// Return (readable, writable)
     pub fn read_write(&self) -> (bool, bool) {
         if self.is_empty() {
             (true, false)
