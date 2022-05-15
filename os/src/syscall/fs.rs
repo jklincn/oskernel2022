@@ -10,7 +10,7 @@ use core::mem::size_of;
 /// pub fn sys_close(fd: usize) -> isize
 /// ```
 //
-use crate::fs::{ch_dir, make_pipe, open, Dirent, Kstat, OpenFlags, MNT_TABLE};
+use crate::fs::{chdir, make_pipe, open, Dirent, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::{string::String, sync::Arc, vec::Vec};
@@ -77,9 +77,12 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     let token = current_user_token();
     let mut inner = task.inner_exclusive_access();
 
-    // 这里传入的地址为用户的虚地址，因此要使用用户的虚地址进行映射
     let path = translated_str(token, path);
     let oflags = OpenFlags::from_bits(flags).unwrap();
+
+    // todo
+    _ = mode;
+
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags) {
@@ -203,17 +206,16 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
     }
 }
 
-// buf：用于保存当前工作目录的字符串。当buf设为NULL，由系统来分配缓存区
-
+/// buf：用于保存当前工作目录的字符串。当 buf 设为 NULL，由系统来分配缓存区
 pub fn sys_getcwd(buf: *mut u8, len: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
-    let buf_vec = translated_byte_buffer(token, buf, len);
     let inner = task.inner_exclusive_access();
 
     if buf as usize == 0 {
         unimplemented!();
     } else {
+        let buf_vec = translated_byte_buffer(token, buf, len);
         let mut userbuf = UserBuffer::new(buf_vec);
         let cwd = inner.current_path.as_bytes();
         userbuf.write(cwd);
@@ -240,10 +242,12 @@ pub fn sys_umount(p_special: *const u8, flags: usize) -> isize {
 pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
-    // 这里传入的地址为用户的虚地址，因此要使用用户的虚地址进行映射
-    let path = translated_str(token, path);
     let inner = task.inner_exclusive_access();
 
+    // todo
+    _ = flags;
+
+    let path = translated_str(token, path);
     if fd == AT_FDCWD {
         if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::from_bits(0).unwrap()) {
             file.delete();
@@ -256,58 +260,71 @@ pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
     }
 }
 
+// pub fn sys_chdir(path: *const u8) -> isize {
+//     let token = current_user_token();
+//     let task = current_task().unwrap();
+//     let mut inner = task.inner_exclusive_access();
+//     let path = translated_str(token, path);
+
+
+//     let mut work_path = inner.current_path.clone();
+
+//     let new_ino_id = ch_dir(work_path.as_str(), path.as_str()) as isize;
+//     if new_ino_id >= 0 {
+//         if path.chars().nth(0).unwrap() == '/' {
+//             // 绝对路径
+//             inner.current_path = path.clone();
+//         } else {
+//             work_path.push('/');
+//             work_path.push_str(path.as_str());
+//             let path_vec: Vec<&str> = work_path.as_str().split('/').collect();
+//             let mut new_pathv: Vec<&str> = Vec::new();
+//             for i in 0..path_vec.len() {
+//                 if path_vec[i] == "" || path_vec[i] == "." {
+//                     continue;
+//                 }
+//                 if path_vec[i] == ".." {
+//                     new_pathv.pop();
+//                     continue;
+//                 }
+//                 new_pathv.push(path_vec[i]);
+//             }
+//             let mut new_wpath = String::new();
+//             for i in 0..new_pathv.len() {
+//                 new_wpath.push('/');
+//                 new_wpath.push_str(new_pathv[i]);
+//             }
+//             if new_pathv.len() == 0 {
+//                 new_wpath.push('/');
+//             }
+//             inner.current_path = new_wpath.clone();
+//         }
+//         new_ino_id
+//     } else {
+//         new_ino_id
+//     }
+// }
+
 pub fn sys_chdir(path: *const u8) -> isize {
-    //print_core_info();
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
+
     let path = translated_str(token, path);
-    let mut work_path = inner.current_path.clone();
-    //println!("work path = {}", work_path);
-    //println!("path  = {}, len = {}", path, path.len());
-    //println!("curr inode id = {}", curr_inode_id);
-    let new_ino_id = ch_dir(work_path.as_str(), path.as_str()) as isize;
-    //println!("new inode id = {}", new_ino_id);
-    if new_ino_id >= 0 {
-        //inner.current_inode = new_ino_id as u32;
-        if path.chars().nth(0).unwrap() == '/' {
-            inner.current_path = path.clone();
-        } else {
-            work_path.push('/');
-            work_path.push_str(path.as_str());
-            let mut path_vec: Vec<&str> = work_path.as_str().split('/').collect();
-            let mut new_pathv: Vec<&str> = Vec::new();
-            for i in 0..path_vec.len() {
-                if path_vec[i] == "" || path_vec[i] == "." {
-                    continue;
-                }
-                if path_vec[i] == ".." {
-                    new_pathv.pop();
-                    continue;
-                }
-                new_pathv.push(path_vec[i]);
-            }
-            let mut new_wpath = String::new();
-            for i in 0..new_pathv.len() {
-                new_wpath.push('/');
-                new_wpath.push_str(new_pathv[i]);
-            }
-            if new_pathv.len() == 0 {
-                new_wpath.push('/');
-            }
-            //println!("after cd workpath = {}", new_wpath);
-            inner.current_path = new_wpath.clone();
-        }
-        new_ino_id
+    if let Some(new_cwd) = chdir(inner.current_path.as_str(),&path){
+        inner.current_path = new_cwd;
+        0
     } else {
-        new_ino_id
+        -1
     }
+    
 }
+
 
 pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
-    let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Kstat>());
+    let buf_vec = translated_byte_buffer(token, buf, size_of::<Kstat>());
     let inner = task.inner_exclusive_access();
     // 使用UserBuffer结构，以便于跨页读写
     let mut userbuf = UserBuffer::new(buf_vec);

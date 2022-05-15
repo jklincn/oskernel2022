@@ -137,11 +137,6 @@ impl PipeRingBuffer {
     pub fn all_write_ends_closed(&self) -> bool {
         self.write_end.as_ref().unwrap().upgrade().is_none()
     }
-
-    /// 通过管道缓冲区写端弱指针判断管道的所有写端都被关闭
-    pub fn write_ends_count(&self) -> usize {
-        self.write_end.as_ref().unwrap().weak_count()
-    }
 }
 
 /// 创建一个管道并返回管道的读端和写端 (read_end, write_end)
@@ -216,10 +211,12 @@ impl File for Pipe {
     }
 
     fn get_fstat(&self, kstat:&mut Kstat){
+        _ = kstat;
         panic!("pipe not implement get_fstat");
     }
 
     fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        _ = dirent;
         panic!("pipe not implement get_dirent");
     }
 

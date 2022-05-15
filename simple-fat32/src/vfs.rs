@@ -1,5 +1,4 @@
-
-use super::{fat32_manager::*,get_block_cache, layout::*, BlockDevice};
+use super::{fat32_manager::*, get_block_cache, layout::*, BlockDevice};
 use alloc::string::{self, String};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -290,7 +289,7 @@ impl VFile {
         }
         let manager_writer = self.fs.write();
         // 传给 fat32_manager 来计算需要多少簇
-        let needed = manager_writer.cluster_num_needed(old_size, new_size, self.is_dir(),first_cluster);
+        let needed = manager_writer.cluster_num_needed(old_size, new_size, self.is_dir(), first_cluster);
         if needed == 0 {
             // 如果是普通文件，需要更新文件大小
             if !self.is_dir() {
@@ -400,13 +399,12 @@ impl VFile {
                 par_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
                 par_dir.set_first_cluster(self.first_cluster());
                 vfile.write_at(DIRENT_SZ, par_dir.as_bytes_mut());
-
             }
             return Some(Arc::new(vfile));
         } else {
             None
         }
-    } 
+    }
 
     /* 获取目录中offset处目录项的信息 TODO:之后考虑和stat复用
      * 返回<name, offset, firstcluster,attributes>
@@ -488,6 +486,8 @@ impl VFile {
             return None;
         }
         let mut list: Vec<(String, u8)> = Vec::new();
+        // （待修改）这里先默认为长文件名，由于 addr 字段在两种目录项中的偏移量相同，所以下面可以进行正确判断
+        // 应该要做结构体映射，然后先根据固定偏移量判断长还是短再做处理
         let mut file_entry = LongDirEntry::new();
         let mut offset = 0;
         loop {
@@ -507,7 +507,6 @@ impl VFile {
             // 文件被标记删除则跳过
             if file_entry.is_deleted() {
                 offset += DIRENT_SZ;
-                //  is_long = false;
                 continue;
             }
             if file_entry.attr() != ATTR_LONG_NAME {
@@ -532,8 +531,7 @@ impl VFile {
                             &self.block_device,
                         )
                     });
-                    if read_size != DIRENT_SZ || file_entry.is_empty() {
-                    }
+                    if read_size != DIRENT_SZ || file_entry.is_empty() {}
                 }
                 list.push((name.clone(), file_entry.attr()));
             }
@@ -556,7 +554,6 @@ impl VFile {
     }
 
     pub fn clear(&self) {
-        // 难点:长名目录项也要修改
         let first_cluster: u32 = self.first_cluster();
         if self.is_dir() || first_cluster == 0 {
             return;
@@ -617,21 +614,20 @@ impl VFile {
     //     self.read_short_dirent(|sde: &ShortDirEntry| sde.get_modification_time())
     // }
 
-    /* WAITING 目前只支持删除自己*/
+    /// 删除文件
     pub fn remove(&self) -> usize {
-        //self.modify_short_dirent(|sdent: &mut ShortDirEntry|{
-        //    sdent.delete();
-        //});
         let first_cluster: u32 = self.first_cluster();
+        // 删除长文件名目录项
         for i in 0..self.long_pos_vec.len() {
             self.modify_long_dirent(i, |long_entry: &mut LongDirEntry| {
                 long_entry.delete();
             });
         }
-        //println!("[fs]: rm file");
+        // 删除短文件名目录项
         self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
             short_entry.delete();
         });
+        // 回收对应簇
         let all_clusters = self
             .fs
             .read()
@@ -639,12 +635,11 @@ impl VFile {
             .read()
             .get_all_cluster_of(first_cluster, self.block_device.clone());
         self.fs.write().dealloc_cluster(all_clusters.clone());
-        //self.fs.write().cache_write_back();
         return all_clusters.len();
     }
 
-    pub fn stat(&self)->( i64, i64, i64, i64, u64 ){
-        self.read_short_dirent(|short_entry:&ShortDirEntry|{
+    pub fn stat(&self) -> (i64, i64, i64, i64, u64) {
+        self.read_short_dirent(|short_entry: &ShortDirEntry| {
             // let (_,_,_,_,_,_,ctime) = short_entry.get_creation_time();
             // let (_,_,_,_,_,_,atime) = short_entry.get_accessed_time();
             // let (_,_,_,_,_,_,mtime) = short_entry.get_modification_time();
@@ -654,13 +649,12 @@ impl VFile {
                 let fs_reader = self.fs.read();
                 let fat = fs_reader.get_fat();
                 let fat_reader = fat.read();
-                let cluster_num = fat_reader.count_claster_num( first_cluster, self.block_device.clone());
+                let cluster_num = fat_reader.count_claster_num(first_cluster, self.block_device.clone());
                 size = cluster_num * fs_reader.bytes_per_cluster();
             }
             (size as i64, 0 as i64, 0 as i64, 0 as i64, first_cluster as u64)
         })
     }
-
 
     /* WAITING */
     #[allow(unused)]

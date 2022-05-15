@@ -405,7 +405,6 @@ impl ShortDirEntry {
     pub fn delete(&mut self) {
         self.clear();
         self.dir_name[0] = 0xE5;
-        //TODO:回收cluster?
     }
 
     /// 获取文件偏移量所在的簇、扇区和偏移

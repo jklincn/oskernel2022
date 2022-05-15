@@ -10,7 +10,7 @@ use super::{File, Kstat, Dirent};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
-use alloc::{sync::Arc, string::String};
+use alloc::string::String;
 
 pub use super::{list_apps, open, OSInode, OpenFlags};
 
@@ -49,10 +49,12 @@ impl File for Stdin {
     }
 
     fn get_fstat(&self, kstat:&mut Kstat){
+        _ = kstat;
         panic!("Stdin not implement get_fstat");
     }
 
     fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        _ = dirent;
         panic!("Stdin not implement get_dirent");
     }
 
@@ -79,10 +81,12 @@ impl File for Stdout {
     }
 
     fn get_fstat(&self, kstat:&mut Kstat){
+        _ = kstat;
         panic!("Stdout not implement get_fstat");
     }
     
     fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        _ = dirent;
         panic!("Stdout not implement get_dirent");
     }
 

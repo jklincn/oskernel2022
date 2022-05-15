@@ -177,7 +177,7 @@ impl FAT32Manager {
             // 将FAT对应表项清零
             fat_writer.set_next_cluster(clusters[i], FREE_CLUSTER, self.block_device.clone())
         }
-        // 修改FSINFO
+        // 修改 FSINFO
         if num > 0 {
             self.fsinfo
                 .write_free_clusters(free_clusters + num as u32, self.block_device.clone());
@@ -259,25 +259,26 @@ pub fn long_name_split(name: &str) -> Vec<String> {
 }
 
 /// 拆分文件名和后缀
-pub fn split_name_ext<'a>(name: &'a str) -> (&'a str, &'a str) {
-    let mut name_and_ext: Vec<&str> = name.split(".").collect(); // 按 . 进行分割
-    if name_and_ext.len() == 1 {
-        // 如果没有后缀名则推入一个空值
-        name_and_ext.push("");
+pub fn split_name_ext(name: &str) -> (&str, &str) {
+    match name {
+        "." => return (".",""),
+        ".." => return ("..",""),
+        _ => {
+            let mut name_and_ext: Vec<&str> = name.split(".").collect(); // 按 . 进行分割
+            if name_and_ext.len() == 1 {
+                // 如果没有后缀名则推入一个空值
+                name_and_ext.push("");
+            }
+            (name_and_ext[0], name_and_ext[1])
+        }
     }
-    (name_and_ext[0], name_and_ext[1])
 }
 
 /// 将短文件名格式化为目录项存储的内容
 pub fn short_name_format(name: &str) -> ([u8; 8], [u8; 3]) {
-    let (mut name_, mut ext_) = split_name_ext(name);
-    // 对这两个目录进行特殊处理（因为不能被正确分割）
-    if name == "." || name == ".." {
-        name_ = name;
-        ext_ = "";
-    }
-    let name_bytes = name_.as_bytes();
-    let ext_bytes = ext_.as_bytes();
+    let (name, ext) = split_name_ext(name);
+    let name_bytes = name.as_bytes();
+    let ext_bytes = ext.as_bytes();
     let mut f_name = [0u8; 8];
     let mut f_ext = [0u8; 3];
     for i in 0..8 {

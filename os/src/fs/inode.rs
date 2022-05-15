@@ -1,8 +1,9 @@
 use super::{Dirent, File, Kstat};
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
-use alloc::{sync::Arc, string::String};
+use _core::str::FromStr;
 use alloc::vec::Vec;
+use alloc::{string::String, sync::Arc};
 use bitflags::*;
 use lazy_static::*;
 use simple_fat32::{FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
@@ -48,7 +49,7 @@ impl OSInode {
         inner.inode.is_dir()
     }
 
-    pub fn name(& self) -> String{
+    pub fn name(&self) -> String {
         let mut name = String::new();
         name.push_str(self.inner.lock().inode.name());
         name
@@ -198,23 +199,47 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
     }
 }
 
-pub fn ch_dir(work_path: &str, path: &str) -> isize {
-    // 切换工作路径
-    // 切换成功，返回inode_id，否则返回-1
-    let cur_inode = {
-        if work_path == "/" || (path.len() > 0 && path.chars().nth(0).unwrap() == '/') {
+// pub fn ch_dir(work_path: &str, path: &str) -> isize {
+//     // 切换工作路径
+//     // 切换成功，返回inode_id，否则返回-1
+//     let cur_inode = {
+//         if work_path == "/" || (path.len() > 0 && path.chars().nth(0).unwrap() == '/') {
+//             ROOT_INODE.clone()
+//         } else {
+//             let wpath: Vec<&str> = work_path.split('/').collect();
+//             ROOT_INODE.find_vfile_bypath(wpath).unwrap()
+//         }
+//     };
+//     let pathv: Vec<&str> = path.split('/').collect();
+//     if let Some(tar_dir) = cur_inode.find_vfile_bypath(pathv) {
+//         // ! 当inode_id > 2^16 时，有溢出的可能（目前不会发生。。
+//         0
+//     } else {
+//         -1
+//     }
+// }
+
+pub fn chdir(work_path: &str, path: &str) -> Option<String> {
+    let current_inode = {
+        if path.chars().nth(0).unwrap() == '/' {
+            // 传入路径是绝对路径
             ROOT_INODE.clone()
         } else {
-            let wpath: Vec<&str> = work_path.split('/').collect();
-            ROOT_INODE.find_vfile_bypath(wpath).unwrap()
+            // 传入路径是相对路径
+            let current_work_pathv: Vec<&str> = work_path.split('/').collect();
+            ROOT_INODE.find_vfile_bypath(current_work_pathv).unwrap()
         }
     };
     let pathv: Vec<&str> = path.split('/').collect();
-    if let Some(tar_dir) = cur_inode.find_vfile_bypath(pathv) {
-        // ! 当inode_id > 2^16 时，有溢出的可能（目前不会发生。。
-        0
+    if let Some(_) = current_inode.find_vfile_bypath(pathv) {
+        let new_current_path = String::from_str("/").unwrap()+&String::from_str(path).unwrap();
+        if current_inode.name() == "/" {
+            Some(new_current_path)
+        } else {
+            Some(String::from_str(current_inode.name()).unwrap() + &new_current_path)
+        }
     } else {
-        -1
+        None
     }
 }
 
@@ -259,14 +284,14 @@ impl File for OSInode {
         let inner = self.inner.lock();
         let vfile = inner.inode.clone();
         // todo
-        let (size, atime, mtime, ctime, ino) = vfile.stat();
+        let (_size, _atimee, _mtime, _ctime, _ino) = vfile.stat();
         kstat.init();
     }
 
     fn get_dirent(&self, dirent: &mut Dirent) -> isize {
         let mut inner = self.inner.lock();
         let offset = inner.offset as u32;
-        if let Some((name, off, first_clu, attri)) = inner.inode.dirent_info(offset as usize) {
+        if let Some((name, off, _, _)) = inner.inode.dirent_info(offset as usize) {
             dirent.init(name.as_str());
             inner.offset = off as usize;
             let len = (name.len() + 8 * 4) as isize;
@@ -275,8 +300,8 @@ impl File for OSInode {
             -1
         }
     }
-    
-    fn get_name(&self) -> String{
+
+    fn get_name(&self) -> String {
         self.name()
     }
 }
