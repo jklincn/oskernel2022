@@ -14,7 +14,7 @@ use crate::sync::UPSafeCell;
 use alloc::{sync::{Arc, Weak}, string::String};
 
 use crate::task::suspend_current_and_run_next;
-pub use super::{list_apps, open, OSInode, OpenFlags,DiskInodeType};
+pub use super::{list_apps, open, OSInode, OpenFlags};
 
 
 /// ### 管道
@@ -213,13 +213,6 @@ impl File for Pipe {
                 }
             }
         }
-    }
-    fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>{
-        panic!("pipe not implement create");
-    }
-
-    fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>{
-        panic!("pipe not implement find");
     }
 
     fn get_fstat(&self, kstat:&mut Kstat){

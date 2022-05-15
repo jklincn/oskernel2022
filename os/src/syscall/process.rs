@@ -12,7 +12,7 @@
 /// ```
 //
 
-use crate::fs::{open, OpenFlags,DiskInodeType};
+use crate::fs::{open, OpenFlags};
 use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,

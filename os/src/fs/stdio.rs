@@ -12,7 +12,7 @@ use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
 use alloc::{sync::Arc, string::String};
 
-pub use super::{list_apps, open, OSInode, OpenFlags,DiskInodeType};
+pub use super::{list_apps, open, OSInode, OpenFlags};
 
 pub struct Stdin;
 
@@ -48,14 +48,6 @@ impl File for Stdin {
         panic!("Cannot write to stdin!");
     }
 
-    fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>{
-        panic!("Stdin not implement create");
-    }
-
-    fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>{
-        panic!("Stdin not implement find");
-    }
-
     fn get_fstat(&self, kstat:&mut Kstat){
         panic!("Stdin not implement get_fstat");
     }
@@ -84,13 +76,6 @@ impl File for Stdout {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
         user_buf.len()
-    }
-    fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>{
-        panic!("Stdout not implement create");
-    }
-
-    fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>{
-        panic!("Stdout not implement find");
     }
 
     fn get_fstat(&self, kstat:&mut Kstat){

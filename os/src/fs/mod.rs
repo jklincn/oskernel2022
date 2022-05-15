@@ -20,10 +20,6 @@ pub trait File: Send + Sync {
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
 
-    fn create(&self, path:&str, type_: DiskInodeType)->Option<Arc<OSInode>>;
-
-    fn find(&self, path:&str, flags:OpenFlags)->Option<Arc<OSInode>>;
-
     fn get_fstat(&self, kstat:&mut Kstat);
 
     fn get_dirent(&self, dirent: &mut Dirent)->isize;
@@ -32,7 +28,7 @@ pub trait File: Send + Sync {
 }
 
 
-pub use inode::{list_apps, open, OSInode, OpenFlags,DiskInodeType,ch_dir};
+pub use inode::{list_apps, open, OSInode, OpenFlags,ch_dir};
 pub use stdio::{Stdin, Stdout};
 pub use pipe::{make_pipe, Pipe};
 pub use mount::MNT_TABLE;

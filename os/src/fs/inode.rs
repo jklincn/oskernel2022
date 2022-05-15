@@ -8,12 +8,6 @@ use lazy_static::*;
 use simple_fat32::{FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
 
-#[derive(PartialEq, Copy, Clone, Debug)]
-pub enum DiskInodeType {
-    File,
-    Directory,
-}
-
 /// 表示进程中一个被打开的常规文件或目录
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
@@ -261,48 +255,6 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
-    }
-
-    fn create(&self, path: &str, type_: DiskInodeType) -> Option<Arc<OSInode>> {
-        let inner = self.inner.lock();
-        let cur_inode = inner.inode.clone();
-        if !cur_inode.is_dir() {
-            println!("[create]:{} is not a directory!", path);
-            return None;
-        }
-        let mut pathv: Vec<&str> = path.split('/').collect();
-        let (readable, writable) = (true, true);
-        if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-            // already exists, clear
-            inode.remove();
-        }
-        // create file
-        let name = pathv.pop().unwrap();
-        if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-            let attribute = {
-                match type_ {
-                    DiskInodeType::Directory => ATTR_DIRECTORY,
-                    DiskInodeType::File => ATTR_ARCHIVE,
-                }
-            };
-            temp_inode
-                .create(name, attribute)
-                .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
-        } else {
-            None
-        }
-    }
-
-    fn find(&self, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-        let inner = self.inner.lock();
-        let pathv: Vec<&str> = path.split('/').collect();
-        let vfile = inner.inode.find_vfile_bypath(pathv);
-        if vfile.is_none() {
-            return None;
-        } else {
-            let (readable, writable) = flags.read_write();
-            return Some(Arc::new(OSInode::new(readable, writable, vfile.unwrap())));
-        }
     }
 
     fn get_fstat(&self, kstat: &mut Kstat) {

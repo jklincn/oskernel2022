@@ -10,7 +10,7 @@ use core::mem::size_of;
 /// pub fn sys_close(fd: usize) -> isize
 /// ```
 //
-use crate::fs::{ch_dir, make_pipe, open, Dirent, DiskInodeType, Kstat, OpenFlags, MNT_TABLE};
+use crate::fs::{ch_dir, make_pipe, open, Dirent, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::{string::String, sync::Arc, vec::Vec};
@@ -77,8 +77,6 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     let token = current_user_token();
     let mut inner = task.inner_exclusive_access();
     
-
-
     // 这里传入的地址为用户的虚地址，因此要使用用户的虚地址进行映射
     let path = translated_str(token, path);
     let oflags = OpenFlags::from_bits(flags).unwrap();
@@ -92,17 +90,13 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
             -1
         }
     } else {
-        
         let dirfd = dirfd as usize;
         // dirfd 不合法
         if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
             return -1;
         }
-
         if let Some(file) = &inner.fd_table[dirfd] {
-
-            
-
+             // 需要新建文件
             if oflags.contains(OpenFlags::O_CREATE) {
                 if let Some(tar_f) = open(file.get_name().as_str(),path.as_str(),oflags) {
                     let fd = inner.alloc_fd();
@@ -112,18 +106,6 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                     return -1;
                 }
             }
-
-
-            // if oflags.contains(OpenFlags::O_CREATE) {
-            //     if let Some(tar_f) = file.create(path.as_str(), DiskInodeType::File) {
-            //         let fd = inner.alloc_fd();
-            //         inner.fd_table[fd] = Some(tar_f);
-            //         return fd as isize;
-            //     } else {
-            //         return -1;
-            //     }
-            // }
-
             // 需要新建目录
             if oflags.contains(OpenFlags::O_DIRECTROY) {
                 if let Some(tar_f) = open(file.get_name().as_str(),path.as_str(),oflags) {
@@ -136,7 +118,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
             }
 
             // 正常打开文件
-            if let Some(tar_f) = file.find(path.as_str(), oflags) {
+            if let Some(tar_f) = open(file.get_name().as_str(),path.as_str(),oflags) {
                 let fd = inner.alloc_fd();
                 inner.fd_table[fd] = Some(tar_f);
                 fd as isize
@@ -218,7 +200,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
         if let Some(_) = open(
             inner.get_work_path().as_str(),
             path.as_str(),
-            OpenFlags::O_CREATE,
+            OpenFlags::O_DIRECTROY,
         ) {
             return 0;
         } else {
@@ -231,7 +213,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-            if let Some(_) = file.create(path.as_str(), DiskInodeType::Directory) {
+            if let Some(_) = open(file.get_name().as_str(),path.as_str(),OpenFlags::O_DIRECTROY) {
                 return 0;
             } else {
                 return -1;
