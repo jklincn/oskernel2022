@@ -19,13 +19,6 @@ int main() {
         else {          // 父进程
             child_return = -1;
             waitpid(npid, &child_return, 0);
-            if (child_return != 0) {
-                printf(COLOR_LIGHT_RED"TEST ERROR:%s return code:%d"COLOR_NONE"\n", prog_name[t], child_return);
-                //return -t;
-            }
-            else{
-                printf(COLOR_LIGHT_GREEN"OK"COLOR_NONE"\n");
-            }
         }
     }
     return 0;
