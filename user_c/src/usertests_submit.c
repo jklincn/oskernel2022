@@ -2,9 +2,10 @@
 #include "unistd.h"
 #include "stdlib.h"
 
-#define PROG_NUM 14
+#define PROG_NUM 24
 
-char* prog_name[] = {"mount","umount","read","fstat","getdents", "getcwd", "open", "unlink" , "openat", "write","close", "mkdir_", "chdir","pipe"};
+char* prog_name[] = {"dup", "exec", "exit", "fork", "getpid", "gettimeofday", "uname", "sleep", "times", "pipe", "wait", 
+    "open",  "openat", "close",  "read",  "write", "mount", "umount", "mkdir",  "chdir", "unlink", "fstat", "getcwd", "getdents" };
 
 int main() {
     for (int t = 0; t < PROG_NUM; t++) {

@@ -20,7 +20,7 @@ OBJCOPY := rust-objcopy --binary-architecture=riscv64
 build: env initproc $(KERNEL_BIN) 
 
 initproc:
-	@cd ../user_c && make build
+	@cd ../user_c && make build_initproc_submit
 
 env:
 	rustup target add $(TARGET)
@@ -52,7 +52,7 @@ copy_to_fs:
 new_fat32_img:
 	cd ../fat32-fuse && rm fat32.img && cp ~/fat32.img .
 
-run-inner: build new_fat32_img
+run-inner: build copy_to_fs
 	@qemu-system-riscv64 \
 		-machine virt \
 		-nographic \

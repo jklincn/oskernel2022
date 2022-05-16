@@ -9,12 +9,12 @@ _num_app:
 
     .global _app_names
 _app_names:
-    .string "c_usertests"
+    .string "usertests"
 
     .section .data
     .global app_0_start
     .global app_0_end
     .align 3
 app_0_start:
-    .incbin "../user_c/bin/c_usertests"
+    .incbin "../user_c/bin/usertests"
 app_0_end:

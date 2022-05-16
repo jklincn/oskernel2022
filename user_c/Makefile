@@ -17,3 +17,8 @@ bin:
 
 build: bin
 	@$(foreach i_src, $(APPS), $(CC) $(i_src) $(LIB_DIR) -T $(LINKER_PATH) -o $(patsubst $(APP_DIR)/%.c,$(TARGET_DIR)/%,$(i_src));)
+
+build_initproc_submit: 
+	$(CC) src/usertests_submit.c $(LIB_DIR) -T $(LINKER_PATH) -o bin/usertests
+
+.PHONY: build build_initproc_submit
