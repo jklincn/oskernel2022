@@ -47,7 +47,7 @@ submit: build
 run: run-inner
 
 copy_to_fs: 
-	cd ../fat32-fuse && sudo mount fat32.img fs && sudo cp ../user_c/bin/* fs/ && sudo umount fs
+	cd ../fat32-fuse && mount fat32.img fs && cp ../user_c/bin/* fs/ && umount fs
 
 run-inner: build copy_to_fs
 	@qemu-system-riscv64 \
