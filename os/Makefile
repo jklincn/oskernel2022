@@ -20,6 +20,9 @@ OBJCOPY := rust-objcopy --binary-architecture=riscv64
 build: env initproc $(KERNEL_BIN) 
 
 initproc:
+	@cd ../user_c && make build
+
+initproc_submit:
 	@cd ../user_c && make build_initproc_submit
 
 env:
@@ -39,7 +42,7 @@ kernel:
 	@cargo build --release --offline --features "board_$(BOARD)"
 	@rm src/linker.ld
 
-submit: build
+submit: build initproc_submit
 	@cp $(BOOTLOADER) $(BOOTLOADER).copy
 	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
 	@mv $(BOOTLOADER).copy ../os.bin

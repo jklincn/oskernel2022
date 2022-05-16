@@ -66,6 +66,10 @@ int dup(int fd) {
     return syscall(SYSCALL_DUP, fd);
 }
 
+int dup2(int old_fd, int new_fd) {
+    return syscall(SYSCALL_DUP3, old_fd, new_fd);
+}
+
 int close(int fd) {
     return syscall(SYSCALL_CLOSE, fd);
 }

@@ -1,4 +1,5 @@
-#define SYSCALL_DUP 24
+#define SYSCALL_DUP 23
+#define SYSCALL_DUP3 24
 #define SYSCALL_OPEN 56
 #define SYSCALL_CLOSE 57
 #define SYSCALL_PIPE 59

@@ -151,12 +151,12 @@ pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
     0
 }
 
-/// ### 将进程中一个已经打开的文件复制一份并分配到一个新的文件描述符中。
+/// ### 将进程中一个已经打开的文件描述符复制一份并分配到一个新的文件描述符中。
 /// - 参数：fd 表示进程中一个已经打开的文件的文件描述符。
 /// - 返回值：
 ///     - 能够访问已打开文件的新文件描述符。
 ///     - 如果出现了错误则返回 -1，可能的错误原因是：传入的 fd 并不对应一个合法的已打开文件。
-/// - syscall ID：24
+/// - syscall ID：23
 pub fn sys_dup(fd: usize) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
@@ -170,6 +170,42 @@ pub fn sys_dup(fd: usize) -> isize {
 
     let new_fd = inner.alloc_fd();
     inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd].as_ref().unwrap()));
+    new_fd as isize
+}
+
+/// ### 将进程中一个已经打开的文件描述符复制一份并分配到一个指定的文件描述符中。
+/// - 参数：
+///     - old_fd 表示进程中一个已经打开的文件的文件描述符。
+///     - new_fd 表示进程中一个指定的文件描述符中。
+/// - 返回值：
+///     - 能够访问已打开文件的新文件描述符。
+///     - 如果出现了错误则返回 -1，可能的错误原因是：
+///         - 传入的 old_fd 为空。
+///         - 传入的 old_fd 不存在
+///         - 传入的 new_fd 超出描述符数量限制 (典型值：128)
+/// - syscall ID：24
+pub fn sys_dup3( old_fd: usize, new_fd: usize )->isize{
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+
+    if  old_fd >= inner.fd_table.len() || new_fd > FD_LIMIT {
+        return -1;
+    }
+    if inner.fd_table[old_fd].is_none() {
+        return -1;
+    }
+    if new_fd >= inner.fd_table.len() {
+        for _ in inner.fd_table.len()..(new_fd + 1) {
+            inner.fd_table.push(None);
+        }
+    }
+
+    //let mut act_fd = new_fd;
+    //if inner.fd_table[new_fd].is_some() {
+    //    act_fd = inner.alloc_fd();
+    //}
+    //let new_fd = inner.alloc_fd();
+    inner.fd_table[new_fd] = Some(inner.fd_table[old_fd].as_ref().unwrap().clone());
     new_fd as isize
 }
 
