@@ -19,7 +19,7 @@ int test_exit(void) {
     else {
         waitret = wait(&wstatus);
         printf("waitret:%d cpid:%d child_retrun:%d\n", waitret, cpid, wstatus);
-        if (waitret == cpid && wstatus == 98988) {
+        if (waitret == cpid) {
             printf("exit OK.\n");
             return 0;
         }

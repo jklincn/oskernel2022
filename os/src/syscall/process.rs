@@ -191,7 +191,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
             // ++++ release child PCB
             // 将子进程的退出码写入到当前进程的应用地址空间中
             if exit_code_ptr as usize != 0 {
-                *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
+                *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code << 8;
             }
             return found_pid as isize;
         } else {

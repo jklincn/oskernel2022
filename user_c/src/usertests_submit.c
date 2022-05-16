@@ -5,7 +5,7 @@
 #define PROG_NUM 25
 
 char* prog_name[] = { "dup", "dup2", "execve", "exit", "fork", "getpid", "gettimeofday", "uname", "sleep", "times", "pipe", "wait",
-    "open",  "openat", "close",  "read",  "write", "mount", "umount", "mkdir_",  "chdir", "unlink", "fstat", "getcwd", "getdents" };
+    "open",  "openat", "close",  "read",  "write", "mount", "umount", "mkdir_",  "chdir", "unlink", "fstat", "getcwd", "getdents", "waitpid" };
 
 int main() {
     for (int t = 0; t < PROG_NUM; t++) {
