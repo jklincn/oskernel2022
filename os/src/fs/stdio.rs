@@ -6,10 +6,13 @@
 /// ```
 //
 
-use super::File;
+use super::{File, Kstat, Dirent};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
+use alloc::string::String;
+
+pub use super::{list_apps, open, OSInode, OpenFlags};
 
 pub struct Stdin;
 
@@ -44,6 +47,20 @@ impl File for Stdin {
     fn write(&self, _user_buf: UserBuffer) -> usize {
         panic!("Cannot write to stdin!");
     }
+
+    fn get_fstat(&self, kstat:&mut Kstat){
+        _ = kstat;
+        panic!("Stdin not implement get_fstat");
+    }
+
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        _ = dirent;
+        panic!("Stdin not implement get_dirent");
+    }
+
+    fn get_name(&self) -> String{
+        panic!("Stdin not implement get_name");
+    }
 }
 
 impl File for Stdout {
@@ -61,5 +78,19 @@ impl File for Stdout {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
         user_buf.len()
+    }
+
+    fn get_fstat(&self, kstat:&mut Kstat){
+        _ = kstat;
+        panic!("Stdout not implement get_fstat");
+    }
+    
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        _ = dirent;
+        panic!("Stdout not implement get_dirent");
+    }
+
+    fn get_name(&self) -> String{
+        panic!("Stdout not implement get_name");
     }
 }

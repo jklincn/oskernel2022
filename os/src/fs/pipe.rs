@@ -8,12 +8,14 @@
 /// pub fn make_pipe()
 /// ```
 //
-use super::File;
+use super::{File, Kstat, Dirent};
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
-use alloc::sync::{Arc, Weak};
+use alloc::{sync::{Arc, Weak}, string::String};
 
 use crate::task::suspend_current_and_run_next;
+pub use super::{list_apps, open, OSInode, OpenFlags};
+
 
 /// ### 管道
 /// 由 读 `readable` / 写 `writable` 权限和 缓冲区 `buffer` 组成，用以分别表示管道的写端和读端
@@ -135,11 +137,6 @@ impl PipeRingBuffer {
     pub fn all_write_ends_closed(&self) -> bool {
         self.write_end.as_ref().unwrap().upgrade().is_none()
     }
-
-    /// 通过管道缓冲区写端弱指针判断管道的所有写端都被关闭
-    pub fn write_ends_count(&self) -> usize {
-        self.write_end.as_ref().unwrap().weak_count()
-    }
 }
 
 /// 创建一个管道并返回管道的读端和写端 (read_end, write_end)
@@ -196,7 +193,6 @@ impl File for Pipe {
         loop {
             let mut ring_buffer = self.buffer.exclusive_access();
             let loop_write = ring_buffer.available_write();
-            println!("loop_write:{}", loop_write);
             if loop_write == 0 {
                 drop(ring_buffer);
                 suspend_current_and_run_next();
@@ -208,10 +204,23 @@ impl File for Pipe {
                     ring_buffer.write_byte(unsafe { *byte_ref });
                     write_size += 1;
                 } else {
-                    println!("write finish");
                     return write_size;
                 }
             }
         }
+    }
+
+    fn get_fstat(&self, kstat:&mut Kstat){
+        _ = kstat;
+        panic!("pipe not implement get_fstat");
+    }
+
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+        _ = dirent;
+        panic!("pipe not implement get_dirent");
+    }
+
+    fn get_name(&self) -> String{
+        panic!("pipe not implement get_name");
     }
 }

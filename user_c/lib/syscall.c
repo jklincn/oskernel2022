@@ -73,3 +73,7 @@ int close(int fd) {
 int pipe(int *fd) {
     return syscall(SYSCALL_PIPE, fd, 0);
 }
+
+int open(const char * name,int flags) {
+    return syscall(SYSCALL_OPEN, name, flags);
+}

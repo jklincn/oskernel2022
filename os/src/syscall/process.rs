@@ -12,7 +12,7 @@
 /// ```
 //
 
-use crate::fs::{open_file, OpenFlags};
+use crate::fs::{open, OpenFlags};
 use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
@@ -129,9 +129,12 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
             args = args.add(1);
         }
     }
-    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+
+    if let Some(app_inode) = open(inner.current_path.as_str(),path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
-        let task = current_task().unwrap();
+        drop(inner);
         let argc = args_vec.len();
         task.exec(all_data.as_slice(), args_vec);
         // return argc because cx.x[10] will be covered with it later
@@ -165,7 +168,6 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         // ---- release current PCB
     }
     drop(inner);
-
     loop{
         let mut inner = task.inner_exclusive_access();
         // 查找所有符合PID要求的处于僵尸状态的进程，如果有的话还需要同时找出它在当前进程控制块子进程向量中的下标
@@ -174,7 +176,6 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
             p.inner_exclusive_access().is_zombie() && (pid == -1 || pid as usize == p.getpid())
             // ++++ release child PCB
         });
-        
         if let Some((idx, _)) = pair {
             // 将子进程从向量中移除并置于当前上下文中
             let child = inner.children.remove(idx);
@@ -189,7 +190,9 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
             let exit_code = child.inner_exclusive_access().exit_code;
             // ++++ release child PCB
             // 将子进程的退出码写入到当前进程的应用地址空间中
-            *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
+            if exit_code_ptr as usize != 0 {
+                *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
+            }
             return found_pid as isize;
         } else {
             // 如果找不到的话则放权等待

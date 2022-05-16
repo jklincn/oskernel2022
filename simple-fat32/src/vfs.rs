@@ -1,4 +1,4 @@
-use super::{fat32_manager::*, get_info_cache, layout::*, BlockDevice};
+use super::{fat32_manager::*, get_block_cache, layout::*, BlockDevice};
 use alloc::string::{self, String};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -73,7 +73,7 @@ impl VFile {
             let rr = root_dirent.read();
             f(&rr)
         } else {
-            get_info_cache(self.short_sector, self.block_device.clone())
+            get_block_cache(self.short_sector, self.block_device.clone())
                 .read()
                 .read(self.short_offset, f)
         }
@@ -81,7 +81,7 @@ impl VFile {
 
     fn modify_long_dirent<V>(&self, index: usize, f: impl FnOnce(&mut LongDirEntry) -> V) -> V {
         let (sector, offset) = self.long_pos_vec[index];
-        get_info_cache(sector, self.block_device.clone()).write().modify(offset, f)
+        get_block_cache(sector, self.block_device.clone()).write().modify(offset, f)
     }
 
     fn modify_short_dirent<V>(&self, f: impl FnOnce(&mut ShortDirEntry) -> V) -> V {
@@ -91,7 +91,7 @@ impl VFile {
             let mut rw = root_dirent.write();
             f(&mut rw)
         } else {
-            get_info_cache(self.short_sector, self.block_device.clone())
+            get_block_cache(self.short_sector, self.block_device.clone())
                 .write()
                 .modify(self.short_offset, f)
         }
@@ -261,7 +261,6 @@ impl VFile {
 
     /// 根据路径递归搜索文件
     pub fn find_vfile_bypath(&self, path: Vec<&str>) -> Option<Arc<VFile>> {
-        let _ = self.fs.read(); // 获取读锁
         let len = path.len();
         if len == 0 {
             return Some(Arc::new(self.clone()));
@@ -280,84 +279,59 @@ impl VFile {
         Some(Arc::new(current_vfile))
     }
 
-    /* WAITING 既然目录都没有大小，那暂时没必要做这个 */
-    //#[allow(unused)]
-    //fn decrease_size() {}
-
+    // 对文件进行扩容，new_size 是文件当前偏移量加 buf 长度
     fn increase_size(&self, new_size: u32) {
-        // TODO: return sth when cannot increase
-        //println!("===================== in increase =======================");
-        //println!("file: {}, newsz = {}", self.name(), new_size);
-        //println!("try lock");
         let first_cluster = self.first_cluster();
         let old_size = self.file_size();
-        let manager_writer = self.fs.write();
-        //println!("get lock");
+        // 写入范围不会超出现有文件范围
         if new_size <= old_size {
-            //println!("oldsz > newsz");
             return;
         }
+        let manager_writer = self.fs.write();
+        // 传给 fat32_manager 来计算需要多少簇
         let needed = manager_writer.cluster_num_needed(old_size, new_size, self.is_dir(), first_cluster);
-        //println!("needed = {}", needed);
         if needed == 0 {
+            // 如果是普通文件，需要更新文件大小
             if !self.is_dir() {
-                //self.size = new_size;
-                self.modify_short_dirent(|se: &mut ShortDirEntry| {
-                    se.set_file_size(new_size);
+                self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
+                    short_entry.set_file_size(new_size);
                 });
             }
             return;
         }
 
-        //println!("first cluster = {} nxt = {}", first_cluster, manager_writer.get_fat().read().get_next_cluster(first_cluster, self.block_device.clone()));
+        // 需要扩容
         if let Some(cluster) = manager_writer.alloc_cluster(needed) {
-            //println!("*** cluster alloc = {}",cluster);
             if first_cluster == 0 {
-                //未分配簇
+                // 从未分配过簇的情况（例如新文件？）
                 drop(manager_writer);
-                self.modify_short_dirent(|se: &mut ShortDirEntry| {
-                    se.set_first_cluster(cluster);
+                self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
+                    short_entry.set_first_cluster(cluster);
                 });
-                //println!("fc = {}",self.first_cluster());
-                //println!("================== increase end ====================");
             } else {
                 // 已经分配簇
-                //let fs_reader = self.fs.read();
-                //println!("[fs-inc]: file: {}, newsz = {}", self.name(), new_size);
-                //println!("  cluster alloc = {}",cluster);
                 let fat = manager_writer.get_fat();
-                //println!("try lock1");
                 let fat_writer = fat.write();
-                //println!("get lock1");
+                // 找到最后一个簇
                 let final_cluster = fat_writer.final_cluster(first_cluster, self.block_device.clone());
                 assert_ne!(cluster, 0);
+                // 设置 FAT 表进行链接
                 fat_writer.set_next_cluster(final_cluster, cluster, self.block_device.clone());
-                //let allc = fat_writer.get_all_cluster_of(first_cluster, self.block_device.clone());
-                //println!("  finish set next cluster, cluster chain:{:?}", allc);
                 drop(manager_writer);
             }
-            //self.size = new_size;
-            self.modify_short_dirent(|se: &mut ShortDirEntry| {
-                se.set_file_size(new_size);
+            // 更新文件大小
+            self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
+                short_entry.set_file_size(new_size);
             });
         } else {
-            panic!("SD Card no space!!!");
+            panic!("increase size failed!");
         }
     }
-
-    /*
-    pub fn set_first_cluster(&mut self, first_cluster:u32) {
-        self.first_cluster = first_cluster;
-        self.modify_short_dirent(|se:&mut ShortDirEntry|{
-            se.set_first_cluster(first_cluster);
-        });
-    }*/
 
     /* 在当前目录下创建文件 */
     pub fn create(&self, name: &str, attribute: u8) -> Option<Arc<VFile>> {
         // 检测同名文件
         assert!(self.is_dir());
-
         let manager_reader = self.fs.read();
         let (name_, ext_) = split_name_ext(name);
         // 搜索空处
@@ -407,14 +381,13 @@ impl VFile {
             tmp_short_ent.initialize(&_name, &_ext, attribute);
             drop(manager_reader);
         }
+
         // 写短目录项（长文件名也是有短文件名目录项的）
         assert_eq!(self.write_at(dirent_offset, tmp_short_ent.as_bytes_mut()), DIRENT_SZ);
-
         // 这边的 if let 算是一个验证
         if let Some(vfile) = self.find_vfile_byname(name) {
             // 如果是目录类型，需要创建.和..
             if attribute & ATTR_DIRECTORY != 0 {
-                let manager_reader = self.fs.read();
                 let (_name, _ext) = short_name_format(".");
                 let mut self_dir = ShortDirEntry::new();
                 self_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
@@ -426,99 +399,12 @@ impl VFile {
                 par_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
                 par_dir.set_first_cluster(self.first_cluster());
                 vfile.write_at(DIRENT_SZ, par_dir.as_bytes_mut());
-
-                drop(manager_reader);
             }
             return Some(Arc::new(vfile));
         } else {
             None
         }
     }
-
-    // /* 获取当前目录下的所有文件名以及属性，以Vector形式返回 */
-    // // 如果出现错误，返回None
-    // pub fn ls(&self) -> Option<Vec<(String, u8)>> {
-    //     if !self.is_dir() {
-    //         return None;
-    //     }
-    //     let mut list: Vec<(String, u8)> = Vec::new();
-    //     // DEBUG
-    //     let mut offset: usize = 0;
-    //     let mut short_entry = ShortDirEntry::new();
-    //     loop {
-    //         let mut read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
-    //             curr_ent.read_at(
-    //                 offset,
-    //                 short_entry.as_bytes_mut(),
-    //                 &self.fs,
-    //                 &self.fs.read().get_fat(),
-    //                 &self.block_device,
-    //             )
-    //         });
-    //         // 检测是否结束或被删除
-    //         if read_size != DIRENT_SZ || short_entry.is_empty() {
-    //             return Some(list);
-    //         }
-    //         if short_entry.is_deleted() {
-    //             offset += DIRENT_SZ;
-    //             continue;
-    //         }
-    //         if short_entry.is_long() {
-    //             // 长文件名
-    //             let (_, long_ent_list, _) = unsafe { short_entry.as_bytes_mut().align_to_mut::<LongDirEntry>() };
-    //             // DEBUG
-    //             let mut long_entry = long_ent_list[0];
-    //             let mut order = long_entry.order(); //^ 0x40;
-    //             if order & 0x40 == 0 {
-    //                 offset += DIRENT_SZ;
-    //                 continue;
-    //             } else {
-    //                 order = order ^ 0x40;
-    //             }
-    //             let mut name = long_entry.get_name_raw();
-    //             #[allow(unused)]
-    //             for i in 1..order as usize {
-    //                 offset += DIRENT_SZ;
-    //                 read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
-    //                     curr_ent.read_at(
-    //                         offset,
-    //                         long_entry.as_bytes_mut(),
-    //                         &self.fs,
-    //                         &self.fs.read().get_fat(),
-    //                         &self.block_device,
-    //                     )
-    //                 });
-    //                 if read_size != DIRENT_SZ || long_entry.is_empty() || long_entry.is_deleted() {
-    //                     return Some(list);
-    //                 }
-    //                 // 若无误，把该段名字放在name最前
-    //                 name.insert_str(0, long_entry.get_name_raw().as_str());
-    //             }
-    //             // 从短文件获取类型
-    //             offset += DIRENT_SZ;
-    //             read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
-    //                 curr_ent.read_at(
-    //                     offset,
-    //                     long_entry.as_bytes_mut(),
-    //                     &self.fs,
-    //                     &self.fs.read().get_fat(),
-    //                     &self.block_device,
-    //                 )
-    //             });
-    //             if read_size != DIRENT_SZ || long_entry.is_empty() || long_entry.is_deleted() {
-    //                 return Some(list);
-    //             }
-    //             list.push((name, long_entry.attr()));
-    //             offset += DIRENT_SZ;
-    //             continue;
-    //         } else {
-    //             // 短文件名
-    //             list.push((short_entry.get_name_lowercase(), short_entry.attr()));
-    //             offset += DIRENT_SZ;
-    //             continue;
-    //         }
-    //     }
-    // }
 
     /* 获取目录中offset处目录项的信息 TODO:之后考虑和stat复用
      * 返回<name, offset, firstcluster,attributes>
@@ -559,7 +445,6 @@ impl VFile {
                 if !is_long {
                     name = short_entry.get_name_lowercase();
                 }
-                //println!("---{}", short_entry.get_name_lowercase());
                 let attribute = short_entry.attr();
                 let first_cluster = short_entry.first_cluster();
                 offset += DIRENT_SZ;
@@ -601,6 +486,8 @@ impl VFile {
             return None;
         }
         let mut list: Vec<(String, u8)> = Vec::new();
+        // （待修改）这里先默认为长文件名，由于 addr 字段在两种目录项中的偏移量相同，所以下面可以进行正确判断
+        // 应该要做结构体映射，然后先根据固定偏移量判断长还是短再做处理
         let mut file_entry = LongDirEntry::new();
         let mut offset = 0;
         loop {
@@ -620,7 +507,6 @@ impl VFile {
             // 文件被标记删除则跳过
             if file_entry.is_deleted() {
                 offset += DIRENT_SZ;
-                //  is_long = false;
                 continue;
             }
             if file_entry.attr() != ATTR_LONG_NAME {
@@ -645,8 +531,7 @@ impl VFile {
                             &self.block_device,
                         )
                     });
-                    if read_size != DIRENT_SZ || file_entry.is_empty() {
-                    }
+                    if read_size != DIRENT_SZ || file_entry.is_empty() {}
                 }
                 list.push((name.clone(), file_entry.attr()));
             }
@@ -661,7 +546,7 @@ impl VFile {
     }
 
     pub fn write_at(&self, offset: usize, buf: &[u8]) -> usize {
-        // 先扩容
+        // 需要提前扩容
         self.increase_size((offset + buf.len()) as u32);
         self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
             short_entry.write_at(offset, buf, &self.fs, &self.fs.read().get_fat(), &self.block_device)
@@ -669,7 +554,6 @@ impl VFile {
     }
 
     pub fn clear(&self) {
-        // 难点:长名目录项也要修改
         let first_cluster: u32 = self.first_cluster();
         if self.is_dir() || first_cluster == 0 {
             return;
@@ -730,21 +614,20 @@ impl VFile {
     //     self.read_short_dirent(|sde: &ShortDirEntry| sde.get_modification_time())
     // }
 
-    /* WAITING 目前只支持删除自己*/
+    /// 删除文件
     pub fn remove(&self) -> usize {
-        //self.modify_short_dirent(|sdent: &mut ShortDirEntry|{
-        //    sdent.delete();
-        //});
         let first_cluster: u32 = self.first_cluster();
+        // 删除长文件名目录项
         for i in 0..self.long_pos_vec.len() {
             self.modify_long_dirent(i, |long_entry: &mut LongDirEntry| {
                 long_entry.delete();
             });
         }
-        //println!("[fs]: rm file");
+        // 删除短文件名目录项
         self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
             short_entry.delete();
         });
+        // 回收对应簇
         let all_clusters = self
             .fs
             .read()
@@ -752,8 +635,25 @@ impl VFile {
             .read()
             .get_all_cluster_of(first_cluster, self.block_device.clone());
         self.fs.write().dealloc_cluster(all_clusters.clone());
-        //self.fs.write().cache_write_back();
         return all_clusters.len();
+    }
+
+    pub fn stat(&self) -> (i64, i64, i64, i64, u64) {
+        self.read_short_dirent(|short_entry: &ShortDirEntry| {
+            // let (_,_,_,_,_,_,ctime) = short_entry.get_creation_time();
+            // let (_,_,_,_,_,_,atime) = short_entry.get_accessed_time();
+            // let (_,_,_,_,_,_,mtime) = short_entry.get_modification_time();
+            let mut size = short_entry.size();
+            let first_cluster = short_entry.first_cluster();
+            if self.is_dir() {
+                let fs_reader = self.fs.read();
+                let fat = fs_reader.get_fat();
+                let fat_reader = fat.read();
+                let cluster_num = fat_reader.count_claster_num(first_cluster, self.block_device.clone());
+                size = cluster_num * fs_reader.bytes_per_cluster();
+            }
+            (size as i64, 0 as i64, 0 as i64, 0 as i64, first_cluster as u64)
+        })
     }
 
     /* WAITING */
