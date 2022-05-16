@@ -46,9 +46,9 @@
 | ✔    | getpid.c  | SYSCALL_GETPID                      |
 |      | getppid.c |
 | ✔    | sleep.c   | SYSCALL_NANOSLEEP、SYSCALL_GET_TIME |
-| 🛠    | yield.c   |
+| ✔    | yield.c   |
 | ✔    | wait.c    |
-| 🛠    | waitpid.c |
+| ✔    | waitpid.c |
 
 #### FAT32相关
 | 完成 | 测试用例   | 简单描述 |
