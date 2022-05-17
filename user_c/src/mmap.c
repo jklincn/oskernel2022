@@ -16,15 +16,10 @@ void test_mmap(void) {
     char* array;
     const char* str = "  Hello, mmap successfully!";
     int fd;
-    printf("1\n");
     fd = open("test_mmap.txt", O_RDWR | O_CREATE);
-    printf("2\n");
     write(fd, str, strlen(str));
-    printf("3\n");
     fstat(fd, &kst);
-    printf("4\n");
     printf("file len: %d\n", kst.st_size);
-    printf("5\n");
     array = mmap(NULL, kst.st_size, PROT_WRITE | PROT_READ, MAP_FILE | MAP_SHARED, fd, 0);
     //printf("return array: %x\n", array);
 

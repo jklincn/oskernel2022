@@ -4,7 +4,7 @@
 #include <syscall.h>
 
 ssize_t write(int fd, const void* buf, size_t len) {
-    return syscall(SYSCALL_WRITE, fd, (int64)buf, len);
+    return syscall(SYSCALL_WRITE, fd, buf, len);
 }
 ssize_t read(int fd, void* buf, size_t len) {
     return syscall(SYSCALL_READ, fd, buf, len);
@@ -72,7 +72,7 @@ int pipe(int* fd) {
     return syscall(SYSCALL_PIPE, fd, 0);
 }
 int open(const char* name, int flags) {
-    return syscall(SYSCALL_OPEN, name, flags);
+    return syscall(SYSCALL_OPEN, AT_FDCWD, name, flags, O_RDWR);
 }
 pid_t fork(void) {
     return syscall(SYSCALL_FORK, SIGCHLD, 0);
@@ -92,6 +92,6 @@ void* mmap(void* start, size_t len, int prot, int flags, int fd, off_t off) {
 int munmap(void* start, size_t len) {
     return syscall(SYSCALL_MUNMAP, start, len);
 }
-int fstat(int fd, struct kstat* st){
+int fstat(int fd, struct kstat* st) {
     return syscall(SYSCALL_FSTAT, fd, st);
 }
