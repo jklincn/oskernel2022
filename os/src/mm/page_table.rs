@@ -49,6 +49,7 @@ bitflags! {
 /// PageTableEntry::readable(&self) -> bool
 /// PageTableEntry::writable(&self) -> bool
 /// PageTableEntry::executable(&self) -> bool
+/// PageTableEntry::set_pte_flags(&mut self, flags: usize)
 /// ```
 #[derive(Copy, Clone)]
 // 让编译器自动为 PageTableEntry 实现 Copy/Clone Trait，来让这个类型以值语义赋值/传参的时候不会发生所有权转移，而是拷贝一份新的副本
@@ -90,6 +91,10 @@ impl PageTableEntry {
     /// 验证页表项是否可执行（X标志位是否为1）
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
+    }
+    // only X+W+R can be set
+    pub fn set_pte_flags(&mut self, flags: usize) {
+        self.bits = (self.bits & !(0b1110 as usize)) | ( flags & (0b1110 as usize));
     }
 }
 
@@ -222,6 +227,30 @@ impl PageTable {
     /// 按照 satp CSR 格式要求 构造一个无符号 64 位无符号整数，使得其分页模式为 SV39 ，且将当前多级页表的根节点所在的物理页号填充进去
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
+    }
+
+    // only X+W+R can be set
+    // return -1 if find no such pte
+    pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: usize) -> isize{
+        let idxs = vpn.indexes();
+        let mut ppn = self.root_ppn;
+        for i in 0..3 {
+            let pte = &mut ppn.get_pte_array()[idxs[i]];
+            if i == 2 {
+                // if pte == None{
+                //     panic!("set_pte_flags: no such pte");
+                // }
+                // else{
+                    pte.set_pte_flags(flags);
+                // }
+                break;
+            }
+            if !pte.is_valid() {
+                return -1;
+            }
+            ppn = pte.ppn();
+        }
+        0
     }
 }
 

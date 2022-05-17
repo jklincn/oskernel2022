@@ -112,17 +112,17 @@ struct linux_dirent64 {
     char            d_name[];
 };
 
-// for mmap
-#define PROT_NONE 0
-#define PROT_READ 1
-#define PROT_WRITE 2
-#define PROT_EXEC 4
+// mmap prot
+#define PROT_NONE  0b0000
+#define PROT_READ  0b0001
+#define PROT_WRITE 0b0010
+#define PROT_EXEC  0b0100
 #define PROT_GROWSDOWN 0X01000000
-#define PROT_GROWSUP 0X02000000
-
+#define PROT_GROWSUP   0X02000000
+// mmap flags
 #define MAP_FILE 0
-#define MAP_SHARED 0x01
-#define MAP_PRIVATE 0X02
+#define MAP_SHARED  0b0001
+#define MAP_PRIVATE 0b0010
 #define MAP_FAILED ((void *) -1)
 
 #endif // __STDDEF_H__

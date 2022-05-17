@@ -9,9 +9,9 @@
 
 use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
-use crate::config::TRAP_CONTEXT;
+use crate::config::{ TRAP_CONTEXT, PAGE_SIZE, MMAP_BASE };
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{translated_refmut, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE, MmapArea, MapPermission};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -84,6 +84,8 @@ pub struct TaskControlBlockInner {
     pub base_size: usize,           
     /// 应用地址空间
     pub memory_set: MemorySet,
+    // 虚拟内存地址映射空间
+    pub mmap_area: MmapArea,
     
     // 文件
     /// 文件描述符表
@@ -166,6 +168,7 @@ impl TaskControlBlock {
                     ],
                     signals: SignalFlags::empty(),
                     current_path:String::from("/"),
+                    mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
                 })
             },
         };
@@ -279,6 +282,7 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     signals: SignalFlags::empty(),
                     current_path: parent_inner.current_path.clone(),
+                    mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
                 })
             },
         });
@@ -289,6 +293,67 @@ impl TaskControlBlock {
         trap_cx.kernel_sp = kernel_stack_top;
 
         task_control_block
+    }
+    
+    /// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
+    /// - 参数
+    ///     - `start`, `len`：映射空间起始地址及长度，起始地址必须4k对齐
+    ///     - `prot`：映射空间读写权限
+    ///         ```c
+    ///         #define PROT_NONE  0b0000
+    ///         #define PROT_READ  0b0001
+    ///         #define PROT_WRITE 0b0010
+    ///         #define PROT_EXEC  0b0100
+    ///         ```
+    ///     - `flags`：映射方式
+    ///         ```rust
+    ///         const MAP_FILE = 0;
+    ///         const MAP_SHARED= 0x01;
+    ///         const MAP_PRIVATE = 0x02;
+    ///         const MAP_FIXED = 0x10;
+    ///         const MAP_ANONYMOUS = 0x20;
+    ///         ```
+    ///     - `fd`：映射文件描述符
+    ///     - `off`: 偏移量
+    /// - 返回值：映射到的内存空间起始地址(虚拟地址)
+    pub fn mmap(&self, start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> usize {        
+        if start % PAGE_SIZE != 0{
+            panic!("mmap: start_va not aligned");
+        }
+
+        let mut inner = self.inner_exclusive_access();
+        let fd_table = inner.fd_table.clone();
+        let token = inner.get_user_token();
+        let mut va_top = inner.mmap_area.get_mmap_top();
+        let mut end_va = VirtAddr::from(va_top.0 + len);
+
+        // "prot<<1" is equal to  meaning of "MapPermission"
+        let map_flags = (((prot & 0b111)<<1) + (1<<4))  as u8; // "1<<4" means user
+    
+        let mut startvpn = start/PAGE_SIZE;
+        
+        if start != 0 { // "Start" va Already mapped
+            while startvpn < (start + len) / PAGE_SIZE {
+                if inner.memory_set.set_pte_flags(startvpn.into(), map_flags as usize) == -1{
+                    panic!("mmap: start_va not mmaped");
+                }
+                startvpn +=1;
+            }
+            return start;
+        }
+        else{ // "Start" va not mapped
+            //inner.memory_set.insert_kernel_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
+            inner.memory_set.insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
+            //inner.mmap_area.push_kernel(va_top.0, len, prot, flags, fd, off, fd_table, token);
+            inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
+            va_top.0
+        }
+    }
+
+    pub fn munmap(&self, start: usize, len: usize) -> isize {
+        let mut inner = self.inner_exclusive_access();
+        inner.memory_set.remove_area_with_start_vpn(VirtAddr::from(start).into());
+        inner.mmap_area.remove(start, len)
     }
     
     pub fn getpid(&self) -> usize {

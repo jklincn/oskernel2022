@@ -92,3 +92,6 @@ void* mmap(void* start, size_t len, int prot, int flags, int fd, off_t off) {
 int munmap(void* start, size_t len) {
     return syscall(SYSCALL_MUNMAP, start, len);
 }
+int fstat(int fd, struct kstat* st){
+    return syscall(SYSCALL_FSTAT, fd, st);
+}

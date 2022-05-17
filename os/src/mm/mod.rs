@@ -11,6 +11,7 @@ mod frame_allocator;// 物理页帧管理器
 mod heap_allocator; // 堆空间内存动态分配模块
 mod memory_set;     // 地址空间模块
 mod page_table;     // 页表
+mod vma;            // 虚拟内存地址映射空间
 
 use address::VPNRange;
 pub use address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
@@ -22,6 +23,7 @@ pub use page_table::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, PageTable,
     PageTableEntry, UserBuffer, UserBufferIterator,
 };
+pub use vma::*;
 
 /// 内存管理子系统的初始化
 pub fn init() {

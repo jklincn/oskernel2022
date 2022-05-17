@@ -63,6 +63,9 @@ pub struct MemorySet {
     page_table: PageTable,
     /// 挂着对应逻辑段中的数据所在的物理页帧
     areas: Vec<MapArea>,
+    chunks: ChunkArea,
+    stack_chunks: ChunkArea,
+    mmap_chunks: Vec<ChunkArea>,
 }
 
 impl MemorySet {
@@ -71,6 +74,11 @@ impl MemorySet {
         Self {
             page_table: PageTable::new(),
             areas: Vec::new(),
+            chunks: ChunkArea::new(MapType::Framed,
+                                MapPermission::R | MapPermission::W | MapPermission::U),
+            mmap_chunks: Vec::new(),
+            stack_chunks: ChunkArea::new(MapType::Framed,
+                                MapPermission::R | MapPermission::W | MapPermission::U),
         }
     }
 
@@ -317,6 +325,13 @@ impl MemorySet {
         self.page_table.translate(vpn)
     }
 
+    // WARNING: This function causes inconsistency between pte flags and 
+    //          map_area flags.
+    // return -1 if not found, 0 if found
+    pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: usize) -> isize{
+        self.page_table.set_pte_flags(vpn, flags)
+    }
+
     /// ### 回收应用地址空间
     /// 将地址空间中的逻辑段列表 areas 清空（即执行 Vec 向量清空），
     /// 这将导致应用地址空间被回收（即进程的数据和代码对应的物理页帧都被回收），
@@ -325,6 +340,109 @@ impl MemorySet {
         //*self = Self::new_bare();
         self.areas.clear();
     }
+
+    pub fn insert_mmap_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
+        let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission,);
+        new_chunk_area.set_mmap_range(start_va, end_va);
+        self.mmap_chunks.push(new_chunk_area);
+
+        //self.push_mmap(MapArea::new(
+        //    start_va,
+        //    (end_va.0).into(),  // bin lazy (X
+        //    MapType::Framed,
+        //    permission,
+        //), None);
+    }
+}
+
+pub struct ChunkArea {
+    vpn_table: Vec<VirtPageNum>,
+    data_frames: BTreeMap<VirtPageNum, FrameTracker>,
+    map_type: MapType,
+    map_perm: MapPermission,
+    mmap_start: VirtAddr,
+    mmap_end: VirtAddr,
+}
+
+impl ChunkArea {
+    pub fn new(
+        map_type: MapType,
+        map_perm: MapPermission
+    ) -> Self {
+        Self {
+            vpn_table: Vec::new(),
+            data_frames: BTreeMap::new(),
+            map_type,
+            map_perm,
+            mmap_start: 0.into(),
+            mmap_end: 0.into(),
+        }
+    }
+
+    pub fn set_mmap_range(&mut self, start: VirtAddr, end: VirtAddr) {
+        self.mmap_start = start;
+        self.mmap_end = end;
+    }
+
+    pub fn push_vpn(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
+        self.vpn_table.push(vpn);
+        self.map_one(page_table, vpn);
+    }
+
+    pub fn from_another(another: &ChunkArea) -> Self {
+        Self {
+            vpn_table: another.vpn_table.clone(),
+            data_frames: BTreeMap::new(),
+            map_type: another.map_type,
+            map_perm: another.map_perm,
+            mmap_start: another.mmap_start,
+            mmap_end: another.mmap_end,
+        }
+    }
+
+    // Alloc and map one page
+    pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+        let ppn: PhysPageNum;
+        match self.map_type {
+            MapType::Identical => {
+                ppn = PhysPageNum(vpn.0);
+            }
+            MapType::Framed => {
+                if let Some(frame) = frame_alloc(){
+                    ppn = frame.ppn;
+                    self.data_frames.insert(vpn, frame);
+                }
+                else{
+                    panic!("No more memory!");
+                }
+            }
+        }
+        let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+        // [WARNING]:因为没有map，所以不能使用
+        page_table.map(vpn, ppn, pte_flags);
+    }
+    pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+        match self.map_type {
+            MapType::Framed => {
+                self.data_frames.remove(&vpn);
+            }
+            _ => {}
+        }
+        page_table.unmap(vpn);
+    }
+    
+    // Alloc and map all pages
+    // pub fn map(&mut self, page_table: &mut PageTable) {
+    //     for vpn in self.vpn_table {
+    //         self.map_one(page_table, vpn);
+    //     }
+    // }
+    // pub fn unmap(&mut self, page_table: &mut PageTable) {
+    //     for vpn in self.vpn_table {
+    //         self.unmap_one(page_table, vpn);
+    //     }
+    // }
+
 }
 
 /// ### 逻辑段

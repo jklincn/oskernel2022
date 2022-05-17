@@ -23,6 +23,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
+use crate::config::PAGE_SIZE;
 
 pub use crate::task::{Utsname, UTSNAME, CloneFlags};
 
@@ -259,4 +260,46 @@ pub fn sys_uname(buf: *const u8) -> isize {
         domainname: uname.domainname,
     };
     0
+}
+
+// not support full flags: MAP_FIXED
+// WARNING: if mmap len is 0, we will alloc one page for it, which actually should be forbidden.
+
+/// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
+/// - 参数
+///     - `start`, `len`：映射空间起始地址及长度，起始地址必须4k对齐
+///     - `prot`：映射空间读写权限
+///         ```c
+///         #define PROT_NONE  0b0000
+///         #define PROT_READ  0b0001
+///         #define PROT_WRITE 0b0010
+///         #define PROT_EXEC  0b0100
+///         ```
+///     - `flags`：映射方式
+///         ```rust
+///         const MAP_FILE = 0;
+///         const MAP_SHARED= 0x01;
+///         const MAP_PRIVATE = 0x02;
+///         const MAP_FIXED = 0x10;
+///         const MAP_ANONYMOUS = 0x20;
+///         ```
+///     - `fd`：映射文件描述符
+///     - `off`: 偏移量
+/// - 返回值：映射到的内存空间起始地址(虚拟地址)
+/// - syscall_id:222
+pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
+    let task = current_task().unwrap();
+    let mut adjust_len = len;
+    if adjust_len == 0{
+        adjust_len = PAGE_SIZE;
+    }
+    let result_addr = task.mmap(start, adjust_len, prot, flags, fd, off);
+    return result_addr as isize;
+}
+
+//use crate::mm::HEAP_ALLOCATOR;
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    let task = current_task().unwrap();
+    let ret = task.munmap(start, len);
+    ret
 }

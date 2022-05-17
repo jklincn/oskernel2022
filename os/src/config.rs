@@ -19,3 +19,6 @@ pub const TRAMPOLINE:           usize = usize::MAX - PAGE_SIZE + 1;
 pub const TRAP_CONTEXT:         usize = TRAMPOLINE - PAGE_SIZE;
 
 pub use crate::board::{CLOCK_FREQ, MMIO};
+
+pub const KMMAP_BASE: usize = 0x90000000;
+pub const MMAP_BASE: usize = 0x60000000;
