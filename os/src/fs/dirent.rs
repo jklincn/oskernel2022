@@ -1,12 +1,13 @@
-pub const NAME_LIMIT:usize = 128;
+pub const NAME_LIMIT:usize = 256;
 
+/// 存储目录中的文件信息
 #[repr(C)]
 pub struct Dirent {
-    d_ino: usize,
-    d_off: isize,
-    d_reclen: u16,
-    d_type: u8,
-    d_name: [u8;NAME_LIMIT],
+    d_ino: usize,   // 索引节点号
+    d_off: isize,   // 从 0 开始到下一个 dirent 的偏移
+    d_reclen: u16,  // 当前 dirent 的长度
+    d_type: u8,   // 文件类型
+    d_name: [u8;NAME_LIMIT], // 文件名
 }
 
 impl Dirent{

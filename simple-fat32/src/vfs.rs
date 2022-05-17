@@ -1,5 +1,5 @@
 use super::{fat32_manager::*, get_block_cache, layout::*, BlockDevice};
-use alloc::string::{self, String};
+use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::RwLock;
@@ -14,12 +14,6 @@ pub struct VFile {
     fs: Arc<RwLock<FAT32Manager>>,
     block_device: Arc<dyn BlockDevice>,
 }
-
-// QUES 文件的复制、移动、删除(尤其目录)的加锁方式需要考证。。。
-// 理论上，操作的时候通过cache锁short_dirent就有很好的效果
-
-// 以数组的形式读目录项 QUES:是否有更好的？
-// type DirEntryArray = [ShortDirEntry; 16]; // 一般是16...
 
 impl VFile {
     pub fn new(
@@ -65,6 +59,7 @@ impl VFile {
             false
         }
     }
+
 
     fn read_short_dirent<V>(&self, f: impl FnOnce(&ShortDirEntry) -> V) -> V {
         if self.short_sector == 0 {
@@ -279,7 +274,7 @@ impl VFile {
         Some(Arc::new(current_vfile))
     }
 
-    // 对文件进行扩容，new_size 是文件当前偏移量加 buf 长度
+    /// 对文件进行扩容，new_size 是文件当前偏移量加 buf 长度
     fn increase_size(&self, new_size: u32) {
         let first_cluster = self.first_cluster();
         let old_size = self.file_size();
@@ -328,7 +323,7 @@ impl VFile {
         }
     }
 
-    /* 在当前目录下创建文件 */
+    /// 在当前目录下创建文件
     pub fn create(&self, name: &str, attribute: u8) -> Option<Arc<VFile>> {
         // 检测同名文件
         assert!(self.is_dir());
@@ -381,7 +376,6 @@ impl VFile {
             tmp_short_ent.initialize(&_name, &_ext, attribute);
             drop(manager_reader);
         }
-
         // 写短目录项（长文件名也是有短文件名目录项的）
         assert_eq!(self.write_at(dirent_offset, tmp_short_ent.as_bytes_mut()), DIRENT_SZ);
         // 这边的 if let 算是一个验证
@@ -406,81 +400,8 @@ impl VFile {
         }
     }
 
-    /* 获取目录中offset处目录项的信息 TODO:之后考虑和stat复用
-     * 返回<name, offset, firstcluster,attributes>
-     */
-    pub fn dirent_info(&self, offset: usize) -> Option<(String, u32, u32, u8)> {
-        if !self.is_dir() {
-            return None;
-        }
-        let mut long_entry = LongDirEntry::new();
-        let mut offset = offset;
-        let mut name = String::new();
-        let mut is_long = false;
-        //let mut order:u8 = 0;
-        loop {
-            let read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
-                curr_ent.read_at(
-                    offset,
-                    long_entry.as_bytes_mut(),
-                    &self.fs,
-                    &self.fs.read().get_fat(),
-                    &self.block_device,
-                )
-            });
-            if read_size != DIRENT_SZ || long_entry.is_empty() {
-                return None;
-            }
-            if long_entry.is_deleted() {
-                //if meet delete ent, search should be restart
-                offset += DIRENT_SZ;
-                name.clear();
-                is_long = false;
-                continue;
-            }
-            // 名称拼接
-            if long_entry.attr() != ATTR_LONG_NAME {
-                let (_, se_array, _) = unsafe { long_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
-                let short_entry = se_array[0];
-                if !is_long {
-                    name = short_entry.get_name_lowercase();
-                }
-                let attribute = short_entry.attr();
-                let first_cluster = short_entry.first_cluster();
-                offset += DIRENT_SZ;
-                return Some((name, offset as u32, first_cluster, attribute));
-            } else {
-                is_long = true;
-                //order += 1;
-                name.insert_str(0, long_entry.get_name_format().as_str());
-            }
-            offset += DIRENT_SZ;
-        }
-    }
-
-    /* 获取目录中offset处目录项的信息 TODO:之后考虑和stat复用
-     * 返回<size, atime, mtime, ctime>
-     */
-    // pub fn stat(&self) -> (i64, i64, i64, i64, u64) {
-    //     self.read_short_dirent(|sde: &ShortDirEntry| {
-    //         let (_, _, _, _, _, _, ctime) = sde.get_creation_time();
-    //         let (_, _, _, _, _, _, atime) = sde.get_accessed_time();
-    //         let (_, _, _, _, _, _, mtime) = sde.get_modification_time();
-    //         let mut size = sde.file_size();
-    //         let first_clu = sde.first_cluster();
-    //         if self.is_dir() {
-    //             let fs_reader = self.fs.read();
-    //             let fat = fs_reader.get_fat();
-    //             let fat_reader = fat.read();
-    //             let cluster_num = fat_reader.count_claster_num(first_clu, self.block_device.clone());
-    //             size = cluster_num * fs_reader.bytes_per_cluster();
-    //             //println!("{} {}",cluster_num, fs_reader.bytes_per_cluster());
-    //         }
-    //         (size as i64, atime as i64, mtime as i64, ctime as i64, first_clu as u64)
-    //     })
-    // }
-
     // ls，返回二元组，第一个是文件名，第二个是文件属性（文件或者目录）
+    // todo：使用 dirent_info 方法
     pub fn ls(&self) -> Option<Vec<(String, u8)>> {
         if !self.is_dir() {
             return None;
@@ -531,7 +452,9 @@ impl VFile {
                             &self.block_device,
                         )
                     });
-                    if read_size != DIRENT_SZ || file_entry.is_empty() {}
+                    if read_size != DIRENT_SZ || file_entry.is_empty() {
+                        panic!("ls read long name entry error!");
+                    }
                 }
                 list.push((name.clone(), file_entry.attr()));
             }
@@ -602,18 +525,6 @@ impl VFile {
         }
     }
 
-    // pub fn creation_time(&self) -> (u32, u32, u32, u32, u32, u32, u64) {
-    //     self.read_short_dirent(|sde: &ShortDirEntry| sde.get_creation_time())
-    // }
-
-    // pub fn accessed_time(&self) -> (u32, u32, u32, u32, u32, u32, u64) {
-    //     self.read_short_dirent(|sde: &ShortDirEntry| sde.get_accessed_time())
-    // }
-
-    // pub fn modification_time(&self) -> (u32, u32, u32, u32, u32, u32, u64) {
-    //     self.read_short_dirent(|sde: &ShortDirEntry| sde.get_modification_time())
-    // }
-
     /// 删除文件
     pub fn remove(&self) -> usize {
         let first_cluster: u32 = self.first_cluster();
@@ -638,37 +549,79 @@ impl VFile {
         return all_clusters.len();
     }
 
-    pub fn stat(&self) -> (i64, i64, i64, i64, u64) {
+    /// 返回：(st_size, st_blksize, st_blocks)
+    /// todo：时间等
+    pub fn stat(&self) -> (i64, i64, u64) {
         self.read_short_dirent(|short_entry: &ShortDirEntry| {
-            // let (_,_,_,_,_,_,ctime) = short_entry.get_creation_time();
-            // let (_,_,_,_,_,_,atime) = short_entry.get_accessed_time();
-            // let (_,_,_,_,_,_,mtime) = short_entry.get_modification_time();
-            let mut size = short_entry.size();
             let first_cluster = short_entry.first_cluster();
+            let mut file_size = short_entry.size();
+            let fs_reader = self.fs.read();
+            let fat = fs_reader.get_fat();
+            let fat_reader = fat.read();
+            let cluster_num = fat_reader.count_claster_num(first_cluster, self.block_device.clone());
+            let blocks = cluster_num * fs_reader.sectors_per_cluster();
             if self.is_dir() {
-                let fs_reader = self.fs.read();
-                let fat = fs_reader.get_fat();
-                let fat_reader = fat.read();
-                let cluster_num = fat_reader.count_claster_num(first_cluster, self.block_device.clone());
-                size = cluster_num * fs_reader.bytes_per_cluster();
+                // 目录文件的 dir_file_size 字段为 0
+                file_size = cluster_num * fs_reader.bytes_per_cluster();
             }
-            (size as i64, 0 as i64, 0 as i64, 0 as i64, first_cluster as u64)
+            (file_size as i64, 512 as i64, blocks as u64)
         })
     }
 
-    /* WAITING */
-    #[allow(unused)]
-    fn remove_file() {}
-
-    /* WAITING */
-    #[allow(unused)]
-    fn remove_dir() {}
+    // 目前返回：(d_name, d_off, d_type)
+    pub fn dirent_info(&self, offset: usize) -> Option<(String, u32, u8)> {
+        if !self.is_dir() {
+            return None;
+        }
+        let mut file_entry = LongDirEntry::new();
+        let mut offset = offset;
+        loop {
+            let read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
+                curr_ent.read_at(
+                    offset,
+                    file_entry.as_bytes_mut(),
+                    &self.fs,
+                    &self.fs.read().get_fat(),
+                    &self.block_device,
+                )
+            });
+            // 读取完了
+            if read_size != DIRENT_SZ || file_entry.is_empty() {
+                return None;
+            }
+            // 文件被标记删除则跳过
+            if file_entry.is_deleted() {
+                offset += DIRENT_SZ;
+                continue;
+            }
+            if file_entry.attr() != ATTR_LONG_NAME {
+                // 短文件名
+                let (_, se_array, _) = unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
+                let short_entry = se_array[0];
+                return Some((short_entry.get_name_lowercase(), offset as u32, short_entry.attr()));
+            } else {
+                // 长文件名
+                // 如果是长文件名目录项，则必是长文件名最后的那一段
+                let mut name = String::new();
+                let order = file_entry.order() ^ 0x40;
+                for _ in 0..order {
+                    name.insert_str(0, file_entry.get_name_format().as_str());
+                    offset += DIRENT_SZ;
+                    let read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
+                        curr_ent.read_at(
+                            offset,
+                            file_entry.as_bytes_mut(),
+                            &self.fs,
+                            &self.fs.read().get_fat(),
+                            &self.block_device,
+                        )
+                    });
+                    if read_size != DIRENT_SZ || file_entry.is_empty() {
+                        panic!("dirent_info read long name entry error!");
+                    }
+                }
+                return Some((name.clone(), offset as u32, file_entry.attr()));
+            }
+        }
+    }
 }
-
-/* WAITING */
-#[allow(unused)]
-pub fn fcopy() {}
-
-/* WAITING */
-#[allow(unused)]
-pub fn fmove() {}

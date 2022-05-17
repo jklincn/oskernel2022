@@ -48,13 +48,13 @@ impl File for Stdin {
         panic!("Cannot write to stdin!");
     }
 
+    #[allow(unused_variables)]
     fn get_fstat(&self, kstat:&mut Kstat){
-        _ = kstat;
         panic!("Stdin not implement get_fstat");
     }
 
+    #[allow(unused_variables)]
     fn get_dirent(&self, dirent: &mut Dirent) -> isize{
-        _ = dirent;
         panic!("Stdin not implement get_dirent");
     }
 
@@ -80,13 +80,13 @@ impl File for Stdout {
         user_buf.len()
     }
 
+    #[allow(unused_variables)]
     fn get_fstat(&self, kstat:&mut Kstat){
-        _ = kstat;
         panic!("Stdout not implement get_fstat");
     }
     
+    #[allow(unused_variables)]
     fn get_dirent(&self, dirent: &mut Dirent) -> isize{
-        _ = dirent;
         panic!("Stdout not implement get_dirent");
     }
 

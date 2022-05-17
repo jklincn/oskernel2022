@@ -55,54 +55,6 @@ impl OSInode {
         name
     }
 
-    /* this func will not influence the file offset
-     * @parm: if offset == -1, file offset will be used
-     */
-    pub fn read_vec(&self, offset: isize, len: usize) -> Vec<u8> {
-        let mut inner = self.inner.lock();
-        let mut len = len;
-        let ori_off = inner.offset;
-        if offset >= 0 {
-            inner.offset = offset as usize;
-        }
-        let mut buffer = [0u8; 512];
-        let mut v: Vec<u8> = Vec::new();
-        loop {
-            let rlen = inner.inode.read_at(inner.offset, &mut buffer);
-            if rlen == 0 {
-                break;
-            }
-            inner.offset += rlen;
-            v.extend_from_slice(&buffer[..rlen.min(len)]);
-            if len > rlen {
-                len -= rlen;
-            } else {
-                break;
-            }
-        }
-        if offset >= 0 {
-            inner.offset = ori_off;
-        }
-        v
-    }
-
-    pub fn write_all(&self, str_vec: &Vec<u8>) -> usize {
-        let mut inner = self.inner.lock();
-        let mut remain = str_vec.len();
-        let mut base = 0;
-        loop {
-            let len = remain.min(512);
-            inner.inode.write_at(inner.offset, &str_vec.as_slice()[base..base + len]);
-            inner.offset += len;
-            base += len;
-            remain -= len;
-            if remain == 0 {
-                break;
-            }
-        }
-        return base;
-    }
-
     pub fn delete(&self) -> usize {
         let inner = self.inner.lock();
         inner.inode.remove()
@@ -199,26 +151,6 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
     }
 }
 
-// pub fn ch_dir(work_path: &str, path: &str) -> isize {
-//     // 切换工作路径
-//     // 切换成功，返回inode_id，否则返回-1
-//     let cur_inode = {
-//         if work_path == "/" || (path.len() > 0 && path.chars().nth(0).unwrap() == '/') {
-//             ROOT_INODE.clone()
-//         } else {
-//             let wpath: Vec<&str> = work_path.split('/').collect();
-//             ROOT_INODE.find_vfile_bypath(wpath).unwrap()
-//         }
-//     };
-//     let pathv: Vec<&str> = path.split('/').collect();
-//     if let Some(tar_dir) = cur_inode.find_vfile_bypath(pathv) {
-//         // ! 当inode_id > 2^16 时，有溢出的可能（目前不会发生。。
-//         0
-//     } else {
-//         -1
-//     }
-// }
-
 pub fn chdir(work_path: &str, path: &str) -> Option<String> {
     let current_inode = {
         if path.chars().nth(0).unwrap() == '/' {
@@ -232,7 +164,7 @@ pub fn chdir(work_path: &str, path: &str) -> Option<String> {
     };
     let pathv: Vec<&str> = path.split('/').collect();
     if let Some(_) = current_inode.find_vfile_bypath(pathv) {
-        let new_current_path = String::from_str("/").unwrap()+&String::from_str(path).unwrap();
+        let new_current_path = String::from_str("/").unwrap() + &String::from_str(path).unwrap();
         if current_inode.name() == "/" {
             Some(new_current_path)
         } else {
@@ -284,14 +216,17 @@ impl File for OSInode {
         let inner = self.inner.lock();
         let vfile = inner.inode.clone();
         // todo
-        let (_size, _atimee, _mtime, _ctime, _ino) = vfile.stat();
-        kstat.init();
+        let (st_size,st_blksize,st_blocks) = vfile.stat();
+        kstat.init(st_size,st_blksize,st_blocks);
     }
 
     fn get_dirent(&self, dirent: &mut Dirent) -> isize {
+        if !self.is_dir() {
+            return -1;
+        }
         let mut inner = self.inner.lock();
         let offset = inner.offset as u32;
-        if let Some((name, off, _, _)) = inner.inode.dirent_info(offset as usize) {
+        if let Some((name, off, _)) = inner.inode.dirent_info(offset as usize) {
             dirent.init(name.as_str());
             inner.offset = off as usize;
             let len = (name.len() + 8 * 4) as isize;

@@ -10,7 +10,7 @@ mod stat;
 mod dirent;
 
 use crate::mm::UserBuffer;
-use alloc::{sync::Arc, string::String};
+use alloc::string::String;
 
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;

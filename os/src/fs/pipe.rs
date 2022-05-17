@@ -162,14 +162,11 @@ impl File for Pipe {
         loop {
             let mut ring_buffer = self.buffer.exclusive_access();
             let loop_read = ring_buffer.available_read();
-            //println!("loop_read:{}", loop_read);
             if loop_read == 0 {
-               // println!("write ends counts:{}", ring_buffer.write_ends_count());
                 if ring_buffer.all_write_ends_closed() {
                     return read_size;
                 }
                 drop(ring_buffer);
-                //println!("continue");
                 suspend_current_and_run_next();
                 continue;
             }
@@ -210,13 +207,13 @@ impl File for Pipe {
         }
     }
 
+    #[allow(unused_variables)]
     fn get_fstat(&self, kstat:&mut Kstat){
-        _ = kstat;
         panic!("pipe not implement get_fstat");
     }
-
+    
+    #[allow(unused_variables)]
     fn get_dirent(&self, dirent: &mut Dirent) -> isize{
-        _ = dirent;
         panic!("pipe not implement get_dirent");
     }
 

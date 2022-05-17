@@ -287,44 +287,6 @@ impl ShortDirEntry {
     pub fn size(&self) -> u32 {
         self.dir_file_size
     }
-    // pub fn get_creation_time(&self) -> (u32, u32, u32, u32, u32, u32, u64) {
-    //     // year-month-day-Hour-min-sec-long_sec
-    //     let year: u32 = ((self.dir_crt_date & 0xFE00) >> 9) as u32 + 1980;
-    //     let month: u32 = ((self.dir_crt_date & 0x01E0) >> 5) as u32;
-    //     let day: u32 = (self.dir_crt_date & 0x001F) as u32;
-    //     let hour: u32 = ((self.dir_crt_time & 0xF800) >> 11) as u32;
-    //     let min: u32 = ((self.dir_crt_time & 0x07E0) >> 5) as u32;
-    //     let sec: u32 = ((self.dir_crt_time & 0x001F) << 1) as u32; // 秒数需要*2
-    //     let long_sec: u64 =
-    //         ((((year - 1970) * 365 + month * 30 + day) * 24 + hour) * 3600 + min * 60 + sec) as u64;
-    //     (year, month, day, hour, min, sec, long_sec)
-    // }
-
-    // pub fn get_modification_time(&self) -> (u32, u32, u32, u32, u32, u32, u64) {
-    //     // year-month-day-Hour-min-sec
-    //     let year: u32 = ((self.dir_wrt_date & 0xFE00) >> 9) as u32 + 1980;
-    //     let month: u32 = ((self.dir_wrt_date & 0x01E0) >> 5) as u32;
-    //     let day: u32 = (self.dir_wrt_date & 0x001F) as u32;
-    //     let hour: u32 = ((self.dir_wrt_time & 0xF800) >> 11) as u32;
-    //     let min: u32 = ((self.dir_wrt_time & 0x07E0) >> 5) as u32;
-    //     let sec: u32 = ((self.dir_wrt_time & 0x001F) << 1) as u32; // 秒数需要*2
-    //     let long_sec: u64 =
-    //         ((((year - 1970) * 365 + month * 30 + day) * 24 + hour) * 3600 + min * 60 + sec) as u64;
-    //     (year, month, day, hour, min, sec, long_sec)
-    // }
-
-    // pub fn get_accessed_time(&self) -> (u32, u32, u32, u32, u32, u32, u64) {
-    //     // year-month-day-Hour-min-sec
-    //     let year: u32 = ((self.dir_lst_acc_date & 0xFE00) >> 9) as u32 + 1980;
-    //     let month: u32 = ((self.dir_lst_acc_date & 0x01E0) >> 5) as u32;
-    //     let day: u32 = (self.dir_lst_acc_date & 0x001F) as u32;
-    //     let hour: u32 = 0;
-    //     let min: u32 = 0;
-    //     let sec: u32 = 0; // 没有相关信息，默认0
-    //     let long_sec: u64 =
-    //         ((((year - 1970) * 365 + month * 30 + day) * 24 + hour) * 3600 + min * 60 + sec) as u64;
-    //     (year, month, day, hour, min, sec, long_sec)
-    // }
 
     /// 获取文件起始簇号
     pub fn first_cluster(&self) -> u32 {

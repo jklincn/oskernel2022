@@ -1,5 +1,3 @@
-use core::mem::size_of;
-
 /// # 文件读写模块
 /// `os/src/syscall/fs.rs`
 /// ## 实现功能
@@ -10,10 +8,11 @@ use core::mem::size_of;
 /// pub fn sys_close(fd: usize) -> isize
 /// ```
 //
+use core::mem::size_of;
 use crate::fs::{chdir, make_pipe, open, Dirent, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::sync::Arc;
 
 const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
@@ -141,6 +140,10 @@ pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
     let mut inner = task.inner_exclusive_access();
+
+    // todo 
+    _ = flag;
+
     let (pipe_read, pipe_write) = make_pipe();
     let read_fd = inner.alloc_fd();
     inner.fd_table[read_fd] = Some(pipe_read);
@@ -259,17 +262,18 @@ pub fn sys_getcwd(buf: *mut u8, len: usize) -> isize {
     }
 }
 
-pub fn sys_mount(p_special: *const u8, p_dir: *const u8, p_fstype: *const u8, flags: usize, data: *const u8) -> isize {
-    // TODO
+pub fn sys_mount(special: *const u8, dir: *const u8, fstype: *const u8, flags: usize, data: *const u8) -> isize {
     let token = current_user_token();
-    let special = translated_str(token, p_special);
-    let dir = translated_str(token, p_dir);
-    let fstype = translated_str(token, p_fstype);
+    let special = translated_str(token, special);
+    let dir = translated_str(token, dir);
+    let fstype = translated_str(token, fstype);
+
+    _ = data;
+
     MNT_TABLE.lock().mount(special, dir, fstype, flags as u32)
 }
 
 pub fn sys_umount(p_special: *const u8, flags: usize) -> isize {
-    // TODO
     let token = current_user_token();
     let special = translated_str(token, p_special);
     MNT_TABLE.lock().umount(special, flags as u32)
@@ -296,51 +300,6 @@ pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
     }
 }
 
-// pub fn sys_chdir(path: *const u8) -> isize {
-//     let token = current_user_token();
-//     let task = current_task().unwrap();
-//     let mut inner = task.inner_exclusive_access();
-//     let path = translated_str(token, path);
-
-
-//     let mut work_path = inner.current_path.clone();
-
-//     let new_ino_id = ch_dir(work_path.as_str(), path.as_str()) as isize;
-//     if new_ino_id >= 0 {
-//         if path.chars().nth(0).unwrap() == '/' {
-//             // 绝对路径
-//             inner.current_path = path.clone();
-//         } else {
-//             work_path.push('/');
-//             work_path.push_str(path.as_str());
-//             let path_vec: Vec<&str> = work_path.as_str().split('/').collect();
-//             let mut new_pathv: Vec<&str> = Vec::new();
-//             for i in 0..path_vec.len() {
-//                 if path_vec[i] == "" || path_vec[i] == "." {
-//                     continue;
-//                 }
-//                 if path_vec[i] == ".." {
-//                     new_pathv.pop();
-//                     continue;
-//                 }
-//                 new_pathv.push(path_vec[i]);
-//             }
-//             let mut new_wpath = String::new();
-//             for i in 0..new_pathv.len() {
-//                 new_wpath.push('/');
-//                 new_wpath.push_str(new_pathv[i]);
-//             }
-//             if new_pathv.len() == 0 {
-//                 new_wpath.push('/');
-//             }
-//             inner.current_path = new_wpath.clone();
-//         }
-//         new_ino_id
-//     } else {
-//         new_ino_id
-//     }
-// }
-
 pub fn sys_chdir(path: *const u8) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
@@ -356,13 +315,12 @@ pub fn sys_chdir(path: *const u8) -> isize {
     
 }
 
-
 pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let buf_vec = translated_byte_buffer(token, buf, size_of::<Kstat>());
     let inner = task.inner_exclusive_access();
-    // 使用UserBuffer结构，以便于跨页读写
+
     let mut userbuf = UserBuffer::new(buf_vec);
     let mut kstat = Kstat::new();
 
@@ -373,40 +331,43 @@ pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
     if let Some(file) = &inner.fd_table[dirfd] {
         file.get_fstat(&mut kstat);
         userbuf.write(kstat.as_bytes());
-        return 0;
+        0
     } else {
-        return -1;
+        -1
     }
 }
 
 pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
-    let buf_vec = translated_byte_buffer(token, buf, len);
     let inner = task.inner_exclusive_access();
-    let dent_len = size_of::<Dirent>();
-    let mut total_len: usize = 0;
-    // 使用UserBuffer结构，以便于跨页读写
-    let mut userbuf = UserBuffer::new(buf_vec);
-    let mut dirent = Dirent::new();
+
     let dirfd = fd as usize;
     if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
         return -1;
     }
+
+    let buf_vec = translated_byte_buffer(token, buf, len);
+    let mut userbuf = UserBuffer::new(buf_vec);
+    let mut dirent = Dirent::new();
+    let dent_len = size_of::<Dirent>();
+    let mut total_len: usize = 0;
     if let Some(file) = &inner.fd_table[dirfd] {
         loop {
             if total_len + dent_len > len {
                 break;
             }
             if file.get_dirent(&mut dirent) > 0 {
+                // 写入 userbuf
                 userbuf.write_at(total_len, dirent.as_bytes());
+                // 更新长度
                 total_len += dent_len;
             } else {
                 break;
             }
         }
-        return total_len as isize; //warning
+        total_len as isize
     } else {
-        return -1;
+        -1
     }
 }
