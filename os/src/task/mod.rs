@@ -20,7 +20,7 @@ mod switch; // 任务上下文切换模块
 mod task;   // 进程控制块
 mod info;   // 系统信息模块
 
-use crate::fs::{open, OpenFlags};
+// use crate::fs::{open, OpenFlags};
 use alloc::sync::Arc;
 use lazy_static::*;
 use manager::fetch_task;
@@ -29,7 +29,7 @@ use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
-pub use info::{Utsname, UTSNAME};
+pub use info::{Utsname, UTSNAME, CloneFlags};
 pub use manager::{add_task, pid2task};
 pub use pid::{pid_alloc, KernelStack, PidHandle};
 pub use processor::{

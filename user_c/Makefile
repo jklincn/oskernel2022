@@ -1,5 +1,6 @@
 ARCH := riscv64
 
+s_DIR := ./src/*.s
 LIB_DIR := ./lib/*.c
 APP_DIR := ./src
 TARGET_DIR := ./bin
@@ -16,7 +17,7 @@ bin:
 	@mkdir bin
 
 build: bin
-	@$(foreach i_src, $(APPS), $(CC) $(i_src) $(LIB_DIR) -T $(LINKER_PATH) -o $(patsubst $(APP_DIR)/%.c,$(TARGET_DIR)/%,$(i_src));)
+	@$(foreach i_src, $(APPS), $(CC) $(i_src) $(LIB_DIR) $(s_DIR) -T $(LINKER_PATH) -o $(patsubst $(APP_DIR)/%.c,$(TARGET_DIR)/%,$(i_src));)
 
 build_initproc_submit: bin
 	$(CC) ./src/usertests_submit.c $(LIB_DIR) -T $(LINKER_PATH) -o ./bin/usertests

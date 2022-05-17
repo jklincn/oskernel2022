@@ -64,18 +64,32 @@ pub struct TaskControlBlock {
 /// TaskControlBlockInner::is_zombie(&self) -> bool
 /// ```
 pub struct TaskControlBlockInner {
+    // 进程
     /// 应用地址空间中的 Trap 上下文所在的物理页帧的物理页号
     pub trap_cx_ppn: PhysPageNum,
+    /// 任务上下文
+    pub task_cx: TaskContext,
+    /// 维护当前进程的执行状态
+    pub task_status: TaskStatus,
+    /// 指向当前进程的父进程（如果存在的话）
+    pub parent: Option<Weak<TaskControlBlock>>, 
+    /// 当前进程的所有子进程的任务控制块向量
+    pub children: Vec<Arc<TaskControlBlock>>,   
+    /// 退出码
+    pub exit_code: i32,  
+
+    // 内存
     /// 应用数据仅有可能出现在应用地址空间低于 base_size 字节的区域中。
     /// 借助它我们可以清楚的知道应用有多少数据驻留在内存中
-    pub base_size: usize,   /// 任务上下文
-    pub task_cx: TaskContext,       /// 维护当前进程的执行状态
-    pub task_status: TaskStatus,    /// 应用地址空间
-    pub memory_set: MemorySet,      /// 指向当前进程的父进程（如果存在的话）
-    pub parent: Option<Weak<TaskControlBlock>>, /// 当前进程的所有子进程的任务控制块向量
-    pub children: Vec<Arc<TaskControlBlock>>,   /// 退出码
-    pub exit_code: i32,             /// 文件描述符表
+    pub base_size: usize,           
+    /// 应用地址空间
+    pub memory_set: MemorySet,
+    
+    // 文件
+    /// 文件描述符表
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+
+    // 状态信息
     pub signals: SignalFlags,
     pub current_path: String,
 }

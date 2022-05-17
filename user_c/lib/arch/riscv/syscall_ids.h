@@ -14,8 +14,10 @@
 #define SYSCALL_GET_TIME 169
 #define SYSCALL_GETPID 172
 #define SYSCALL_GETPPID 173
+#define SYSCALL_MUNMAP 215
 #define SYSCALL_FORK 220
 #define SYSCALL_EXEC 221
+#define SYSCALL_MMAP 222
 #define SYSCALL_WAITPID 260
 
 // Based on https://git.musl-libc.org/cgit/musl/tree/arch/riscv64/bits/syscall.h.in

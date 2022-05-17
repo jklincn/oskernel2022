@@ -3,6 +3,7 @@ use crate::sync::UPSafeCell;
 /// `os/src/task/info.rs`
 /// ```
 /// pub struct Utsname
+/// pub struct CloneFlags
 /// ```
 //
 //use alloc::sync::Arc;
@@ -42,5 +43,13 @@ impl Utsname {
             arr[i] = cstr[i];
         }
         arr
+    }
+}
+
+bitflags!{
+    pub struct CloneFlags: usize{
+        const SIGCHLD = 17;
+        const CLONE_CHILD_CLEARTID  = 0x0020_0000;
+        const CLONE_CHILD_SETTID    = 0x0100_0000;
     }
 }

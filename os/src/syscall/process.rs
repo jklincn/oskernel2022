@@ -16,14 +16,15 @@ use crate::fs::{open, OpenFlags};
 use crate::mm::{translated_ref, translated_refmut, translated_str};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
-    suspend_current_and_run_next, SignalFlags,
+    suspend_current_and_run_next, SignalFlags
 };
 use crate::timer::{TimeVal, tms, get_TimeVal, get_time_ms};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::arch::asm;
 
-pub use crate::task::{Utsname, UTSNAME};
+pub use crate::task::{Utsname, UTSNAME, CloneFlags};
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -87,12 +88,38 @@ pub fn sys_getpid() -> isize {
     current_task().unwrap().pid.0 as isize
 }
 
-/// ### 当前进程 fork 出来一个子进程。
+//  long clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsigned long newtls);
+
+/// ### 当前进程 fork/clone 出来一个子进程。
+/// - 参数：
+///     - `flags`: 
+///     - `stack_ptr`
+///     - `ptid`
+///     - `ctid`
+///     - `newtls`
 /// - 返回值：对于子进程返回 0，对于当前进程则返回子进程的 PID 。
 /// - syscall ID：220
-pub fn sys_fork() -> isize {
+pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _newtls: usize) -> isize {
     let current_task = current_task().unwrap();
     let new_task = current_task.fork();
+    // let tid = new_task.getpid();
+
+    let flags = CloneFlags::from_bits(flags).unwrap();
+    // if flags.contains(CloneFlags::CLONE_CHILD_SETTID) && ctid != 0{
+    //     new_task.inner_exclusive_access().address.set_child_tid = ctid; 
+    //     *translated_refmut(new_task.inner_exclusive_access().get_user_token(), ctid as *mut i32) = tid  as i32;
+    // }
+    // if flags.contains(CloneFlags::CLONE_CHILD_CLEARTID) && ctid != 0{
+    //     new_task.inner_exclusive_access().address.clear_child_tid = ctid;
+    // }
+    if !flags.contains(CloneFlags::SIGCHLD){
+        panic!("sys_fork: FLAG not supported!");
+    }
+  
+    if stack_ptr != 0{
+        let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+        trap_cx.set_sp(stack_ptr);
+    }
     let new_pid = new_task.pid.0;
     // modify trap context of new_task, because it returns immediately after switching
     let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
@@ -100,12 +127,10 @@ pub fn sys_fork() -> isize {
     // trap_handler 已经将当前进程 Trap 上下文中的 sepc 向后移动了 4 字节，
     // 使得它回到用户态之后，会从发出系统调用的 ecall 指令的下一条指令开始执行
 
-    // 对于子进程，返回值是0
-    trap_cx.x[10] = 0;
-    // 将 fork 到的进程加入任务调度器
-    add_task(new_task);
-    // 对于父进程，返回值是子进程的 PID
-    new_pid as isize
+    trap_cx.x[10] = 0;      // 对于子进程，返回值是0
+    add_task(new_task);     // 将 fork 到的进程加入任务调度器
+    unsafe { asm!("sfence.vma"); asm!("fence.i"); }
+    new_pid as isize        // 对于父进程，返回值是子进程的 PID
 }
 
 /// ### 将当前进程的地址空间清空并加载一个特定的可执行文件，返回用户态后开始它的执行。
