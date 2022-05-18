@@ -23,8 +23,8 @@ void test_mmap(void) {
     fstat(fd, &kst);
 
     printf("file len: %d\n", kst.st_size);
-    read(fd,res, kst.st_size);
-    printf("%s\n",res);
+    int len = read(fd, res, kst.st_size);
+    printf("read:%d\n%s\n",len, res);
 
 
     array = mmap(NULL, kst.st_size, PROT_WRITE | PROT_READ, MAP_FILE | MAP_SHARED, fd, 0);

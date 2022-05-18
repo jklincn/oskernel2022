@@ -3,11 +3,14 @@
 
 #include <syscall.h>
 
-ssize_t write(int fd, const void* buf, size_t len) {
-    return syscall(SYSCALL_WRITE, fd, buf, len);
+ssize_t read(int fd, void *buf, size_t len)
+{
+    return syscall(SYS_read, fd, buf, len);
 }
-ssize_t read(int fd, void* buf, size_t len) {
-    return syscall(SYSCALL_READ, fd, buf, len);
+
+ssize_t write(int fd, const void *buf, size_t len)
+{
+    return syscall(SYS_write, fd, buf, len);
 }
 void exit(int exit_code) {
     syscall(SYSCALL_EXIT, (int64)exit_code, 0, 0);
@@ -71,8 +74,9 @@ int close(int fd) {
 int pipe(int* fd) {
     return syscall(SYSCALL_PIPE, fd, 0);
 }
-int open(const char* name, int flags) {
-    return syscall(SYSCALL_OPEN, AT_FDCWD, name, flags, O_RDWR);
+int open(const char* path, int flags)
+{
+    return syscall(SYS_openat, AT_FDCWD, path, flags, O_RDWR);
 }
 pid_t fork(void) {
     return syscall(SYSCALL_FORK, SIGCHLD, 0);
