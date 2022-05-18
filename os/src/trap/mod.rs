@@ -106,16 +106,20 @@ pub fn trap_handler() -> ! {
             // The boundary decision
             if va > TRAMPOLINE.into() {
                 //panic!("VirtAddr out of range!");
+                println!("[kernel] jeremy 2");
                 current_add_signal(SignalFlags::SIGSEGV);
             }
-            //println!("check_lazy 1");
             let lazy = current_task().unwrap().check_lazy(va, is_load);
-            if lazy != 0 { current_add_signal(SignalFlags::SIGSEGV); }
+            if lazy != 0 { 
+                println!("[kernel] jeremy 1");
+                current_add_signal(SignalFlags::SIGSEGV); 
+            }
             unsafe { asm!("sfence.vma"); asm!("fence.i"); }
         }
 
         Trap::Exception(Exception::InstructionFault)
         | Trap::Exception(Exception::InstructionPageFault) => {
+                println!("[kernel] jeremy 3");
             current_add_signal(SignalFlags::SIGSEGV);
         }
 
