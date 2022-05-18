@@ -11,7 +11,7 @@ use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::{ TRAP_CONTEXT, PAGE_SIZE, MMAP_BASE };
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE, MmapArea, MapPermission};
+use crate::mm::{translated_refmut, MemorySet, PhysPageNum, VirtPageNum, VirtAddr, KERNEL_SPACE, MmapArea, MapPermission};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -294,6 +294,72 @@ impl TaskControlBlock {
 
         task_control_block
     }
+
+    /// ### 尝试用时加载缺页，目前只支持mmap缺页
+    /// - 参数：
+    ///     - `va`：缺页中的虚拟地址
+    ///     - `is_load`：加载(1)/写入(0)
+    /// - 返回值：
+    ///     - `0`：成功加载缺页
+    ///     - `-1`：加载缺页失败
+    pub fn check_lazy(&self, va: VirtAddr, is_load: bool) -> isize {
+        let inner = self.inner_exclusive_access();
+
+        //let vpn: VirtPageNum = va.floor();
+
+        //let heap_base = inner.heap_start;
+        //let heap_pt = inner.heap_pt;
+        //let stack_top = inner.base_size;
+        //let stack_bottom = stack_top - USER_STACK_SIZE;
+        let mmap_start = inner.mmap_area.mmap_start;
+        let mmap_end = inner.mmap_area.mmap_top;
+        drop(inner);
+        
+        if va >= mmap_start && va < mmap_end {
+            //println!("lazy mmap");
+            self.lazy_mmap(va.0, is_load)
+        } 
+        else { -1 }
+        
+        // else if va.0 >= heap_base && va.0 <= heap_pt {
+        //     inner.lazy_alloc_heap(vpn);
+        //     return 0;
+        // } else if va.0 >= stack_bottom && va.0 <= stack_top {
+        //     //println!{"lazy_stack_page: {:?}", va}
+        //     inner.lazy_alloc_stack(vpn);
+        //     0
+        // } else {
+        //     // get the PageTableEntry that faults
+        //     let pte = inner.enquire_vpn(vpn);
+        //     // if the virtPage is a CoW
+        //     if pte.is_some() && pte.unwrap().is_cow() {
+        //         let former_ppn = pte.unwrap().ppn();
+        //         inner.cow_alloc(vpn, former_ppn);
+        //         0
+        //     } else {
+        //         -1
+        //     }
+        // }
+    }
+
+    /// ### 用时加载mmap缺页
+    /// - 参数：
+    ///     - `stval`：缺页中的虚拟地址
+    ///     - `is_load`：加载(1)/写入(0)
+    /// - 返回值：
+    ///     - `0`
+    ///     - `-1`
+    pub fn lazy_mmap(&self, stval: usize, is_load: bool) -> isize {
+        let mut inner = self.inner_exclusive_access();
+        let fd_table = inner.fd_table.clone();
+        let token = inner.get_user_token();
+        let lazy_result = inner.memory_set.lazy_mmap(stval.into());
+
+        if lazy_result == 0 || is_load {
+            inner.mmap_area.lazy_map_page(stval, fd_table, token);
+        }
+        return lazy_result;
+    }
     
     /// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
     /// - 参数
@@ -315,7 +381,7 @@ impl TaskControlBlock {
     ///         ```
     ///     - `fd`：映射文件描述符
     ///     - `off`: 偏移量
-    /// - 返回值：映射到的内存空间起始地址(虚拟地址)
+    /// - 返回值：从文件的哪个位置开始映射
     pub fn mmap(&self, start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> usize {        
         if start % PAGE_SIZE != 0{
             panic!("mmap: start_va not aligned");
@@ -324,11 +390,12 @@ impl TaskControlBlock {
         let mut inner = self.inner_exclusive_access();
         let fd_table = inner.fd_table.clone();
         let token = inner.get_user_token();
-        let mut va_top = inner.mmap_area.get_mmap_top();
-        let mut end_va = VirtAddr::from(va_top.0 + len);
+        let va_top = inner.mmap_area.get_mmap_top();
+        let end_va = VirtAddr::from(va_top.0 + len);
 
-        // "prot<<1" is equal to  meaning of "MapPermission"
-        let map_flags = (((prot & 0b111)<<1) + (1<<4))  as u8; // "1<<4" means user
+        // "prot<<1" is equal to meaning of "MapPermission"
+        // "1<<4" means user
+        let map_flags = (((prot & 0b111)<<1) + (1<<4))  as u8;
     
         let mut startvpn = start/PAGE_SIZE;
         
@@ -342,9 +409,7 @@ impl TaskControlBlock {
             return start;
         }
         else{ // "Start" va not mapped
-            //inner.memory_set.insert_kernel_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
             inner.memory_set.insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
-            //inner.mmap_area.push_kernel(va_top.0, len, prot, flags, fd, off, fd_table, token);
             inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
             va_top.0
         }

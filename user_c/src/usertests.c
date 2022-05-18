@@ -4,7 +4,7 @@
 
 #define PROG_NUM 17
 
-char* prog_name[] = { "clone", "yield", "waitpid", "dup2", "dup", "exec", "exit", "fork", "getpid", "gettimeofday", "uname", "sleep", "times", "pipe", "wait", "open", "mmap" };
+char* prog_name[] = {  "mmap", "clone", "yield", "waitpid", "dup2", "dup", "exec", "exit", "fork", "getpid", "gettimeofday", "uname", "sleep", "times", "pipe", "wait", "open"};
 
 int main() {
     for (int t = 0; t < PROG_NUM; t++) {

@@ -263,7 +263,6 @@ pub fn sys_uname(buf: *const u8) -> isize {
 }
 
 // not support full flags: MAP_FIXED
-// WARNING: if mmap len is 0, we will alloc one page for it, which actually should be forbidden.
 
 /// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
 /// - 参数
@@ -278,22 +277,19 @@ pub fn sys_uname(buf: *const u8) -> isize {
 ///     - `flags`：映射方式
 ///         ```rust
 ///         const MAP_FILE = 0;
-///         const MAP_SHARED= 0x01;
+///         const MAP_SHARED  = 0x01;
 ///         const MAP_PRIVATE = 0x02;
-///         const MAP_FIXED = 0x10;
+///         const MAP_FIXED   = 0x10;
 ///         const MAP_ANONYMOUS = 0x20;
 ///         ```
 ///     - `fd`：映射文件描述符
 ///     - `off`: 偏移量
-/// - 返回值：映射到的内存空间起始地址(虚拟地址)
+/// - 返回值：从文件的哪个位置开始映射
 /// - syscall_id:222
 pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
     let task = current_task().unwrap();
-    let mut adjust_len = len;
-    if adjust_len == 0{
-        adjust_len = PAGE_SIZE;
-    }
-    let result_addr = task.mmap(start, adjust_len, prot, flags, fd, off);
+    if len == 0 {panic!("mmap:len == 0");}
+    let result_addr = task.mmap(start, len, prot, flags, fd, off);
     return result_addr as isize;
 }
 

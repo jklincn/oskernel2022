@@ -12,6 +12,8 @@
 
 static struct kstat kst;
 void test_mmap(void) {
+    char res[50] = "";
+
     TEST_START(__func__);
     char* array;
     const char* str = "  Hello, mmap successfully!";
@@ -19,7 +21,12 @@ void test_mmap(void) {
     fd = open("test_mmap.txt", O_RDWR | O_CREATE);
     write(fd, str, strlen(str));
     fstat(fd, &kst);
+
     printf("file len: %d\n", kst.st_size);
+    read(fd,res, kst.st_size);
+    printf("%s\n",res);
+
+
     array = mmap(NULL, kst.st_size, PROT_WRITE | PROT_READ, MAP_FILE | MAP_SHARED, fd, 0);
     //printf("return array: %x\n", array);
 

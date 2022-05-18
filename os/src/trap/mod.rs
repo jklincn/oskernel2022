@@ -16,9 +16,10 @@ use crate::config::{TRAMPOLINE, TRAP_CONTEXT};
 use crate::syscall::syscall;
 use crate::task::{
     check_signals_of_current, current_add_signal, current_trap_cx, current_user_token,
-    exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,
+    exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,current_task
 };
 use crate::timer::set_next_trigger;
+use crate::mm::{ VirtAddr, VirtPageNum };
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -84,11 +85,9 @@ pub fn trap_handler() -> ! {
             cx = current_trap_cx();
             cx.x[10] = result as usize;
         }
-        // 处理应用程序出现访存错误
+        // 处理应用程序出现访存错误，判断能否CoW
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault)
-        | Trap::Exception(Exception::InstructionFault)
-        | Trap::Exception(Exception::InstructionPageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
             // println!(
@@ -97,8 +96,29 @@ pub fn trap_handler() -> ! {
             //     stval,
             //     current_trap_cx().sepc,
             // );
+            let is_load: bool;
+            if scause.cause() == Trap::Exception(Exception::LoadFault) || scause.cause() == Trap::Exception(Exception::LoadPageFault) {
+                is_load = true;
+            } else {
+                is_load = false;
+            }
+            let va: VirtAddr = (stval as usize).into();
+            // The boundary decision
+            if va > TRAMPOLINE.into() {
+                //panic!("VirtAddr out of range!");
+                current_add_signal(SignalFlags::SIGSEGV);
+            }
+            //println!("check_lazy 1");
+            let lazy = current_task().unwrap().check_lazy(va, is_load);
+            if lazy != 0 { current_add_signal(SignalFlags::SIGSEGV); }
+            unsafe { asm!("sfence.vma"); asm!("fence.i"); }
+        }
+
+        Trap::Exception(Exception::InstructionFault)
+        | Trap::Exception(Exception::InstructionPageFault) => {
             current_add_signal(SignalFlags::SIGSEGV);
         }
+
         // 处理应用程序出现非法指令错误
         Trap::Exception(Exception::IllegalInstruction) => {
             // println!("[kernel] IllegalInstruction in application, kernel killed it.");

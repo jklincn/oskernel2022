@@ -122,6 +122,12 @@ impl MemorySet {
         }
         self.areas.push(map_area);  // 将生成的数据段压入 areas 使其生命周期由areas控制
     }
+    /// 在ChunkArea中为vpn分配一页
+    fn push_chunk(&mut self, vpn: VirtPageNum) {
+        // self.chunks.vpn_table.push(vpn);
+        // self.chunks.map_one(&mut self.page_table, vpn);
+        self.chunks.push_vpn(vpn, &mut self.page_table)
+    }
     
     /// 映射跳板的虚拟页号和物理物理页号
     fn map_trampoline(&mut self) {
@@ -310,6 +316,21 @@ impl MemorySet {
         memory_set
     }
 
+    /// 为mmap缺页分配空页表
+    pub fn lazy_mmap (&mut self, stval: VirtAddr) -> isize {
+        for mmap_chunk in self.mmap_chunks.iter() {
+            if stval >= mmap_chunk.mmap_start && stval < mmap_chunk.mmap_end {
+                // read only can also be mapped!!??
+                //if (mmap_chunk.map_perm & MapPermission::W).bits == 0 {
+                //    return -1;
+                //}
+                self.push_chunk(stval.floor());
+                return 0
+            }
+        }
+        0
+    }
+
     /// ### 激活当前虚拟地址空间
     /// 将多级页表的token（格式化后的root_ppn）写入satp
     pub fn activate(&self) {
@@ -342,16 +363,9 @@ impl MemorySet {
     }
 
     pub fn insert_mmap_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
-        let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission,);
+        let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission);
         new_chunk_area.set_mmap_range(start_va, end_va);
         self.mmap_chunks.push(new_chunk_area);
-
-        //self.push_mmap(MapArea::new(
-        //    start_va,
-        //    (end_va.0).into(),  // bin lazy (X
-        //    MapType::Framed,
-        //    permission,
-        //), None);
     }
 }
 
@@ -365,10 +379,7 @@ pub struct ChunkArea {
 }
 
 impl ChunkArea {
-    pub fn new(
-        map_type: MapType,
-        map_perm: MapPermission
-    ) -> Self {
+    pub fn new( map_type: MapType, map_perm: MapPermission ) -> Self {
         Self {
             vpn_table: Vec::new(),
             data_frames: BTreeMap::new(),
@@ -378,17 +389,14 @@ impl ChunkArea {
             mmap_end: 0.into(),
         }
     }
-
     pub fn set_mmap_range(&mut self, start: VirtAddr, end: VirtAddr) {
         self.mmap_start = start;
         self.mmap_end = end;
     }
-
     pub fn push_vpn(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
         self.vpn_table.push(vpn);
         self.map_one(page_table, vpn);
     }
-
     pub fn from_another(another: &ChunkArea) -> Self {
         Self {
             vpn_table: another.vpn_table.clone(),
@@ -399,7 +407,6 @@ impl ChunkArea {
             mmap_end: another.mmap_end,
         }
     }
-
     // Alloc and map one page
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
@@ -589,34 +596,4 @@ bitflags! {
         const X = 1 << 3;
         const U = 1 << 4;
     }
-}
-
-#[allow(unused)]
-pub fn remap_test() {
-    let mut kernel_space = KERNEL_SPACE.exclusive_access();
-    let mid_text: VirtAddr = ((stext as usize + etext as usize) / 2).into();
-    let mid_rodata: VirtAddr = ((srodata as usize + erodata as usize) / 2).into();
-    let mid_data: VirtAddr = ((sdata as usize + edata as usize) / 2).into();
-    assert!(
-        !kernel_space
-            .page_table
-            .translate(mid_text.floor())
-            .unwrap()
-            .writable(),
-    );
-    assert!(
-        !kernel_space
-            .page_table
-            .translate(mid_rodata.floor())
-            .unwrap()
-            .writable(),
-    );
-    assert!(
-        !kernel_space
-            .page_table
-            .translate(mid_data.floor())
-            .unwrap()
-            .executable(),
-    );
-    println!("remap_test passed!");
 }
