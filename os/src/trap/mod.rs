@@ -19,7 +19,7 @@ use crate::task::{
     exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,current_task
 };
 use crate::timer::set_next_trigger;
-use crate::mm::{ VirtAddr, VirtPageNum };
+use crate::mm::VirtAddr;
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -85,17 +85,12 @@ pub fn trap_handler() -> ! {
             cx = current_trap_cx();
             cx.x[10] = result as usize;
         }
-        // 处理应用程序出现访存错误，判断能否CoW
+
+        // 处理应用程序出现访存错误，判断能否CoW/lazy
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            // println!(
-            //     "[kernel] {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
-            //     scause.cause(),
-            //     stval,
-            //     current_trap_cx().sepc,
-            // );
             let is_load: bool;
             if scause.cause() == Trap::Exception(Exception::LoadFault) || scause.cause() == Trap::Exception(Exception::LoadPageFault) {
                 is_load = true;
@@ -103,23 +98,38 @@ pub fn trap_handler() -> ! {
                 is_load = false;
             }
             let va: VirtAddr = (stval as usize).into();
-            // The boundary decision
             if va > TRAMPOLINE.into() {
-                //panic!("VirtAddr out of range!");
-                println!("[kernel] jeremy 2");
+                println!("[kernel] VirtAddr out of range!");
                 current_add_signal(SignalFlags::SIGSEGV);
             }
+
             let lazy = current_task().unwrap().check_lazy(va, is_load);
             if lazy != 0 { 
-                println!("[kernel] jeremy 1");
                 current_add_signal(SignalFlags::SIGSEGV); 
             }
-            unsafe { asm!("sfence.vma"); asm!("fence.i"); }
+
+            // current_trap_cx().debug_show();
+            // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
+            // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());
         }
 
         Trap::Exception(Exception::InstructionFault)
         | Trap::Exception(Exception::InstructionPageFault) => {
-                println!("[kernel] jeremy 3");
+            let task = current_task().unwrap();
+            println!(
+                "[kernel] {:?} in application {}, bad addr = {:#x}, bad instruction = {:#x}.",
+                scause.cause(),
+                task.pid.0,
+                stval,
+                current_trap_cx().sepc,
+            );
+            drop(task);
+
+            // current_trap_cx().debug_show();
+            // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
+            
+            // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());
+
             current_add_signal(SignalFlags::SIGSEGV);
         }
 
@@ -130,6 +140,7 @@ pub fn trap_handler() -> ! {
             // exit_current_and_run_next(-3);
             current_add_signal(SignalFlags::SIGILL);
         }
+
         // 时间片到中断
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
@@ -143,6 +154,7 @@ pub fn trap_handler() -> ! {
             );
         }
     }
+    
     // check signals
     if let Some((errno, msg)) = check_signals_of_current() {
         println!("[kernel] {}", msg);

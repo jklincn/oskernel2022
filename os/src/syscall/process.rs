@@ -89,6 +89,10 @@ pub fn sys_getpid() -> isize {
     current_task().unwrap().pid.0 as isize
 }
 
+pub fn sys_getppid() -> isize {
+    current_task().unwrap().tgid as isize
+}
+
 //  long clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsigned long newtls);
 
 /// ### 当前进程 fork/clone 出来一个子进程。
@@ -102,7 +106,7 @@ pub fn sys_getpid() -> isize {
 /// - syscall ID：220
 pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _newtls: usize) -> isize {
     let current_task = current_task().unwrap();
-    let new_task = current_task.fork();
+    let new_task = current_task.fork(false);
     // let tid = new_task.getpid();
 
     let flags = CloneFlags::from_bits(flags).unwrap();
@@ -298,4 +302,22 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
     let task = current_task().unwrap();
     let ret = task.munmap(start, len);
     ret
+}
+
+pub fn sys_sbrk(grow_size: isize, _is_shrink: usize) -> isize {
+    let current_va = current_task().unwrap().grow_proc(grow_size) as isize;
+    current_va
+}
+
+pub fn sys_brk(brk_addr: usize) -> isize{
+    let mut addr_new = 0;
+    if brk_addr == 0 {
+        addr_new = sys_sbrk(0, 0) as usize;
+    }
+    else{
+        let former_addr = current_task().unwrap().grow_proc(0);
+        let grow_size: isize = (brk_addr - former_addr) as isize;
+        addr_new = current_task().unwrap().grow_proc(grow_size);
+    }
+    addr_new as isize
 }

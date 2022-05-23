@@ -14,7 +14,7 @@ int test_getppid()
     TEST_START(__func__);
     pid_t ppid = getppid();
     if(ppid > 0) printf("  getppid success. ppid : %d\n", ppid);
-    else printf("  getppid error.\n");
+    else printf("  getppid error. ppid : %d\n", ppid);
     TEST_END(__func__);
     return ppid > 0 ? 0 : ppid;
 }

@@ -3,11 +3,11 @@
 
 #include <syscall.h>
 
-ssize_t read(int fd, void *buf, size_t len){
+ssize_t read(int fd, void* buf, size_t len) {
     return syscall(SYS_read, fd, buf, len);
 }
 
-ssize_t write(int fd, const void *buf, size_t len){
+ssize_t write(int fd, const void* buf, size_t len) {
     return syscall(SYS_write, fd, buf, len);
 }
 void exit(int exit_code) {
@@ -96,4 +96,7 @@ int munmap(void* start, size_t len) {
 }
 int fstat(int fd, struct kstat* st) {
     return syscall(SYSCALL_FSTAT, fd, st);
+}
+int brk(void* addr) {
+    return syscall(SYSCALL_BRK, addr);
 }

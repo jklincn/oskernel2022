@@ -12,8 +12,8 @@ use super::{frame_alloc, FrameTracker};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
-use crate::config::{MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE};
 use crate::sync::UPSafeCell;
+use crate::config::*;
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -63,7 +63,7 @@ pub struct MemorySet {
     page_table: PageTable,
     /// 挂着对应逻辑段中的数据所在的物理页帧
     areas: Vec<MapArea>,
-    chunks: ChunkArea,
+    // chunks: ChunkArea,
     stack_chunks: ChunkArea,
     mmap_chunks: Vec<ChunkArea>,
 }
@@ -74,8 +74,8 @@ impl MemorySet {
         Self {
             page_table: PageTable::new(),
             areas: Vec::new(),
-            chunks: ChunkArea::new(MapType::Framed,
-                                MapPermission::R | MapPermission::W | MapPermission::U),
+            // chunks: ChunkArea::new(MapType::Framed,
+            //                     MapPermission::R | MapPermission::W | MapPermission::U),
             mmap_chunks: Vec::new(),
             stack_chunks: ChunkArea::new(MapType::Framed,
                                 MapPermission::R | MapPermission::W | MapPermission::U),
@@ -121,12 +121,6 @@ impl MemorySet {
             map_area.copy_data(&mut self.page_table, data);
         }
         self.areas.push(map_area);  // 将生成的数据段压入 areas 使其生命周期由areas控制
-    }
-    /// 在ChunkArea中为vpn分配一页
-    fn push_chunk(&mut self, vpn: VirtPageNum) {
-        // self.chunks.vpn_table.push(vpn);
-        // self.chunks.map_one(&mut self.page_table, vpn);
-        self.chunks.push_vpn(vpn, &mut self.page_table)
     }
     
     /// 映射跳板的虚拟页号和物理物理页号
@@ -222,7 +216,7 @@ impl MemorySet {
     ///     - Self
     ///     - 用户栈顶地址
     ///     - 程序入口地址
-    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
+    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize, usize) {
         let mut memory_set = Self::new_bare();
         // 将跳板插入到应用地址空间
         memory_set.map_trampoline();
@@ -288,11 +282,21 @@ impl MemorySet {
             ),
             None,
         );
-        (
-            memory_set,
-            user_stack_top,
-            elf.header.pt2.entry_point() as usize,
-        )
+
+        // 分配用户堆
+        let mut user_heap_bottom: usize = user_stack_top;
+        //放置一个保护页
+        user_heap_bottom += PAGE_SIZE;
+        let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
+        
+        memory_set.push(MapArea::new(
+            user_heap_bottom.into(),
+            user_heap_top.into(),
+            MapType::Framed,
+            MapPermission::R | MapPermission::W | MapPermission::U,
+        ), None);
+
+        (memory_set, user_stack_top, user_heap_bottom, elf.header.pt2.entry_point() as usize)
     }
     
     /// 复制一个完全相同的地址空间
@@ -318,17 +322,13 @@ impl MemorySet {
 
     /// 为mmap缺页分配空页表
     pub fn lazy_mmap (&mut self, stval: VirtAddr) -> isize {
-        for mmap_chunk in self.mmap_chunks.iter() {
+        for mmap_chunk in self.mmap_chunks.iter_mut() {
             if stval >= mmap_chunk.mmap_start && stval < mmap_chunk.mmap_end {
-                // read only can also be mapped!!??
-                //if (mmap_chunk.map_perm & MapPermission::W).bits == 0 {
-                //    return -1;
-                //}
-                self.push_chunk(stval.floor());
+                mmap_chunk.push_vpn(stval.floor(), &mut self.page_table);
                 return 0
             }
         }
-        0
+        -1
     }
 
     /// ### 激活当前虚拟地址空间
@@ -366,6 +366,42 @@ impl MemorySet {
         let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission);
         new_chunk_area.set_mmap_range(start_va, end_va);
         self.mmap_chunks.push(new_chunk_area);
+    }
+
+    #[allow(unused)]
+    pub fn debug_show_data(&self, va: VirtAddr){
+        println!("-----------------------PTE Data-----------------------");
+        println!("MemorySet token: 0x{:x}",self.token());
+        let findpte = self.translate(va.floor());
+        if let Some(pte) = findpte {
+            println!("VirtAddr 0x{:x} ", va.0);
+            println!("ppn:     0x{:x}XXX", pte.ppn().0);
+            println!("pte_raw: 0b{:b}", pte.bits);
+            println!("executable: {}", pte.executable());
+            println!("readable:   {}", pte.readable());
+            println!("writable:   {}", pte.writable());
+        } else {
+            println!("VirtAddr 0x{:x} is not valied", va.0);
+            println!("------------------------------------------------------");
+            return;
+        }
+        println!("------------------------------------------------------");
+
+        unsafe {
+            let pa = findpte.unwrap().ppn().0 << 12;
+            let raw_data = core::slice::from_raw_parts(pa as *const usize, 512); 
+            let mut i = 0;
+            while i < 512 {
+                print!("offset:{:03x}\t0x{:016x}", (i) * 8, raw_data[i]);
+                print!("\t");
+                print!("offset:{:03x}\t0x{:016x}", (i + 1) * 8, raw_data[i + 1]);
+                print!("\t");
+                print!("offset:{:03x}\t0x{:016x}", (i + 2) * 8, raw_data[i + 2]);
+                print!("\t");
+                println!("offset:{:03x}\t0x{:016x}", (i + 3) * 8, raw_data[i + 3]);
+                i+=4;
+            }
+        }
     }
 }
 

@@ -239,4 +239,9 @@ impl File for OSInode {
     fn get_name(&self) -> String {
         self.name()
     }
+
+    fn set_offset(&self, offset: usize){
+        let mut inner = self.inner.lock();
+        inner.offset = offset;
+    }
 }

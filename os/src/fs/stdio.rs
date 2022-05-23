@@ -61,6 +61,10 @@ impl File for Stdin {
     fn get_name(&self) -> String{
         panic!("Stdin not implement get_name");
     }
+
+    fn set_offset(&self, offset: usize) {
+        panic!("Stdin not implement set_offset");
+    }
 }
 
 impl File for Stdout {
@@ -92,5 +96,9 @@ impl File for Stdout {
 
     fn get_name(&self) -> String{
         panic!("Stdout not implement get_name");
+    }
+
+    fn set_offset(&self, offset: usize) {
+        panic!("Stdput not implement set_offset");
     }
 }

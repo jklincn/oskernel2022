@@ -68,4 +68,16 @@ impl TrapContext {
         cx.set_sp(sp);
         cx
     }
+    #[allow(unused)]
+    pub fn debug_show(&self){
+        println!("------------------TrapContext info------------------");
+        println!("sepc:         0x{:x}",self.sepc);
+        println!("kernel_satp:  0x{:x}",self.kernel_satp);
+        println!("kernel_sp:    0x{:x}",self.kernel_sp);
+        println!("trap_handler: 0x{:x}",self.trap_handler);
+        for i in 0..32 {
+            println!("x[{}]: 0x{:x}", i, self.x[i]);
+        }
+        println!("----------------------------------------------------");
+    }
 }

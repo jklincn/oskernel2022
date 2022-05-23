@@ -39,4 +39,15 @@ impl TaskContext {
             s: [0; 12],
         }
     }
+
+    #[allow(unused)]
+    pub fn debug_show(&self){
+        println!("------------------TaskContext info------------------");
+        println!("TaskContext: ra: 0x{:x}  sp: 0x{:x}", self.ra, self.sp);
+        for i in 0..12 {
+            println!("s[{}]: 0x{:x}", i, self.s[i]);
+        }
+        
+        println!("----------------------------------------------------");
+    }
 }

@@ -220,4 +220,8 @@ impl File for Pipe {
     fn get_name(&self) -> String{
         panic!("pipe not implement get_name");
     }
+
+    fn set_offset(&self, offset: usize) {
+        panic!("pipe not implement set_offset");
+    }
 }

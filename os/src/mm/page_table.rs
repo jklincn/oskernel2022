@@ -268,6 +268,16 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
+        
+        match page_table.translate(vpn) {
+            None => {
+                println!("[kernel] mm: 0x{:x} not mapped", start);
+            }
+            _ => {
+                
+            }
+        }
+
         let ppn = page_table.translate(vpn).unwrap().ppn();
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();

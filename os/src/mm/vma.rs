@@ -53,9 +53,9 @@ impl MmapArea {
     pub fn lazy_map_page(&mut self, stval: usize, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) {
         for mmap_space in self.mmap_set.iter_mut() {
             if stval >= mmap_space.oaddr.0 && stval < mmap_space.oaddr.0 + mmap_space.length {
-                // let va: VirtAddr = stval.into();
-                let page_start: VirtAddr = (stval & !(PAGE_SIZE - 1)).into();
-                mmap_space.lazy_map_page(page_start, fd_table, token);
+                let va: VirtAddr = stval.into();
+                // let page_start: VirtAddr = (stval & !(PAGE_SIZE - 1)).into();
+                mmap_space.lazy_map_page(va, fd_table, token);
                 return 
             }
         }
@@ -67,6 +67,7 @@ impl MmapArea {
         let start_addr = start.into();
 
         let mut mmap_space = MmapSpace::new(start_addr, len, prot, flags, 0, fd, offset);
+        mmap_space.map_file(start_addr, PAGE_SIZE, offset, fd_table, token);
 
         self.mmap_set.push(mmap_space);
 
@@ -136,12 +137,13 @@ impl MmapSpace{
         if self.fd as usize >= fd_table.len() { return -1; }
 
         if let Some(file) = &fd_table[self.fd as usize] {
-            // file.set_offset(offset);
             let f = file.clone();
+            f.set_offset(offset);
             if !f.readable() { return -1; }
             // println!{"The va_start is 0x{:X}, offset of file is {}", va_start.0, offset};
-            let read_len = f.read(UserBuffer::new(translated_byte_buffer(token, va_start.0 as *const u8, len)));
-            //println!{"[kernel mmap] read {} bytes", read_len};
+            let _read_len = f.read(UserBuffer::new(translated_byte_buffer(token, va_start.0 as *const u8, len)));
+            // println!{"[kernel mmap] read {} bytes", _read_len};
+            // println!("[kernel] {:?}",va_start);
         } else { return -1 };
         return 1;
     }

@@ -25,6 +25,8 @@ pub trait File: Send + Sync {
     fn get_dirent(&self, dirent: &mut Dirent)->isize;
 
     fn get_name(&self) -> String;
+
+    fn set_offset(&self, offset: usize);
 }
 
 

@@ -9,9 +9,9 @@
 
 use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
-use crate::config::{ TRAP_CONTEXT, PAGE_SIZE, MMAP_BASE };
+use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MemorySet, PhysPageNum, VirtPageNum, VirtAddr, KERNEL_SPACE, MmapArea, MapPermission};
+use crate::mm::{translated_refmut, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE, MmapArea, MapPermission};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -36,6 +36,8 @@ use core::cell::RefMut;
 pub struct TaskControlBlock {
     /// 进程标识符
     pub pid: PidHandle,
+    /// thread group id
+    pub tgid: usize,
     /// 应用内核栈
     pub kernel_stack: KernelStack,
     inner: UPSafeCell<TaskControlBlockInner>,
@@ -86,6 +88,8 @@ pub struct TaskControlBlockInner {
     pub memory_set: MemorySet,
     // 虚拟内存地址映射空间
     pub mmap_area: MmapArea,
+    pub heap_start: usize,
+    pub heap_pt: usize,
     
     // 文件
     /// 文件描述符表
@@ -134,7 +138,7 @@ impl TaskControlBlock {
     /// 通过 elf 数据新建一个任务控制块，目前仅用于内核中手动创建唯一一个初始进程 initproc
     pub fn new(elf_data: &[u8]) -> Self {
         // 解析传入的 ELF 格式数据构造应用的地址空间 memory_set 并获得其他信息
-        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let (memory_set, user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data);
         // 从地址空间 memory_set 中查多级页表找到应用地址空间中的 Trap 上下文实际被放在哪个物理页帧
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(TRAP_CONTEXT).into())
@@ -142,16 +146,20 @@ impl TaskControlBlock {
             .ppn();
         // 为进程分配 PID 以及内核栈，并记录下内核栈在内核地址空间的位置
         let pid_handle = pid_alloc();
+        let tgid = pid_handle.0;
         let kernel_stack = KernelStack::new(&pid_handle);
         let kernel_stack_top = kernel_stack.get_top();
         // 在该进程的内核栈上压入初始化的任务上下文，使得第一次任务切换到它的时候可以跳转到 trap_return 并进入用户态开始执行
         let task_control_block = Self {
             pid: pid_handle,
+            tgid,
             kernel_stack,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: user_sp,
+                    heap_start: user_heap,
+                    heap_pt: user_heap,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
                     memory_set,
@@ -188,7 +196,7 @@ impl TaskControlBlock {
     /// 用来实现 exec 系统调用，即当前进程加载并执行另一个 ELF 格式可执行文件
     pub fn exec(&self, elf_data: &[u8], args: Vec<String>) {
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let (memory_set, mut user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let (memory_set, mut user_sp,user_heap, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(TRAP_CONTEXT).into())
             .unwrap()
@@ -226,6 +234,8 @@ impl TaskControlBlock {
 
         let mut inner = self.inner_exclusive_access();
         inner.memory_set = memory_set;  // 这将导致原有的地址空间生命周期结束，里面包含的全部物理页帧都会被回收
+        inner.heap_start = user_heap;
+        inner.heap_pt = user_heap;
         inner.trap_cx_ppn = trap_cx_ppn;
         let trap_cx = inner.get_trap_cx();
         // 修改新的地址空间中的 Trap 上下文，将解析得到的应用入口点、用户栈位置以及一些内核的信息进行初始化
@@ -242,7 +252,7 @@ impl TaskControlBlock {
     }
     
     /// 用来实现 fork 系统调用，即当前进程 fork 出来一个与之几乎相同的子进程
-    pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
+    pub fn fork(self: &Arc<TaskControlBlock>, is_create_thread: bool) -> Arc<TaskControlBlock> {
         let mut parent_inner = self.inner_exclusive_access();
         // 拷贝用户地址空间
         let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
@@ -252,6 +262,13 @@ impl TaskControlBlock {
             .ppn();
         // 分配一个 PID
         let pid_handle = pid_alloc();
+        let mut tgid = 0;
+        if is_create_thread{
+            tgid = self.pid.0;
+        }
+        else{
+            tgid = pid_handle.0;
+        }
         // 根据 PID 创建一个应用内核栈
         let kernel_stack = KernelStack::new(&pid_handle);
         let kernel_stack_top = kernel_stack.get_top();
@@ -268,11 +285,14 @@ impl TaskControlBlock {
 
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
+            tgid,
             kernel_stack,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: parent_inner.base_size,
+                    heap_start: parent_inner.heap_start,
+                    heap_pt: parent_inner.heap_pt,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
                     memory_set,
@@ -304,9 +324,6 @@ impl TaskControlBlock {
     ///     - `-1`：加载缺页失败
     pub fn check_lazy(&self, va: VirtAddr, is_load: bool) -> isize {
         let inner = self.inner_exclusive_access();
-
-        //let vpn: VirtPageNum = va.floor();
-
         //let heap_base = inner.heap_start;
         //let heap_pt = inner.heap_pt;
         //let stack_top = inner.base_size;
@@ -319,7 +336,12 @@ impl TaskControlBlock {
             //println!("lazy mmap");
             self.lazy_mmap(va.0, is_load)
         } 
-        else { -1 }
+        else { 
+            println!("va: 0x{:x}", va.0);
+            println!("mmap_start: 0x{:x}", mmap_start.0);
+            println!("mmap_end: 0x{:x}", mmap_end.0);
+            -2 
+        }
         
         // else if va.0 >= heap_base && va.0 <= heap_pt {
         //     inner.lazy_alloc_heap(vpn);
@@ -410,7 +432,18 @@ impl TaskControlBlock {
         }
         else{ // "Start" va not mapped
             inner.memory_set.insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
+
+            // 创建mmap后直接加载一页，不使用lazy mmap
+            inner.memory_set.lazy_mmap(va_top);
             inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
+            // println!("ppn: 0x{:x}", inner.memory_set.translate(va_top.into()).unwrap().ppn().0);
+            // inner.memory_set.debug_show_data(va_top);
+            //-------------------------------------
+
+            drop(inner);
+            // super::processor::current_task().unwrap().check_lazy(va_top, true);
+            // self.check_lazy(va_top, true);
+
             va_top.0
         }
     }
@@ -420,9 +453,33 @@ impl TaskControlBlock {
         inner.memory_set.remove_area_with_start_vpn(VirtAddr::from(start).into());
         inner.mmap_area.remove(start, len)
     }
-    
+
     pub fn getpid(&self) -> usize {
         self.pid.0
+    }
+
+    pub fn get_parent(&self) -> Option<Arc<TaskControlBlock>> {
+        let inner = self.inner.exclusive_access();
+        inner.parent.as_ref().unwrap().upgrade()
+    }
+
+    pub fn grow_proc(&self, grow_size: isize) -> usize {
+        if grow_size > 0 {
+            let growed_addr: usize = self.inner.exclusive_access().heap_pt + grow_size as usize;
+            let limit = self.inner.exclusive_access().heap_start + USER_HEAP_SIZE;
+            if growed_addr > limit {
+                panic!("process doesn't have enough memsize to grow! {} {} {} {}", limit, self.inner.exclusive_access().heap_pt, growed_addr, self.pid.0);
+            }
+            self.inner.exclusive_access().heap_pt = growed_addr;
+        }
+        else {
+            let shrinked_addr: usize = self.inner.exclusive_access().heap_pt + grow_size as usize;
+            if shrinked_addr < self.inner.exclusive_access().heap_start {
+                panic!("Memory shrinked to the lowest boundary!")
+            }
+            self.inner.exclusive_access().heap_pt = shrinked_addr;
+        }
+        return self.inner.exclusive_access().heap_pt;
     }
 }
 

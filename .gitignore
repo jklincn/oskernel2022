@@ -21,3 +21,4 @@ user_c/bin/*
 .vscode
 .gdb_history
 os.bin
+os.bin.burn
