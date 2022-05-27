@@ -13,7 +13,7 @@
 //
 
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_ref, translated_refmut, translated_str};
+use crate::mm::{translated_ref, translated_refmut, translated_str, translated_byte_buffer, UserBuffer};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task,
     suspend_current_and_run_next, SignalFlags
@@ -255,14 +255,9 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
 pub fn sys_uname(buf: *const u8) -> isize {
     let token = current_user_token();
     let uname = UTSNAME.exclusive_access();
-    *translated_refmut(token, buf as *mut Utsname) = Utsname {
-        sysname:uname.sysname,
-        nodename:uname.nodename,
-        release: uname.release,
-        version: uname.version,
-        machine: uname.machine,
-        domainname: uname.domainname,
-    };
+    let buf_vec = translated_byte_buffer(token, buf, core::mem::size_of::<Utsname>());
+    let mut userbuf = UserBuffer::new(buf_vec);
+    userbuf.write(uname.as_bytes());
     0
 }
 
