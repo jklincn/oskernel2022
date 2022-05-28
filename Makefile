@@ -20,3 +20,20 @@ run: all
 	@sudo chmod 777 $(K210-SERIALPORT)
 	python3 $(K210-BURNER) -p $(K210-SERIALPORT) -b 1500000 $(KERNEL_BIN)
 	python3 -m serial.tools.miniterm --eol LF --dtr 0 --rts 0 --filter direct $(K210-SERIALPORT) 115200
+	
+gdb-run:
+#	@cd os && make build
+	@qemu-system-riscv64 \
+		-machine virt \
+		-nographic \
+		-bios ./bootloader/rustsbi-qemu.bin \
+		-device loader,file=os/target/riscv64imac-unknown-none-elf/release/os.bin,addr=0x80200000 \
+		-drive file=./fat32-fuse/fat32.img,if=none,format=raw,id=x0 \
+        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
+		-s -S 
+
+gdb:
+	gdb-multiarch \
+    -ex 'file ./os/target/riscv64imac-unknown-none-elf/release/os' \
+    -ex 'set arch riscv:rv64' \
+    -ex 'target remote localhost:1234'
