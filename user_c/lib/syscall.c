@@ -33,23 +33,23 @@ int exec(char* name) {
 int execve(const char* name, char* const argv[], char* const argp[]) {
     return syscall(SYSCALL_EXEC, name, argv, argp);
 }
-pid_t getpid(void) {
+pid_t getpid(void){
     return syscall(SYSCALL_GETPID);
 }
-pid_t getppid(void) {
+pid_t getppid(void){
     return syscall(SYSCALL_GETPPID);
 }
-int64 get_time() {
+int64 get_time(){
     TimeVal time;
     int err = sys_get_time(&time, 0);
-    if (err == 0) {
+    if (err == 0){
         return ((time.sec & 0xffff) * 1000 + time.usec / 1000);
     }
-    else {
+    else{
         return -1;
     }
 }
-int sys_get_time(TimeVal* ts, int tz) {
+int sys_get_time(TimeVal* ts, int tz){
     return syscall(SYSCALL_GET_TIME, ts, tz);
 }
 int sleep(unsigned long long time) {
@@ -57,7 +57,7 @@ int sleep(unsigned long long time) {
     if (syscall(SYSCALL_NANOSLEEP, &tv, &tv)) return tv.sec;
     return 0;
 }
-int times(void* mytimes) {
+int times(void* mytimes){
     return syscall(SYSCALL_TIMES, mytimes);
 }
 int dup(int fd) {
@@ -69,7 +69,8 @@ int dup2(int old_fd, int new_fd) {
 int close(int fd) {
     return syscall(SYSCALL_CLOSE, fd);
 }
-int pipe(int* fd) {
+
+int pipe(int *fd) {
     return syscall(SYSCALL_PIPE, fd, 0);
 }
 int open(const char* path, int flags)

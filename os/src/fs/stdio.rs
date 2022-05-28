@@ -49,16 +49,16 @@ impl File for Stdin {
     }
 
     #[allow(unused_variables)]
-    fn get_fstat(&self, kstat:&mut Kstat){
+    fn get_fstat(&self, kstat: &mut Kstat) {
         panic!("Stdin not implement get_fstat");
     }
 
     #[allow(unused_variables)]
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
         panic!("Stdin not implement get_dirent");
     }
 
-    fn get_name(&self) -> String{
+    fn get_name(&self) -> String {
         panic!("Stdin not implement get_name");
     }
 
@@ -85,16 +85,16 @@ impl File for Stdout {
     }
 
     #[allow(unused_variables)]
-    fn get_fstat(&self, kstat:&mut Kstat){
+    fn get_fstat(&self, kstat: &mut Kstat) {
         panic!("Stdout not implement get_fstat");
     }
-    
+
     #[allow(unused_variables)]
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
         panic!("Stdout not implement get_dirent");
     }
 
-    fn get_name(&self) -> String{
+    fn get_name(&self) -> String {
         panic!("Stdout not implement get_name");
     }
 

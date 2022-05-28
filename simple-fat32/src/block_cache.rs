@@ -1,11 +1,11 @@
-use super::{BlockDevice, BLOCK_SZ};
+use super::{BlockDevice, BLOCK_SIZE};
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use lazy_static::*;
 use spin::RwLock; //读写锁
 
 pub struct BlockCache {
-    pub cache: [u8; BLOCK_SZ],
+    pub cache: [u8; BLOCK_SIZE],
     block_id: usize,
     block_device: Arc<dyn BlockDevice>,
     modified: bool,
@@ -14,7 +14,7 @@ pub struct BlockCache {
 impl BlockCache {
     /// 从磁盘上加载一个块缓存
     pub fn new(block_id: usize, block_device: Arc<dyn BlockDevice>) -> Self {
-        let mut cache = [0u8; BLOCK_SZ];
+        let mut cache = [0u8; BLOCK_SIZE];
         block_device.read_block(block_id, &mut cache);
         Self {
             cache,
@@ -35,7 +35,7 @@ impl BlockCache {
         T: Sized,
     {
         let type_size = core::mem::size_of::<T>();
-        assert!(offset + type_size <= BLOCK_SZ);
+        assert!(offset + type_size <= BLOCK_SIZE);
         let addr = self.addr_of_offset(offset);
         unsafe { &*(addr as *const T) }
     }
@@ -46,7 +46,7 @@ impl BlockCache {
         T: Sized,
     {
         let type_size = core::mem::size_of::<T>();
-        assert!(offset + type_size <= BLOCK_SZ);
+        assert!(offset + type_size <= BLOCK_SIZE);
         self.modified = true;
         let addr = self.addr_of_offset(offset);
         unsafe { &mut *(addr as *mut T) }
@@ -63,7 +63,7 @@ impl BlockCache {
     }
 
     /// 将缓冲区中的内容写回到磁盘块中
-    pub fn sync(&mut self) {
+    fn sync(&mut self) {
         if self.modified {
             //println!("drop cache, id = {}", self.block_id);
             self.modified = false;

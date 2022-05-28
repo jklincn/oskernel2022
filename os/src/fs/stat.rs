@@ -46,7 +46,7 @@ impl Kstat {
         }
     }
 
-    pub fn init(&mut self,st_size:i64,st_blksize:i64,st_blocks:u64) {
+    pub fn init(&mut self, st_size: i64, st_blksize: i64, st_blocks: u64) {
         self.st_nlink = 1;
         self.st_size = st_size;
         self.st_blksize = st_blksize;

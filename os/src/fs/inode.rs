@@ -1,12 +1,10 @@
 use super::{Dirent, File, Kstat};
-use crate::drivers::BLOCK_DEVICE;
-use crate::mm::UserBuffer;
+use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
 use _core::str::FromStr;
-use alloc::vec::Vec;
-use alloc::{string::String, sync::Arc};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
 use lazy_static::*;
-use simple_fat32::{FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
+use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
 
 /// 表示进程中一个被打开的常规文件或目录
@@ -65,22 +63,19 @@ impl OSInode {
 lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
         let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
-        let manager_reader = fat32_manager.read();
-        Arc::new(manager_reader.create_root_vfile(&fat32_manager)) // 返回根目录
+        Arc::new(create_root_vfile(&fat32_manager)) // 返回根目录
     };
 }
 
 pub fn list_apps() {
     println!("/**** APPS ****");
-
     for app in ROOT_INODE.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
             println!("{}", app.0);
         }
     }
-
-    println!("**************/")
+    println!("**************/");
 }
 
 // 定义一份打开文件的标志
@@ -216,8 +211,8 @@ impl File for OSInode {
         let inner = self.inner.lock();
         let vfile = inner.inode.clone();
         // todo
-        let (st_size,st_blksize,st_blocks) = vfile.stat();
-        kstat.init(st_size,st_blksize,st_blocks);
+        let (st_size, st_blksize, st_blocks) = vfile.stat();
+        kstat.init(st_size, st_blksize, st_blocks);
     }
 
     fn get_dirent(&self, dirent: &mut Dirent) -> isize {

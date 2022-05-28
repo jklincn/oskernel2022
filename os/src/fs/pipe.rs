@@ -8,14 +8,16 @@
 /// pub fn make_pipe()
 /// ```
 //
-use super::{File, Kstat, Dirent};
+use super::{Dirent, File, Kstat};
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
-use alloc::{sync::{Arc, Weak}, string::String};
+use alloc::{
+    string::String,
+    sync::{Arc, Weak},
+};
 
-use crate::task::suspend_current_and_run_next;
 pub use super::{list_apps, open, OSInode, OpenFlags};
-
+use crate::task::suspend_current_and_run_next;
 
 /// ### 管道
 /// 由 读 `readable` / 写 `writable` 权限和 缓冲区 `buffer` 组成，用以分别表示管道的写端和读端
@@ -208,16 +210,16 @@ impl File for Pipe {
     }
 
     #[allow(unused_variables)]
-    fn get_fstat(&self, kstat:&mut Kstat){
+    fn get_fstat(&self, kstat: &mut Kstat) {
         panic!("pipe not implement get_fstat");
     }
-    
+
     #[allow(unused_variables)]
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize{
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
         panic!("pipe not implement get_dirent");
     }
 
-    fn get_name(&self) -> String{
+    fn get_name(&self) -> String {
         panic!("pipe not implement get_name");
     }
 

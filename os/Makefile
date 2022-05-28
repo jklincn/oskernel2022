@@ -52,10 +52,13 @@ submit: build_submit
 run: run-inner
 
 copy_to_fs: 
-	cd ../fat32-fuse && sudo mount fat32.img fs && sudo cp ../user_c/bin/* fs/ && sudo umount fs
-
-new_fat32_img:
-	cd ../fat32-fuse && rm fat32.img && cp ~/fat32.img .
+	@cd ../simple-fat32 \
+	&& sh ./create_img.sh \
+	&& sudo mkdir fs \
+	&& sudo mount fat32.img fs \
+	&& sudo cp ../user_c/bin/* fs/ \
+	&& sudo umount fs \
+	&& sudo rmdir fs
 
 run-inner: build copy_to_fs
 	@qemu-system-riscv64 \
@@ -63,7 +66,7 @@ run-inner: build copy_to_fs
 		-nographic \
 		-bios ../bootloader/rustsbi-qemu.bin \
 		-device loader,file=$(KERNEL_BIN),addr=0x80200000 \
-		-drive file=../fat32-fuse/fat32.img,if=none,format=raw,id=x0 \
+		-drive file=../simple-fat32/fat32.img,if=none,format=raw,id=x0 \
         -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 .PHONY: build env kernel

@@ -6,13 +6,13 @@ use spin::RwLock;
 
 #[derive(Clone)]
 pub struct VFile {
-    name: String,
-    short_sector: usize,               // 文件短目录项所在扇区
-    short_offset: usize,               // 文件短目录项所在扇区的偏移
-    long_pos_vec: Vec<(usize, usize)>, // 长目录项的位置<sector, offset>
-    attribute: u8,
-    fs: Arc<RwLock<FAT32Manager>>,
-    block_device: Arc<dyn BlockDevice>,
+    name: String,                       // 文件名
+    short_sector: usize,                // 文件短目录项所在扇区
+    short_offset: usize,                // 文件短目录项所在扇区的偏移
+    long_pos_vec: Vec<(usize, usize)>,  // 长目录项的位置<sector, offset>
+    attribute: u8,                      // 文件属性
+    fs: Arc<RwLock<FAT32Manager>>,      // 文件系统引用
+    block_device: Arc<dyn BlockDevice>, // 块设备引用
 }
 
 impl VFile {
@@ -81,7 +81,6 @@ impl VFile {
 
     fn modify_short_dirent<V>(&self, f: impl FnOnce(&mut ShortDirEntry) -> V) -> V {
         if self.short_sector == 0 {
-            //println!("[fs]: modify vroot dent");
             let root_dirent = self.fs.read().get_root_dirent();
             let mut rw = root_dirent.write();
             f(&mut rw)
@@ -238,7 +237,7 @@ impl VFile {
     }
 
     /// 根据名称搜索当前目录下的文件
-    pub fn find_vfile_byname(&self, name: &str) -> Option<VFile> {
+    fn find_vfile_byname(&self, name: &str) -> Option<VFile> {
         // 不是目录则退出
         assert!(self.is_dir());
         let (name_, ext_) = split_name_ext(name);
@@ -350,9 +349,6 @@ impl VFile {
             drop(manager_reader);
             let long_ent_num = v_long_name.len(); // 需要创建的长文件名目录项个数
 
-            // 计算校验和
-            let check_sum = tmp_short_ent.checksum();
-
             // 定义一个空的长文件名目录项用于写入
             let mut tmp_long_ent = LongDirEntry::new();
             // 逐个写入长名目录项
@@ -364,7 +360,7 @@ impl VFile {
                     order |= 0x40;
                 }
                 // 初始化长文件名目录项
-                tmp_long_ent.initialize(v_long_name.pop().unwrap().as_bytes(), order, check_sum);
+                tmp_long_ent.initialize(v_long_name.pop().unwrap().as_bytes(), order, tmp_short_ent.checksum());
                 // 写入长文件名目录项
                 assert_eq!(self.write_at(dirent_offset, tmp_long_ent.as_bytes_mut()), DIRENT_SZ);
                 // 更新写入位置
@@ -430,6 +426,7 @@ impl VFile {
                 offset += DIRENT_SZ;
                 continue;
             }
+            // 注意：Linux中文件创建都会创建一个长文件名目录项，用于处理文件大小写问题
             if file_entry.attr() != ATTR_LONG_NAME {
                 // 短文件名
                 let (_, se_array, _) = unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
@@ -624,4 +621,18 @@ impl VFile {
             }
         }
     }
+}
+
+/// 创建根目录的虚拟文件
+pub fn create_root_vfile(fs_manager: &Arc<RwLock<FAT32Manager>>) -> VFile {
+    let long_pos_vec: Vec<(usize, usize)> = Vec::new();
+    VFile::new(
+        String::from("/"),
+        0,
+        0,
+        long_pos_vec,
+        ATTR_DIRECTORY,
+        Arc::clone(fs_manager),
+        fs_manager.read().block_device(),
+    )
 }

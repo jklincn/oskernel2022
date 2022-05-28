@@ -1,17 +1,16 @@
-use super::{clone_into_array, fat32_manager::FAT32Manager, get_block_cache, BlockDevice, BLOCK_SZ};
+use super::{clone_into_array, fat32_manager::FAT32Manager, get_block_cache, BlockDevice, BLOCK_SIZE};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::RwLock;
 
-const LEAD_SIGNATURE: u32 = 0x41615252; // This lead signature is used to validate that this is in fact an FSInfo sector.
-const STRUC_SIGNATURE: u32 = 0x61417272; // Another signature that is more localized in the sector to the location of the fields that are used.
+const LEAD_SIGNATURE: u32 = 0x41615252;
+const STRUC_SIGNATURE: u32 = 0x61417272;
 pub const FREE_CLUSTER: u32 = 0x00000000; // 空闲簇
 pub const END_CLUSTER: u32 = 0x0FFFFFF8; // 最后一个簇
 pub const BAD_CLUSTER: u32 = 0x0FFFFFF7;
-const FATENTRY_PER_SEC: u32 = BLOCK_SZ as u32 / 4;
+const FATENTRY_PER_SEC: u32 = BLOCK_SIZE as u32 / 4;
 
-// 文件属性
 pub const ATTR_READ_ONLY: u8 = 0x01;
 pub const ATTR_HIDDEN: u8 = 0x02;
 pub const ATTR_SYSTEM: u8 = 0x04;
@@ -19,16 +18,11 @@ pub const ATTR_VOLUME_ID: u8 = 0x08;
 pub const ATTR_DIRECTORY: u8 = 0x10;
 pub const ATTR_ARCHIVE: u8 = 0x20;
 pub const ATTR_LONG_NAME: u8 = ATTR_READ_ONLY | ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME_ID;
-pub const ATTR_LONG_NAME_MASK: u8 = ATTR_READ_ONLY | ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME_ID | ATTR_DIRECTORY | ATTR_ARCHIVE;
 
 pub const DIRENT_SZ: usize = 32;
-#[allow(unused)]
-pub const SHORT_NAME_LEN: u32 = 8;
-#[allow(unused)]
-pub const SHORT_EXT_LEN: u32 = 3;
 pub const LONG_NAME_LEN: u32 = 13;
 
-type DataBlock = [u8; BLOCK_SZ];
+type DataBlock = [u8; BLOCK_SIZE];
 
 /// DBR(Dos Boot Record) and BPB Structure
 /// or call it BS(Boot sector)
@@ -63,7 +57,7 @@ impl FatBS {
         self.bpb_num_fats as u32
     }
 
-    pub fn first_fat_sector(&self) -> u32 {
+    pub fn rsvd_sec_cnt(&self) -> u32 {
         self.bpb_rsvd_sec_cnt as u32
     }
 }
@@ -100,75 +94,43 @@ impl FatExtBS {
     }
 }
 
-/*
-FSInfo 字段
-FSI_LeadSig	    0	4    Value 0x41615252
-FSI_Reserved1	4	480 保留
-FSI_StrucSig	484	4    Value 0x61417272
-FSI_Free_Count	488	4   包含卷上最近已知的空闲簇计数。如果值是0xFFFFFFFF，那么空闲计数是未知的，必须计算。
-FSI_Nxt_Free	492	4   最后被分配的簇号，起始空闲簇号应该是下一个簇
-FSI_Reserved2	496	12  保留
-FSI_TrailSig	508	4   Trail signature (0xAA550000)
- */
-// 该结构体不对Buffer作结构映射，仅保留位置信息
-// 但是为其中信息的获取和修改提供了接口
+#[repr(packed)]
+#[allow(unused)]
+#[derive(Clone, Copy)]
 pub struct FSInfo {
-    sector_num: u32,
+    fsi_lead_sig: u32,        // Value 0x41615252
+    fsi_reserved1: [u8; 480], // 保留
+    fsi_struc_sig: u32,       // Value 0x61417272
+    fsi_free_count: u32,      // 包含卷上最近已知的空闲簇计数。如果值是0xFFFFFFFF，那么空闲计数是未知的，必须计算。
+    fsi_nxt_free: u32,        // 最后被分配的簇号，起始空闲簇号应该是下一个簇
+    fsi_reserved2: [u8; 12],  // 保留
+    fsi_trail_sig: u32,       // Trail signature (0xAA550000)
 }
 
 impl FSInfo {
-    pub fn new(sector_num: u32) -> Self {
-        Self { sector_num }
-    }
-
-    fn check_lead_signature(&self, block_device: Arc<dyn BlockDevice>) -> bool {
-        get_block_cache(self.sector_num as usize, block_device)
-            .read()
-            .read(0, |&lead_sig: &u32| lead_sig == LEAD_SIGNATURE)
-    }
-
-    fn check_struc_signature(&self, block_device: Arc<dyn BlockDevice>) -> bool {
-        get_block_cache(self.sector_num as usize, block_device)
-            .read()
-            .read(484, |&sec_sig: &u32| sec_sig == STRUC_SIGNATURE)
-    }
-
     /// 对签名进行校验
-    pub fn check_signature(&self, block_device: Arc<dyn BlockDevice>) -> bool {
-        return self.check_lead_signature(block_device.clone()) && self.check_struc_signature(block_device.clone());
+    pub fn check_signature(&self) -> bool {
+        self.fsi_lead_sig == LEAD_SIGNATURE && self.fsi_struc_sig == STRUC_SIGNATURE
     }
 
     /// 读取空闲簇数
-    pub fn free_clusters(&self, block_device: Arc<dyn BlockDevice>) -> u32 {
-        get_block_cache(self.sector_num as usize, block_device)
-            .read()
-            .read(488, |&free_cluster_count: &u32| free_cluster_count)
+    pub fn free_clusters(&self) -> u32 {
+        self.fsi_free_count
     }
 
     /// 写入空闲簇数
-    pub fn write_free_clusters(&self, free_clusters: u32, block_device: Arc<dyn BlockDevice>) {
-        get_block_cache(self.sector_num as usize, block_device)
-            .write()
-            .modify(488, |free_cluster_count: &mut u32| {
-                *free_cluster_count = free_clusters;
-            });
+    pub fn set_free_clusters(&mut self, free_clusters: u32) {
+        self.fsi_free_count = free_clusters
     }
 
     /// 读取最后被分配的簇号
-    pub fn next_free_cluster(&self, block_device: Arc<dyn BlockDevice>) -> u32 {
-        get_block_cache(self.sector_num as usize, block_device)
-            .read()
-            .read(492, |&start_cluster: &u32| start_cluster)
+    pub fn next_free_cluster(&self) -> u32 {
+        self.fsi_nxt_free
     }
 
     /// 写入最后被分配的簇号
-    pub fn write_next_free_cluster(&self, start_cluster: u32, block_device: Arc<dyn BlockDevice>) {
-        //println!("sector_num = {}, start_c = {}", self.sector_num, start_cluster);
-        get_block_cache(self.sector_num as usize, block_device)
-            .write()
-            .modify(492, |start_clu: &mut u32| {
-                *start_clu = start_cluster;
-            });
+    pub fn set_next_free_cluster(&mut self, start_cluster: u32) {
+        self.fsi_nxt_free = start_cluster
     }
 }
 
@@ -213,45 +175,22 @@ impl ShortDirEntry {
         }
     }
 
-    /// 初始化
+    /// 初始化，这里仅修改名字与属性
     pub fn initialize(&mut self, name_: &[u8], extension_: &[u8], dir_attr: u8) {
-        let dir_name: [u8; 8] = clone_into_array(&name_[0..8]);
-        let dir_extension: [u8; 3] = clone_into_array(&extension_[0..3]);
-        *self = Self {
-            dir_name,
-            dir_extension,
-            dir_attr,
-            dir_ntres: 0,
-            dir_crt_time_tenth: 0,
-            dir_crt_time: 0,
-            dir_crt_date: 0,
-            dir_lst_acc_date: 0,
-            dir_fst_clus_hi: 0,
-            dir_wrt_time: 0,
-            dir_wrt_date: 0,
-            dir_fst_clus_lo: 0,
-            dir_file_size: 0,
-        };
-    }
-
-    /// If DIR_Name[0] == 0xE5, then the directory entry is free (there is no file or directory name in this entry).
-    pub fn is_deleted(&self) -> bool {
-        if self.dir_name[0] == 0xE5 {
-            true
-        } else {
-            false
-        }
+        self.dir_name = clone_into_array(&name_[0..8]);
+        self.dir_extension = clone_into_array(&extension_[0..3]);
+        self.dir_attr = dir_attr;
     }
 
     pub fn is_valid(&self) -> bool {
-        !self.is_deleted() // 未删除即有效
+        // 目前未删除即有效
+        if self.dir_name[0] != 0xE5 {
+            true
+        } else {
+            false
+        } 
     }
 
-    /// If DIR_Name[0] == 0x00, then the directory entry is free (same as for 0xE5),
-    /// and there are no allocated directory entries after this one (all of the DIR_Name[0]
-    /// bytes in all of the entries after this one are also set to 0).The special 0 value, 0
-    /// rather than the 0xE5 value, indicates to FAT file system driver code that the rest of
-    /// the entries in this directory do not need to be examined because they are all free.
     pub fn is_empty(&self) -> bool {
         if self.dir_name[0] == 0x00 {
             true
@@ -266,10 +205,6 @@ impl ShortDirEntry {
         } else {
             false
         }
-    }
-
-    pub fn is_file(&self) -> bool {
-        !self.is_dir() // 要么目录要么文件
     }
 
     pub fn is_long(&self) -> bool {
@@ -288,6 +223,15 @@ impl ShortDirEntry {
         self.dir_file_size
     }
 
+    pub fn file_size(&self) -> u32 {
+        self.dir_file_size
+    }
+
+    /// 设置当前文件的大小
+    pub fn set_file_size(&mut self, dir_file_size: u32) {
+        self.dir_file_size = dir_file_size;
+    }
+
     /// 获取文件起始簇号
     pub fn first_cluster(&self) -> u32 {
         ((self.dir_fst_clus_hi as u32) << 16) + (self.dir_fst_clus_lo as u32)
@@ -299,7 +243,7 @@ impl ShortDirEntry {
         self.dir_fst_clus_lo = (cluster & 0x0000FFFF) as u16; // 设置低位
     }
 
-    /// 获取短文件名
+    /// 获取短文件名(大写)
     pub fn get_name_uppercase(&self) -> String {
         let mut name: String = String::new();
         for i in 0..8 {
@@ -324,41 +268,15 @@ impl ShortDirEntry {
         name
     }
 
+    #[allow(unused_assignments)]
+    /// 获取短文件名(小写)
     pub fn get_name_lowercase(&self) -> String {
         let mut name: String = String::new();
-        for i in 0..8 {
-            // 记录文件名
-            if self.dir_name[i] == 0x20 {
-                break;
-            } else {
-                name.push((self.dir_name[i] as char).to_ascii_lowercase());
-            }
-        }
-        for i in 0..3 {
-            // 记录扩展名
-            if self.dir_extension[i] == 0x20 {
-                break;
-            } else {
-                if i == 0 {
-                    name.push('.');
-                }
-                name.push((self.dir_extension[i] as char).to_ascii_lowercase());
-            }
-        }
+        name = self.get_name_uppercase().to_ascii_lowercase();
         name
     }
 
-    pub fn file_size(&self) -> u32 {
-        self.dir_file_size
-    }
-
-    /* 设置当前文件的大小 */
-    // 簇的分配和回收实际要对FAT表操作
-    pub fn set_file_size(&mut self, dir_file_size: u32) {
-        self.dir_file_size = dir_file_size;
-    }
-
-    /* 清空文件，删除时使用 */
+    /// 清空文件，删除时使用
     pub fn clear(&mut self) {
         self.dir_file_size = 0;
         self.set_first_cluster(0);
@@ -388,7 +306,7 @@ impl ShortDirEntry {
         (current_cluster, current_sector, offset % bytes_per_sector)
     }
 
-    /* 以偏移量读取文件，这里会对fat和manager加读锁 */
+    /// 以偏移量读取文件，这里会对fat和manager加读锁
     pub fn read_at(
         &self,
         offset: usize,
@@ -437,7 +355,7 @@ impl ShortDirEntry {
             get_block_cache(current_sector, Arc::clone(block_device))
                 .read()
                 .read(0, |data_block: &DataBlock| {
-                    let src = &data_block[current_off % BLOCK_SZ..current_off % BLOCK_SZ + block_read_size];
+                    let src = &data_block[current_off % BLOCK_SIZE..current_off % BLOCK_SIZE + block_read_size];
                     dst.copy_from_slice(src);
                 });
 
@@ -462,7 +380,7 @@ impl ShortDirEntry {
         read_size
     }
 
-    /* 以偏移量写文件，这里会对fat和manager加读锁 */
+    /// 以偏移量写文件，这里会对fat和manager加读锁
     pub fn write_at(
         &self,
         offset: usize,
@@ -476,7 +394,7 @@ impl ShortDirEntry {
         let fat_reader = fat.read();
         let bytes_per_sector = manager_reader.bytes_per_sector() as usize;
         let bytes_per_cluster = manager_reader.bytes_per_cluster() as usize;
-       
+
         let end: usize;
         if self.is_dir() {
             let dir_file_size =
@@ -499,7 +417,7 @@ impl ShortDirEntry {
                 .write()
                 .modify(0, |data_block: &mut DataBlock| {
                     let src = &buf[write_size..write_size + block_write_size];
-                    let dst = &mut data_block[current_off % BLOCK_SZ..current_off % BLOCK_SZ + block_write_size];
+                    let dst = &mut data_block[current_off % BLOCK_SIZE..current_off % BLOCK_SIZE + block_write_size];
                     dst.copy_from_slice(src);
                 });
 
@@ -629,7 +547,7 @@ impl LongDirEntry {
     }
 
     /// 长文件名目录项初始化
-    /// 传入长度为 13 的字符数组，目前还是以 ASCII 码进行处理!
+    /// 传入长度为 13 的字符数组，暂不支持中文
     pub fn initialize(&mut self, name_buffer: &[u8], ldir_ord: u8, ldir_chksum: u8) {
         let mut ldir_name1: [u8; 10] = [0; 10];
         let mut ldir_name2: [u8; 12] = [0; 12];
@@ -690,23 +608,19 @@ impl LongDirEntry {
 
     /* 获取长文件名，此处完成unicode至ascii的转换，暂不支持中文！*/
     // 这里直接将几个字段拼合，不考虑填充字符0xFF等
-    // 需要和manager的long_name_split配合使用
     pub fn get_name_raw(&self) -> String {
         let mut name = String::new();
         let mut c: u8;
         for i in 0..5 {
             c = self.ldir_name1[i << 1];
-            //if c == 0 { return name }
             name.push(c as char);
         }
         for i in 0..6 {
             c = self.ldir_name2[i << 1];
-            //if c == 0 { return name }
             name.push(c as char);
         }
         for i in 0..2 {
             c = self.ldir_name3[i << 1];
-            //if c == 0 { return name }
             name.push(c as char);
         }
         return name;
@@ -825,10 +739,6 @@ impl FAT {
             .modify(offset as usize, |old_clu: &mut u32| {
                 *old_clu = next_cluster;
             });
-    }
-
-    pub fn set_next_end(&self, cluster: u32, block_device: Arc<dyn BlockDevice>) {
-        self.set_next_cluster(cluster, END_CLUSTER, block_device);
     }
 
     /// 获取某个簇链的第i个簇(i为参数)
