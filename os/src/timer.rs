@@ -27,6 +27,13 @@ pub struct  TimeVal {
     pub usec:usize,
 }
 
+impl TimeVal {
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
+}
+
 #[allow(non_camel_case_types)]
 /// ### Linux 间隔计数
 /// - `tms_utime`：用户态时间
@@ -38,6 +45,13 @@ pub struct tms {    /// 用户态时间
     pub tms_stime:isize,    /// 已回收子进程的用户态时间
     pub tms_cutime:isize,   /// 已回收子进程的内核态时间
     pub tms_cstime:isize,
+}
+
+impl tms {
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
 }
 
 /// ### 取得当前 `mtime` 计数器的值

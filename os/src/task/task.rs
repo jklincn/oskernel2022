@@ -334,7 +334,7 @@ impl TaskControlBlock {
         
         if va >= mmap_start && va < mmap_end {
             //println!("lazy mmap");
-            self.lazy_mmap(va.0, is_load)
+            self.lazy_mmap(va, is_load)
         } 
         else { 
             println!("va: 0x{:x}", va.0);
@@ -371,14 +371,14 @@ impl TaskControlBlock {
     /// - 返回值：
     ///     - `0`
     ///     - `-1`
-    pub fn lazy_mmap(&self, stval: usize, is_load: bool) -> isize {
+    pub fn lazy_mmap(&self, va: VirtAddr, is_load: bool) -> isize {
         let mut inner = self.inner_exclusive_access();
         let fd_table = inner.fd_table.clone();
         let token = inner.get_user_token();
-        let lazy_result = inner.memory_set.lazy_mmap(stval.into());
+        let lazy_result = inner.memory_set.lazy_mmap(va.into());
 
         if lazy_result == 0 || is_load {
-            inner.mmap_area.lazy_map_page(stval, fd_table, token);
+            inner.mmap_area.lazy_map_page(va, fd_table, token);
         }
         return lazy_result;
     }
@@ -434,7 +434,7 @@ impl TaskControlBlock {
             inner.memory_set.insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
 
             // 创建mmap后直接加载一页，不使用lazy mmap
-            inner.memory_set.lazy_mmap(va_top);
+            // inner.memory_set.lazy_mmap(va_top);
             inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
             // println!("ppn: 0x{:x}", inner.memory_set.translate(va_top.into()).unwrap().ppn().0);
             // inner.memory_set.debug_show_data(va_top);
@@ -458,10 +458,10 @@ impl TaskControlBlock {
         self.pid.0
     }
 
-    pub fn get_parent(&self) -> Option<Arc<TaskControlBlock>> {
-        let inner = self.inner.exclusive_access();
-        inner.parent.as_ref().unwrap().upgrade()
-    }
+    // pub fn get_parent(&self) -> Option<Arc<TaskControlBlock>> {
+    //     let inner = self.inner.exclusive_access();
+    //     inner.parent.as_ref().unwrap().upgrade()
+    // }
 
     pub fn grow_proc(&self, grow_size: isize) -> usize {
         if grow_size > 0 {

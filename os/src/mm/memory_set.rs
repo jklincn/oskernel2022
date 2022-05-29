@@ -99,6 +99,7 @@ impl MemorySet {
             None,
         );
     }
+    
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
         if let Some((idx, area)) = self
             .areas
@@ -362,6 +363,14 @@ impl MemorySet {
         self.areas.clear();
     }
 
+    /// ### 在地址空间中插入一个空的离散逻辑段
+    /// - 已确定：
+    ///     - 起止虚拟地址
+    ///     - 映射方式：Framed
+    ///     - map_perm
+    /// - 留空：
+    ///     - vpn_table
+    ///     - data_frames
     pub fn insert_mmap_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
         let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission);
         new_chunk_area.set_mmap_range(start_va, end_va);
@@ -405,6 +414,7 @@ impl MemorySet {
     }
 }
 
+/// ### 离散逻辑段
 pub struct ChunkArea {
     vpn_table: Vec<VirtPageNum>,
     data_frames: BTreeMap<VirtPageNum, FrameTracker>,
@@ -488,13 +498,13 @@ impl ChunkArea {
 
 }
 
-/// ### 逻辑段
+/// ### 连续逻辑段
 /// - 一段虚拟页号连续的区间
 /// 
 /// |参数|描述|
 /// |--|--|
 /// |`vpn_range`|描述一段虚拟页号的连续区间，表示该逻辑段在地址区间中的位置和长度
-/// |`data_frames`|保存了该逻辑段内的每个虚拟页面和它被映射到的物理页帧的一个键值对容器 BTreeMap 中<br>这些物理页帧被用来存放实际内存数据而不是作为多级页表中的中间节点
+/// |`data_frames`|键值对容器 BTreeMap ,保存了该逻辑段内的每个虚拟页面的 VPN 和被映射到的物理页帧<br>这些物理页帧被用来存放实际内存数据而不是作为多级页表中的中间节点
 /// |`map_type`|描述该逻辑段内的所有虚拟页面映射到物理页帧的方式
 /// |`map_perm`|控制该逻辑段的访问方式，它是页表项标志位 PTEFlags 的一个子集，仅保留 `U` `R` `W` `X` 四个标志位
 /// ```
@@ -506,7 +516,7 @@ impl ChunkArea {
 pub struct MapArea {
     /// 描述一段虚拟页号的连续区间，表示该逻辑段在地址区间中的位置和长度
     vpn_range: VPNRange,
-    /// 保存了该逻辑段内的每个虚拟页面和它被映射到的物理页帧的一个键值对容器 `BTreeMap` 中<br>
+    /// 键值对容器 BTreeMap ,保存了该逻辑段内的每个虚拟页面的 VPN 和被映射到的物理页帧<br>
     /// 这些物理页帧被用来存放实际内存数据而不是作为多级页表中的中间节点
     data_frames: BTreeMap<VirtPageNum, FrameTracker>,
     /// 描述该逻辑段内的所有虚拟页面映射到物理页帧的方式

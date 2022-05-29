@@ -23,7 +23,6 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
-use crate::config::PAGE_SIZE;
 
 pub use crate::task::{Utsname, UTSNAME, CloneFlags};
 
@@ -68,19 +67,24 @@ pub fn sys_nanosleep(buf: *const u8) -> isize {
 /// - 返回值：正确执行返回 0，出现错误返回 -1。
 pub fn sys_get_time(buf: *const u8) -> isize {
     let token = current_user_token();
-    *translated_refmut(token, buf as *mut TimeVal) = get_TimeVal();
+    let buffers = translated_byte_buffer(token, buf, core::mem::size_of::<TimeVal>());
+    let mut userbuf = UserBuffer::new(buffers);
+    userbuf.write(get_TimeVal().as_bytes());
     0
 }
 
 pub fn sys_times(buf: *const u8) -> isize {
     let sec = get_time_ms() as isize * 1000;
     let token = current_user_token();
-    *translated_refmut(token, buf as *mut tms) = tms {
+    let buffers = translated_byte_buffer(token, buf, core::mem::size_of::<tms>());
+    let mut userbuf = UserBuffer::new(buffers);
+    userbuf.write(tms {
         tms_stime:sec,
         tms_utime:sec,
         tms_cstime:sec,
         tms_cutime:sec,
-    };
+        }.as_bytes()
+    );
     0
 }
 
@@ -282,8 +286,8 @@ pub fn sys_uname(buf: *const u8) -> isize {
 ///         const MAP_ANONYMOUS = 0x20;
 ///         ```
 ///     - `fd`：映射文件描述符
-///     - `off`: 偏移量
-/// - 返回值：从文件的哪个位置开始映射
+///     - `off`: 从文件的哪个位置开始映射
+/// - 返回值：mmap映射空间的起始地址
 /// - syscall_id:222
 pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
     let task = current_task().unwrap();
@@ -305,6 +309,7 @@ pub fn sys_sbrk(grow_size: isize, _is_shrink: usize) -> isize {
 }
 
 pub fn sys_brk(brk_addr: usize) -> isize{
+    #[allow(unused_assignments)]
     let mut addr_new = 0;
     if brk_addr == 0 {
         addr_new = sys_sbrk(0, 0) as usize;

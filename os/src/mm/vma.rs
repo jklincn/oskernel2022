@@ -9,8 +9,8 @@ bitflags! {
     pub struct MmapProts: usize {
         const PROT_NONE = 0;
         const PROT_READ = 1;
-        const PROT_WRITE = 2;
-        const PROT_EXEC = 4;
+        const PROT_WRITE = 1 << 1;
+        const PROT_EXEC  = 1 << 2;
         const PROT_GROWSDOWN = 0x01000000;
         const PROT_GROWSUP = 0x02000000;
     }
@@ -33,6 +33,10 @@ bitflags! {
     }
 }
 
+/// ### mmap 块管理器
+/// - `mmap_start` : 地址空间中mmap区块起始虚地址
+/// - `mmap_top` : 地址空间中mmap区块当结束虚地址
+/// - `mmap_set` : mmap块 向量
 pub struct MmapArea {
     pub mmap_start: VirtAddr,
     pub mmap_top: VirtAddr,
@@ -50,11 +54,9 @@ impl MmapArea {
 
     pub fn get_mmap_top(&mut self) -> VirtAddr { self.mmap_top }
 
-    pub fn lazy_map_page(&mut self, stval: usize, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) {
+    pub fn lazy_map_page(&mut self, va: VirtAddr, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) {
         for mmap_space in self.mmap_set.iter_mut() {
-            if stval >= mmap_space.oaddr.0 && stval < mmap_space.oaddr.0 + mmap_space.length {
-                let va: VirtAddr = stval.into();
-                // let page_start: VirtAddr = (stval & !(PAGE_SIZE - 1)).into();
+            if va.0 >= mmap_space.oaddr.0 && va.0 < mmap_space.oaddr.0 + mmap_space.length {
                 mmap_space.lazy_map_page(va, fd_table, token);
                 return 
             }
@@ -62,12 +64,12 @@ impl MmapArea {
     }
 
     pub fn push(&mut self, start: usize, len: usize, prot: usize, flags: usize,
-                fd: isize, offset: usize, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) -> usize {
+                fd: isize, offset: usize, _fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, _token: usize) -> usize {
         
         let start_addr = start.into();
 
-        let mut mmap_space = MmapSpace::new(start_addr, len, prot, flags, 0, fd, offset);
-        mmap_space.map_file(start_addr, PAGE_SIZE, offset, fd_table, token);
+        let mmap_space = MmapSpace::new(start_addr, len, prot, flags, 0, fd, offset);
+        // mmap_space.map_file(start_addr, PAGE_SIZE, offset, _fd_table, _token);
 
         self.mmap_set.push(mmap_space);
 
@@ -94,6 +96,24 @@ impl MmapArea {
     }
 }
 
+/// ### mmap 块
+/// 用于记录 mmap 空间信息，mmap数据并不存放在此
+/// 
+/// |成员变量|含义|
+/// |--|--|
+/// |`oaddr`|mmap 空间起始虚拟地址|
+/// |`length`|mmap 空间长度|
+/// |`valid`|mmap 空间有效性|
+/// |`prot`|mmap 空间权限|
+/// |`flags`|映射方式|
+/// |`fd`|文件描述符|
+/// |`offset`|映射文件偏移地址|
+/// 
+/// - 成员函数
+///     ```
+///     pub fn new()
+///     pub fn lazy_map_page()
+///     ```
 pub struct MmapSpace {
     // pub addr: VirtAddr,
     pub oaddr: VirtAddr,

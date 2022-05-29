@@ -4,9 +4,9 @@
 
 #define PROG_NUM 32
 
-char* prog_name[] = { "mmap", "dup", "dup2", "execve", "exit", "fork", "getpid", "getppid", "gettimeofday", "uname", "sleep", "times", "pipe", "wait", "waitpid",
+char* prog_name[] = { "mmap", "dup", "dup2", "execve", "exit", "fork", "getpid", "getppid", "uname", "pipe", "wait", "waitpid","munmap", 
     "open",  "openat", "close",  "read",  "write", "mount", "umount", "mkdir_",  "chdir", "unlink", "fstat", "getcwd", "getdents",  "yield" , "clone", "brk",
-    "munmap" };
+    "gettimeofday", "sleep", "times" };
 
 int main() {
     for (int t = 0; t < PROG_NUM; t++) {
