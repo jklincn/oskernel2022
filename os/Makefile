@@ -17,7 +17,7 @@ BOARD ?= qemu
 # Binutils
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
 
-build: env initproc $(KERNEL_BIN) 
+build: env initproc_submit $(KERNEL_BIN) 
 
 build_submit: env initproc_submit $(KERNEL_BIN) 
 
@@ -38,7 +38,7 @@ $(KERNEL_BIN): kernel
 
 
 kernel:
-	@cargo clean
+    # @cargo clean
 	@echo Platform: $(BOARD)
 	@cp src/linker-$(BOARD).ld src/linker.ld
 	@cargo build --release --offline --features "board_$(BOARD)"
@@ -53,10 +53,11 @@ run: run-inner
 
 copy_to_fs: 
 	@cd ../simple-fat32 \
+	&& rm -f ./fat32.img \
 	&& sh ./create_img.sh \
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
-	&& sudo cp ../user_c/bin/* fs/ \
+	&& sudo cp ../test_program/final/sdcard_content/* fs/ \
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
