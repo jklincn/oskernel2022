@@ -8,7 +8,7 @@ char* prog_name[] = { "mmap", "dup", "dup2", "execve", "exit", "fork", "getpid",
     "open",  "openat", "close",  "read",  "write", "mount", "umount", "mkdir_",  "chdir", "unlink", "fstat", "getcwd", "getdents",  "yield" , "clone", "brk",
     "gettimeofday", "sleep", "times" };
 
-char *argv[] = {"-w","entry-static.exe",0};
+char *argv[] = {"-w","entry-static.exe","argv",0};
 
 int main() {
     for (int t = 0; t < PROG_NUM; t++) {

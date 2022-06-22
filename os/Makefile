@@ -51,6 +51,15 @@ submit: build_submit
 
 run: run-inner
 
+run-custom: build copy_to_fs_custom
+	@qemu-system-riscv64 \
+		-machine virt \
+		-nographic \
+		-bios ../bootloader/rustsbi-qemu.bin \
+		-device loader,file=$(KERNEL_BIN),addr=0x80200000 \
+		-drive file=../simple-fat32/fat32.img,if=none,format=raw,id=x0 \
+        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+
 copy_to_fs: 
 	@cd ../simple-fat32 \
 	&& rm -f ./fat32.img \
@@ -58,6 +67,19 @@ copy_to_fs:
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
 	&& sudo cp ../test_program/final/sdcard_content/* fs/ \
+	&& sudo umount fs \
+	&& sudo rmdir fs
+
+copy_to_fs_custom: 
+	@cd ../test_program/final/custom-test \
+	&& make disk \
+	&& make clean \
+	&& cd ../../../simple-fat32 \
+	&& rm -f ./fat32.img \
+	&& sh ./create_img.sh \
+	&& sudo mkdir fs \
+	&& sudo mount fat32.img fs \
+	&& sudo cp ../test_program/final/custom-test/disk/* fs/ \
 	&& sudo umount fs \
 	&& sudo rmdir fs
 

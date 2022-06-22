@@ -170,6 +170,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
         let all_data = app_inode.read_all();
         drop(inner);
         let argc = args_vec.len();
+        println!("exec name:{},argvs:{:?}",path,args_vec);
         task.exec(all_data.as_slice(), args_vec);
         // return argc because cx.x[10] will be covered with it later
         argc as isize
