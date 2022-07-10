@@ -40,6 +40,7 @@ static void usage(char *argv[])
 
 int main(int argc, char *argv[])
 {
+	exit(1194964161);
 	char *wrap = "";
 	int timeoutsec = 5;
 	int timeout = 0;

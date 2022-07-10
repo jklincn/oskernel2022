@@ -40,6 +40,7 @@ const SYSCALL_READ:     usize = 63;
 const SYSCALL_WRITE:    usize = 64;
 const SYSCALL_FSTAT:    usize = 80;
 const SYSCALL_EXIT:     usize = 93;
+const SYSCALL_SET_TID_ADDRESS:     usize = 96;
 const SYSCALL_NANOSLEEP:usize = 101;
 const SYSCALL_YIELD:    usize = 124;
 const SYSCALL_KILL:     usize = 129;
@@ -57,9 +58,11 @@ const SYSCALL_WAITPID:  usize = 260;
 
 mod fs;         // 文件读写模块
 mod process;    // 进程控制模块
+mod thread;
 
 use fs::*;
 use process::*;
+use thread::*;
 
 /// 系统调用分发函数
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
@@ -80,6 +83,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_WRITE =>    sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_FSTAT=>     sys_fstat(args[0] as isize, args[1] as *mut u8),
         SYSCALL_EXIT =>     sys_exit(args[0] as i32),
+        SYSCALL_SET_TID_ADDRESS => sys_set_tid_address(args[0] as *mut usize),
         SYSCALL_NANOSLEEP=> sys_nanosleep(args[0] as *const u8),
         SYSCALL_YIELD =>    sys_yield(),
         SYSCALL_KILL =>     sys_kill(args[0], args[1] as u32),
@@ -89,7 +93,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GETPID =>   sys_getpid(),
         SYSCALL_GETPPID =>  sys_getppid(),
         SYSCALL_FORK =>     sys_fork(args[0] as usize, args[1] as  usize, args[2] as  usize, args[3] as  usize, args[4] as usize),
-        SYSCALL_EXEC =>     sys_exec(args[0] as *const u8, args[1] as *const usize),
+        SYSCALL_EXEC =>     sys_exec(args[0] as *const u8, args[1] as *const usize,args[2] as *const usize),
         SYSCALL_BRK =>      sys_brk(args[0]),
         SYSCALL_MMAP=>      sys_mmap(args[0] as usize, args[1] as usize, args[2] as usize, args[3] as usize, args[4] as isize, args[5] as usize),
         SYSCALL_MUNMAP =>   sys_munmap(args[0] as usize, args[1] as usize),

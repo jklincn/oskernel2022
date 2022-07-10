@@ -79,7 +79,7 @@ pub fn trap_handler() -> ! {
             // 由于应用的 Trap 上下文不在内核地址空间，因此我们调用 current_trap_cx 来获取当前应用的 Trap 上下文的可变引用
             let mut cx = current_trap_cx();
             cx.sepc += 4;   // 我们希望trap返回后应用程序从下一条指令开始执行
-            // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值 放到 a0
+            // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值放到 a0
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
@@ -97,6 +97,7 @@ pub fn trap_handler() -> ! {
             } else {
                 is_load = false;
             }
+            println!("stval:{:?}",stval::read());
             let va: VirtAddr = (stval as usize).into();
             if va > TRAMPOLINE.into() {
                 println!("[kernel] VirtAddr out of range!");
@@ -105,8 +106,10 @@ pub fn trap_handler() -> ! {
 
             let lazy = current_task().unwrap().check_lazy(va, is_load);
             if lazy != 0 { 
+                panic!("lazy:{}",lazy);
                 current_add_signal(SignalFlags::SIGSEGV); 
             }
+
 
             // current_trap_cx().debug_show();
             // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();

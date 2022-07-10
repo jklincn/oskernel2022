@@ -141,7 +141,7 @@ pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
     let token = current_user_token();
     let mut inner = task.inner_exclusive_access();
 
-    // todo 
+    // todo
     _ = flag;
 
     let (pipe_read, pipe_write) = make_pipe();
@@ -187,11 +187,11 @@ pub fn sys_dup(fd: usize) -> isize {
 ///         - 传入的 old_fd 不存在
 ///         - 传入的 new_fd 超出描述符数量限制 (典型值：128)
 /// - syscall ID：24
-pub fn sys_dup3( old_fd: usize, new_fd: usize )->isize{
+pub fn sys_dup3(old_fd: usize, new_fd: usize) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
 
-    if  old_fd >= inner.fd_table.len() || new_fd > FD_LIMIT {
+    if old_fd >= inner.fd_table.len() || new_fd > FD_LIMIT {
         return -1;
     }
     if inner.fd_table[old_fd].is_none() {
@@ -306,13 +306,12 @@ pub fn sys_chdir(path: *const u8) -> isize {
     let mut inner = task.inner_exclusive_access();
 
     let path = translated_str(token, path);
-    if let Some(new_cwd) = chdir(inner.current_path.as_str(),&path){
+    if let Some(new_cwd) = chdir(inner.current_path.as_str(), &path) {
         inner.current_path = new_cwd;
         0
     } else {
         -1
     }
-    
 }
 
 pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {

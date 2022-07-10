@@ -19,6 +19,7 @@ mod switch; // 任务上下文切换模块
 #[allow(clippy::module_inception)]
 mod task;   // 进程控制块
 mod info;   // 系统信息模块
+mod aux;
 
 use alloc::sync::Arc;
 use lazy_static::*;

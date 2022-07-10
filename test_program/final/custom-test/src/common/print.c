@@ -10,7 +10,6 @@ int t_printf(const char *s, ...)
 	va_list ap;
 	char buf[512];
 	int n;
-
 	t_status = 1;
 	va_start(ap, s);
 	n = vsnprintf(buf, sizeof buf, s, ap);

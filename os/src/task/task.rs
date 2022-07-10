@@ -6,12 +6,11 @@
 /// pub enum TaskStatus
 /// ```
 //
-
-use super::TaskContext;
+use super::{aux::*, TaskContext};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE, MmapArea, MapPermission};
+use crate::mm::{translated_refmut, translated_str, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -55,7 +54,7 @@ pub struct TaskControlBlock {
 /// |`children`|当前进程的所有子进程的任务控制块向量|
 /// |`exit_code`|退出码|
 /// |`fd_table`|文件描述符表|
-/// 
+///
 /// 注意我们在维护父子进程关系的时候大量用到了引用计数 `Arc/Weak` 。进程控制块的本体是被放到内核堆上面的，
 /// 对于它的一切访问都是通过智能指针 `Arc/Weak` 来进行的，这样是便于建立父子进程的双向链接关系（避免仅基于 `Arc` 形成环状链接关系）。
 /// 当且仅当智能指针 `Arc` 的引用计数变为 0 的时候，进程控制块以及被绑定到它上面的各类资源才会被回收。
@@ -74,23 +73,23 @@ pub struct TaskControlBlockInner {
     /// 维护当前进程的执行状态
     pub task_status: TaskStatus,
     /// 指向当前进程的父进程（如果存在的话）
-    pub parent: Option<Weak<TaskControlBlock>>, 
+    pub parent: Option<Weak<TaskControlBlock>>,
     /// 当前进程的所有子进程的任务控制块向量
-    pub children: Vec<Arc<TaskControlBlock>>,   
+    pub children: Vec<Arc<TaskControlBlock>>,
     /// 退出码
-    pub exit_code: i32,  
+    pub exit_code: i32,
 
     // 内存
     /// 应用数据仅有可能出现在应用地址空间低于 base_size 字节的区域中。
     /// 借助它我们可以清楚的知道应用有多少数据驻留在内存中
-    pub base_size: usize,           
+    pub base_size: usize,
     /// 应用地址空间
     pub memory_set: MemorySet,
     // 虚拟内存地址映射空间
     pub mmap_area: MmapArea,
     pub heap_start: usize,
     pub heap_pt: usize,
-    
+
     // 文件
     /// 文件描述符表
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
@@ -125,7 +124,7 @@ impl TaskControlBlockInner {
         }
     }
 
-    pub fn get_work_path(&self)->String{
+    pub fn get_work_path(&self) -> String {
         self.current_path.clone()
     }
 }
@@ -140,10 +139,7 @@ impl TaskControlBlock {
         // 解析传入的 ELF 格式数据构造应用的地址空间 memory_set 并获得其他信息
         let (memory_set, user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data);
         // 从地址空间 memory_set 中查多级页表找到应用地址空间中的 Trap 上下文实际被放在哪个物理页帧
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
+        let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 为进程分配 PID 以及内核栈，并记录下内核栈在内核地址空间的位置
         let pid_handle = pid_alloc();
         let tgid = pid_handle.0;
@@ -175,7 +171,7 @@ impl TaskControlBlock {
                         Some(Arc::new(Stdout)),
                     ],
                     signals: SignalFlags::empty(),
-                    current_path:String::from("/"),
+                    current_path: String::from("/"),
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
                 })
             },
@@ -194,46 +190,60 @@ impl TaskControlBlock {
     }
 
     /// 用来实现 exec 系统调用，即当前进程加载并执行另一个 ELF 格式可执行文件
-    pub fn exec(&self, elf_data: &[u8], args: Vec<String>) {
+    pub fn exec(&self, elf_data: &[u8], args: Vec<String>, envs: Vec<String>) {
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let (memory_set, mut user_sp,user_heap, entry_point) = MemorySet::from_elf(elf_data);
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
+        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data);
+        let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
 
-        // 将命令行参数以某种格式压入用户栈
-        // 在用户栈中提前分配好 参数字符串首地址 的空间
-        user_sp -= (args.len() + 1) * core::mem::size_of::<usize>();
-        let argv_base = user_sp;                             // 参数字符串首地址数组 起始地址
-        let mut argv: Vec<_> = (0..=args.len()) // 获取 参数字符串首地址数组 在用户栈中的可变引用
+        // 计算对齐位置
+        let mut total_len = 0;
+        for i in 0..args.len() {
+            total_len += args[i].len() + 1;
+        }
+        user_sp -= (8 - total_len % 8) * core::mem::size_of::<u8>();
+        // 分配 envs 的空间(目前暂不考虑env，故为0）
+        user_sp -= 0 * core::mem::size_of::<usize>();
+        let envv_base = 0;
+
+        // 分配 args 的空间，并写入字符串数据，把字符串首地址保存在 argv 中
+        // 这里高地址放前面的参数，即先存放 argv[0]
+        let argv: Vec<_> = (0..args.len())
             .map(|arg| {
-                translated_refmut(
-                    memory_set.token(),
-                    (argv_base + arg * core::mem::size_of::<usize>()) as *mut usize,
-                )
+                user_sp -= args[arg].len() + 1; //1是手动添加结束标记的空间
+                let mut p = user_sp;
+                for c in args[arg].as_bytes() {
+                    // 将参数写入到用户栈
+                    *translated_refmut(memory_set.token(), p as *mut u8) = *c;
+                    p += 1;
+                } // 写入字符串结束标记
+                *translated_refmut(memory_set.token(), p as *mut u8) = 0;
+                user_sp
             })
             .collect();
-            
-        // 参数字符串
-        *argv[args.len()] = 0;  // 标记参数尾
-        for i in 0..args.len() {
-            user_sp -= args[i].len() + 1;   // 在用户栈中分配 参数i 的空间
-            *argv[i] = user_sp;             // 在 参数字符串首地址数组中 记录 参数i 首地址
-            let mut p = user_sp;
-            for c in args[i].as_bytes() {   // 将参数写入到用户栈
-                *translated_refmut(memory_set.token(), p as *mut u8) = *c;
-                p += 1;
-            }                                    // 写入字符串结束标记
-            *translated_refmut(memory_set.token(), p as *mut u8) = 0;
-        }
 
-        // 将 user_sp 以 8 字节对齐，这是因为命令行参数的长度不一，很有可能压入之后 user_sp 没有对齐到 8 字节，
-        // 那么在 K210 平台上在访问用户栈的时候就会触发访存不对齐的异常.在 Qemu 平台上则并不存在这个问题。
-        user_sp -= user_sp % core::mem::size_of::<usize>();
+        // 分配 auxs 空间，并写入数据
+        for i in 0..AUX_NUM {
+            user_sp -= core::mem::size_of::<AuxEntry>();
+            *translated_refmut(memory_set.token(), user_sp as *mut AuxEntry) = AUX_VEC[i];
+        }
+        // envp，0，表示结束
+        user_sp -= core::mem::size_of::<usize>();
+        *translated_refmut(memory_set.token(), user_sp as *mut usize) = 0;
+        // argv, 0, 表示结束
+        user_sp -= core::mem::size_of::<usize>();
+        *translated_refmut(memory_set.token(), user_sp as *mut usize) = 0;
+        // argv
+        user_sp -= (args.len()) * core::mem::size_of::<usize>();
+        let argv_base = user_sp; // 参数字符串指针起始地址
+        for i in 0..args.len() {
+            *translated_refmut(memory_set.token(), (argv_base + i * core::mem::size_of::<usize>()) as *mut usize) = argv[i];
+        }
+        // argc
+        user_sp -= core::mem::size_of::<usize>();
+        *translated_refmut(memory_set.token(), user_sp as *mut usize) = args.len();
 
         let mut inner = self.inner_exclusive_access();
-        inner.memory_set = memory_set;  // 这将导致原有的地址空间生命周期结束，里面包含的全部物理页帧都会被回收
+        inner.memory_set = memory_set; // 这将导致原有的地址空间生命周期结束，里面包含的全部物理页帧都会被回收
         inner.heap_start = user_heap;
         inner.heap_pt = user_heap;
         inner.trap_cx_ppn = trap_cx_ppn;
@@ -248,25 +258,21 @@ impl TaskControlBlock {
         );
         // 修改 Trap 上下文中的 a0/a1 寄存器
         trap_cx.x[10] = args.len(); // a0 表示命令行参数的个数
-        trap_cx.x[11] = argv_base;  // a1 则表示 参数字符串首地址数组 的起始地址
+        trap_cx.x[11] = argv_base; // a1 则表示 参数字符串首地址数组 的起始地址
     }
-    
+
     /// 用来实现 fork 系统调用，即当前进程 fork 出来一个与之几乎相同的子进程
     pub fn fork(self: &Arc<TaskControlBlock>, is_create_thread: bool) -> Arc<TaskControlBlock> {
         let mut parent_inner = self.inner_exclusive_access();
         // 拷贝用户地址空间
         let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
+        let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 分配一个 PID
         let pid_handle = pid_alloc();
         let mut tgid = 0;
-        if is_create_thread{
+        if is_create_thread {
             tgid = self.pid.0;
-        }
-        else{
+        } else {
             tgid = pid_handle.0;
         }
         // 根据 PID 创建一个应用内核栈
@@ -331,18 +337,17 @@ impl TaskControlBlock {
         let mmap_start = inner.mmap_area.mmap_start;
         let mmap_end = inner.mmap_area.mmap_top;
         drop(inner);
-        
+
         if va >= mmap_start && va < mmap_end {
             //println!("lazy mmap");
             self.lazy_mmap(va, is_load)
-        } 
-        else { 
+        } else {
             println!("va: 0x{:x}", va.0);
             println!("mmap_start: 0x{:x}", mmap_start.0);
             println!("mmap_end: 0x{:x}", mmap_end.0);
-            -2 
+            -2
         }
-        
+
         // else if va.0 >= heap_base && va.0 <= heap_pt {
         //     inner.lazy_alloc_heap(vpn);
         //     return 0;
@@ -382,7 +387,7 @@ impl TaskControlBlock {
         }
         return lazy_result;
     }
-    
+
     /// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
     /// - 参数
     ///     - `start`, `len`：映射空间起始地址及长度，起始地址必须4k对齐
@@ -404,8 +409,8 @@ impl TaskControlBlock {
     ///     - `fd`：映射文件描述符
     ///     - `off`: 偏移量
     /// - 返回值：从文件的哪个位置开始映射
-    pub fn mmap(&self, start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> usize {        
-        if start % PAGE_SIZE != 0{
+    pub fn mmap(&self, start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> usize {
+        if start % PAGE_SIZE != 0 {
             panic!("mmap: start_va not aligned");
         }
 
@@ -417,21 +422,24 @@ impl TaskControlBlock {
 
         // "prot<<1" is equal to meaning of "MapPermission"
         // "1<<4" means user
-        let map_flags = (((prot & 0b111)<<1) + (1<<4))  as u8;
-    
-        let mut startvpn = start/PAGE_SIZE;
-        
-        if start != 0 { // "Start" va Already mapped
+        let map_flags = (((prot & 0b111) << 1) + (1 << 4)) as u8;
+
+        let mut startvpn = start / PAGE_SIZE;
+
+        if start != 0 {
+            // "Start" va Already mapped
             while startvpn < (start + len) / PAGE_SIZE {
-                if inner.memory_set.set_pte_flags(startvpn.into(), map_flags as usize) == -1{
+                if inner.memory_set.set_pte_flags(startvpn.into(), map_flags as usize) == -1 {
                     panic!("mmap: start_va not mmaped");
                 }
-                startvpn +=1;
+                startvpn += 1;
             }
             return start;
-        }
-        else{ // "Start" va not mapped
-            inner.memory_set.insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
+        } else {
+            // "Start" va not mapped
+            inner
+                .memory_set
+                .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
 
             // 创建mmap后直接加载一页，不使用lazy mmap
             // inner.memory_set.lazy_mmap(va_top);
@@ -468,11 +476,16 @@ impl TaskControlBlock {
             let growed_addr: usize = self.inner.exclusive_access().heap_pt + grow_size as usize;
             let limit = self.inner.exclusive_access().heap_start + USER_HEAP_SIZE;
             if growed_addr > limit {
-                panic!("process doesn't have enough memsize to grow! {} {} {} {}", limit, self.inner.exclusive_access().heap_pt, growed_addr, self.pid.0);
+                panic!(
+                    "process doesn't have enough memsize to grow! {} {} {} {}",
+                    limit,
+                    self.inner.exclusive_access().heap_pt,
+                    growed_addr,
+                    self.pid.0
+                );
             }
             self.inner.exclusive_access().heap_pt = growed_addr;
-        }
-        else {
+        } else {
             let shrinked_addr: usize = self.inner.exclusive_access().heap_pt + grow_size as usize;
             if shrinked_addr < self.inner.exclusive_access().heap_start {
                 panic!("Memory shrinked to the lowest boundary!")
@@ -489,9 +502,9 @@ impl TaskControlBlock {
 /// |`Ready`|准备运行|
 /// |`Running`|正在运行|
 /// |`Zombie`|僵尸态|
-#[derive(Copy, Clone, PartialEq)]   // 由编译器实现一些特性
+#[derive(Copy, Clone, PartialEq)] // 由编译器实现一些特性
 pub enum TaskStatus {
-    Ready,  // 准备运行
-    Running,// 正在运行
-    Zombie, // 僵尸态
+    Ready,   // 准备运行
+    Running, // 正在运行
+    Zombie,  // 僵尸态
 }

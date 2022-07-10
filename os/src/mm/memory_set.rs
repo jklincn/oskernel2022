@@ -232,6 +232,7 @@ impl MemorySet {
         let ph_count = elf_header.pt2.ph_count();
         // 记录目前涉及到的最大的虚拟页号
         let mut max_end_vpn = VirtPageNum(0);
+
         // 遍历所有的 program header 并对每个 program header 生成一个逻辑段
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
