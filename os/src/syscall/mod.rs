@@ -44,25 +44,34 @@ const SYSCALL_SET_TID_ADDRESS:     usize = 96;
 const SYSCALL_NANOSLEEP:usize = 101;
 const SYSCALL_YIELD:    usize = 124;
 const SYSCALL_KILL:     usize = 129;
+const SYSCALL_RT_SIGACTION: usize = 134;
+const SYSCALL_RT_SIGPROCMASK: usize = 135;
+const SYSCALL_RT_SIGTIMEDWAIT: usize = 137;
+const SYSCALL_RT_SIGRETURN: usize = 139;
 const SYSCALL_TIMES:    usize = 153;
 const SYSCALL_UNAME:    usize = 160;
 const SYSCALL_GET_TIME: usize = 169;
 const SYSCALL_GETPID:   usize = 172;
 const SYSCALL_GETPPID:  usize = 173;
+const SYSCALL_GETTID:  usize = 178;
 const SYSCALL_BRK:      usize = 214;
 const SYSCALL_MUNMAP:   usize = 215;
 const SYSCALL_FORK:     usize = 220;
 const SYSCALL_EXEC:     usize = 221;
 const SYSCALL_MMAP:     usize = 222;
 const SYSCALL_WAITPID:  usize = 260;
+const SYSCALL_PRLIMIT64:usize = 261;
 
 mod fs;         // 文件读写模块
 mod process;    // 进程控制模块
 mod thread;
+mod sync;
 
 use fs::*;
 use process::*;
 use thread::*;
+use sync::*;
+
 
 /// 系统调用分发函数
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
@@ -87,6 +96,10 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_NANOSLEEP=> sys_nanosleep(args[0] as *const u8),
         SYSCALL_YIELD =>    sys_yield(),
         SYSCALL_KILL =>     sys_kill(args[0], args[1] as u32),
+        SYSCALL_RT_SIGACTION => sys_rt_sigaction(),
+        SYSCALL_RT_SIGPROCMASK =>     sys_rt_sigprocmask(args[0] as *mut usize),
+        SYSCALL_RT_SIGTIMEDWAIT => sys_rt_sigtimedwait(),
+        SYSCALL_RT_SIGRETURN =>     sys_rt_sigreturn(args[0] as *mut usize),
         SYSCALL_TIMES =>    sys_times(args[0] as *const u8),
         SYSCALL_UNAME =>    sys_uname(args[0] as *const u8),
         SYSCALL_GET_TIME => sys_get_time(args[0] as *const u8),
@@ -94,10 +107,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GETPPID =>  sys_getppid(),
         SYSCALL_FORK =>     sys_fork(args[0] as usize, args[1] as  usize, args[2] as  usize, args[3] as  usize, args[4] as usize),
         SYSCALL_EXEC =>     sys_exec(args[0] as *const u8, args[1] as *const usize,args[2] as *const usize),
+        SYSCALL_GETTID =>   sys_gettid(),
         SYSCALL_BRK =>      sys_brk(args[0]),
         SYSCALL_MMAP=>      sys_mmap(args[0] as usize, args[1] as usize, args[2] as usize, args[3] as usize, args[4] as isize, args[5] as usize),
         SYSCALL_MUNMAP =>   sys_munmap(args[0] as usize, args[1] as usize),
         SYSCALL_WAITPID =>  sys_waitpid(args[0] as isize, args[1] as *mut i32),
+        SYSCALL_PRLIMIT64=> sys_prlimit64(),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }
 }

@@ -2,6 +2,8 @@ use alloc::vec::Vec;
 
 use lazy_static::*;
 
+use crate::config::PAGE_SIZE;
+
 pub const AUX_NUM :usize =8;
 
 #[derive(Clone,Copy)]
@@ -21,7 +23,7 @@ lazy_static!{
     pub static ref AUX_VEC:Vec<AuxEntry> = {
         let mut temp = Vec::new();
         temp.push(AuxEntry(AT_NULL,0));
-        temp.push(AuxEntry(AT_PAGESZ,4096));
+        temp.push(AuxEntry(AT_PAGESZ,PAGE_SIZE));
         temp.push(AuxEntry(AT_UID,0));
         temp.push(AuxEntry(AT_EUID,0));
         temp.push(AuxEntry(AT_GID,0));

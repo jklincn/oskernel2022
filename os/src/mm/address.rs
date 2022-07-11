@@ -255,7 +255,7 @@ impl StepByOne for PhysPageNum {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone,Debug)]
 pub struct SimpleRange<T>
 where
     T: StepByOne + Copy + PartialEq + PartialOrd + Debug,
@@ -318,4 +318,5 @@ where
         }
     }
 }
+
 pub type VPNRange = SimpleRange<VirtPageNum>;

@@ -106,7 +106,6 @@ pub fn trap_handler() -> ! {
 
             let lazy = current_task().unwrap().check_lazy(va, is_load);
             if lazy != 0 { 
-                panic!("lazy:{}",lazy);
                 current_add_signal(SignalFlags::SIGSEGV); 
             }
 
@@ -131,7 +130,7 @@ pub fn trap_handler() -> ! {
             // current_trap_cx().debug_show();
             // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
             
-            // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());
+            //current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());
 
             current_add_signal(SignalFlags::SIGSEGV);
         }

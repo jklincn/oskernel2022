@@ -328,3 +328,11 @@ pub fn sys_brk(brk_addr: usize) -> isize {
     }
     addr_new as isize
 }
+
+pub fn sys_gettid()->isize{
+    0
+}
+
+pub fn sys_prlimit64()->isize{
+    0
+}
