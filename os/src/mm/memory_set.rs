@@ -221,13 +221,13 @@ impl MemorySet {
         let ph_count = elf_header.pt2.ph_count();
         // 记录目前涉及到的最大的虚拟页号
         let mut max_end_vpn = VirtPageNum(0);
-
         // 遍历所有的 program header 并对每个 program header 生成一个逻辑段
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
             if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
                 let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
                 let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
+                println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
                 let mut map_perm = MapPermission::U;
                 let ph_flags = ph.flags();
                 if ph_flags.is_read() {
@@ -248,13 +248,14 @@ impl MemorySet {
                 );
             }
         }
+
         // 分配用户栈
         let max_end_va: VirtAddr = max_end_vpn.into();
         let mut user_stack_bottom: usize = max_end_va.into();
         // 在已用最大虚拟页之上放置一个保护页
         user_stack_bottom += PAGE_SIZE; // 栈底
         let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址
-                                                                  // 将用户栈加入到程序地址空间
+        // 将用户栈加入到程序地址空间
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
@@ -264,6 +265,7 @@ impl MemorySet {
             ),
             None,
         );
+
         // 在应用地址空间中映射次高页面来存放 Trap 上下文
         memory_set.push(
             MapArea::new(

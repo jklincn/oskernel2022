@@ -11,7 +11,7 @@ buddy_system_allocator = "0.6"
 bitflags = "1.3.2"
 xmas-elf = "0.7.0"
 spin = "0.7.1"
-simple-fat32 = { path = "../simple-fat32" }
+simple-fat32 = { path = "../simple-fat32", features = [] }
 riscv = { git = "https://github.com/rcore-os/riscv", features = ["inline-asm"] }
 virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers" }
 k210-pac = { git = "https://github.com/wyfcyx/k210-pac" }

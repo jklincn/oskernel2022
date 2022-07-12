@@ -21,8 +21,9 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
-
+// use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 pub use crate::task::{CloneFlags, Utsname, UTSNAME};
+use lazy_static::*;
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -30,6 +31,10 @@ pub fn sys_exit(exit_code: i32) -> ! {
     panic!("Unreachable in sys_exit!");
 }
 
+pub fn sys_exit_group(exit_code: i32) -> ! {
+    exit_current_and_run_next(exit_code);
+    panic!("Unreachable in sys_exit_group!");
+}
 /// ### 应用主动交出 CPU 所有权进入 Ready 状态并切换到其他应用
 /// - 返回值：总是返回 0。
 /// - syscall ID：124
@@ -174,12 +179,17 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
 
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
-
+    println!("exec name:{},argvs:{:?}", path, args_vec);
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+        if path == "entry-static.exe"{
+            drop(inner);
+            let argc = args_vec.len();
+            task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
+            return argc as isize
+        }
         let all_data = app_inode.read_all();
         drop(inner);
-        let argc = args_vec.len();
-        println!("exec name:{},argvs:{:?}", path, args_vec);
+        let argc = args_vec.len();   
         task.exec(all_data.as_slice(), args_vec, envs_vec);
         // return argc because cx.x[10] will be covered with it later
         argc as isize
@@ -188,6 +198,20 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     }
 }
 
+lazy_static!{
+    pub static ref ENTRY_STATIC_EXE: Vec<u8> = {
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+        if let Some(app_inode) = open(inner.current_path.as_str(), "entry-static.exe", OpenFlags::O_RDONLY) {
+            let data = app_inode.read_all();
+            drop(inner);
+            data
+        }
+        else {
+            panic!("can't find entry-static.exe");
+        }
+    };
+}
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
 /// - 参数：
 ///     - pid 表示要等待的子进程的进程 ID，如果为 -1 的话表示等待任意一个子进程；

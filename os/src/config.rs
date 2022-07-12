@@ -6,7 +6,7 @@
 
 pub const USER_STACK_SIZE:      usize = 4096 * 25;
 pub const KERNEL_STACK_SIZE:    usize = 4096 * 2;
-pub const KERNEL_HEAP_SIZE:     usize = 0x20_0000;
+pub const KERNEL_HEAP_SIZE:     usize = 4096 * (512+256);
 /// 指定内存终止物理地址，内存大小为8MiB（左闭右开）
 pub const MEMORY_END:           usize = 0x80800000;
 /// 页面大小：4KiB

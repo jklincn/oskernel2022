@@ -106,6 +106,10 @@ impl BlockCacheManager {
     pub fn get_block_cache(&mut self, block_id: usize, block_device: Arc<dyn BlockDevice>) -> Arc<RwLock<BlockCache>> {
         // 先在队列中寻找，若找到则将块缓存的引用复制一份并返回
         if let Some(pair) = self.queue.iter().find(|pair| pair.0 == block_id) {
+            #[cfg(feature = "calc_hit_rate")]
+            unsafe {
+                CACHEHIT_NUM = CACHEHIT_NUM + 1.0;
+            }
             Arc::clone(&pair.1)
         } else {
             // 判断块缓存数量是否到达上线
@@ -136,13 +140,21 @@ lazy_static! {
     pub static ref BLOCK_CACHE_MANAGER: RwLock<BlockCacheManager> = RwLock::new(BlockCacheManager::new(1024));
 }
 
+#[cfg(feature = "calc_hit_rate")]
+pub static mut CACHEGET_NUM: f64 = 0.0;
+#[cfg(feature = "calc_hit_rate")]
+pub static mut CACHEHIT_NUM: f64 = 0.0;
+
 /// 用于外部模块访问文件数据块
 pub fn get_block_cache(block_id: usize, block_device: Arc<dyn BlockDevice>) -> Arc<RwLock<BlockCache>> {
     // 这里的read是RWLock读写锁
+    #[cfg(feature = "calc_hit_rate")]
+    unsafe {
+        CACHEGET_NUM = CACHEGET_NUM + 1.0;
+    }
     let phy_blk_id = BLOCK_CACHE_MANAGER.read().start_sec() + block_id;
     BLOCK_CACHE_MANAGER.write().get_block_cache(phy_blk_id, block_device)
 }
-
 
 // 设置起始扇区
 pub fn set_start_sec(start_sec: usize) {

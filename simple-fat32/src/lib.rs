@@ -19,6 +19,9 @@ use block_cache::{get_block_cache, set_start_sec, write_to_dev};
 pub use fat32_manager::FAT32Manager;
 pub use layout::*;
 
+#[cfg(feature = "calc_hit_rate")]
+pub use block_cache::{CACHEGET_NUM,CACHEHIT_NUM};
+
 pub fn clone_into_array<A, T>(slice: &[T]) -> A
 where
     A: Default + AsMut<[T]>,

@@ -25,7 +25,9 @@ static int start(char *wrap, char *argv[])
 			argv--;
 			argv[0] = wrap;
 		}
+		t_printf("==========argv[0]:%s==========\n",argv[0]);
 		execv(argv[0], argv);
+		t_printf("==========112211==========\n");
 		t_error("%s exec failed: %s\n", argv[0], strerror(errno));
 		exit(1);
 	}
@@ -40,7 +42,6 @@ static void usage(char *argv[])
 
 int main(int argc, char *argv[])
 {
-	exit(1194964161);
 	char *wrap = "";
 	int timeoutsec = 5;
 	int timeout = 0;
@@ -48,7 +49,6 @@ int main(int argc, char *argv[])
 	sigset_t set;
 	int opt;
 	int pid;
-	t_printf("my test!\n");
 	while ((opt = getopt(argc, argv, "w:t:")) != -1) {
 		switch (opt) {
 		case 'w':
