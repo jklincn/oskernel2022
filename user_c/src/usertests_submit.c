@@ -6,7 +6,7 @@
 
 char proc_name[40];
 char buf[6000];
-char *argv[] = {"-w", "entry-static.exe", proc_name, 0};
+char *argv[] = {"./runtest.exe","-w", "entry-static.exe", proc_name, 0};
 int offset = 0;
 
 void read_test_name()

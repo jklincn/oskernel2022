@@ -25,9 +25,7 @@ static int start(char *wrap, char *argv[])
 			argv--;
 			argv[0] = wrap;
 		}
-		t_printf("==========argv[0]:%s==========\n",argv[0]);
 		execv(argv[0], argv);
-		t_printf("==========112211==========\n");
 		t_error("%s exec failed: %s\n", argv[0], strerror(errno));
 		exit(1);
 	}
@@ -50,6 +48,7 @@ int main(int argc, char *argv[])
 	int opt;
 	int pid;
 	while ((opt = getopt(argc, argv, "w:t:")) != -1) {
+		t_printf("opt:%c\n", opt);
 		switch (opt) {
 		case 'w':
 			wrap = optarg;
@@ -63,6 +62,7 @@ int main(int argc, char *argv[])
 	}
 	if (optind >= argc)
 		usage(argv);
+	t_printf("%s\n", argv[0]);
 	argv += optind;
 	sigemptyset(&set);
 	sigaddset(&set, SIGCHLD);
