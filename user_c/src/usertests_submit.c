@@ -3,15 +3,21 @@
 #include "stdlib.h"
 
 #define PROG_NUM 110
+#define PROG_NAME_MAX_LENGTH 40
 
-char proc_name[40];
+char prog_name[PROG_NAME_MAX_LENGTH];
 char buf[6000];
-char *argv[] = {"./runtest.exe","-w", "entry-static.exe", proc_name, 0};
+char *argv[] = {"./runtest.exe","-w", "entry-static.exe", prog_name, 0};
 int offset = 0;
 
 void read_test_name()
 {
     // skip space
+    for (int i = 0; i < 40; i++)
+    {
+        *(prog_name + i) = '\0';
+    }
+    
     for (int k = 0; k < 3; k++)
     {
         for (; buf[offset] != ' '; offset++)
@@ -20,8 +26,8 @@ void read_test_name()
     }
     int k;
     for (k = 0; buf[offset] != '\n'; k++, offset++)
-        *(proc_name + k) = buf[offset];
-    *(proc_name + k + 1) = '\0';
+        *(prog_name + k) = buf[offset];
+    // *(prog_name + k + 1) = '\0';
     offset++;
 }
 

@@ -13,7 +13,6 @@ int main()
 {
 	char *s;
 	int r;
-
 	if (!environ)
 		t_error("environ is NULL\n");
 	if (clearenv() || (environ && *environ))

@@ -75,6 +75,7 @@ pub fn list_apps() {
             println!("{}", app.0);
         }
     }
+    open("/", "tmp", OpenFlags::O_DIRECTROY);
     println!("**************/");
 }
 

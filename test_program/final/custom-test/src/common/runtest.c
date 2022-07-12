@@ -48,7 +48,6 @@ int main(int argc, char *argv[])
 	int opt;
 	int pid;
 	while ((opt = getopt(argc, argv, "w:t:")) != -1) {
-		t_printf("opt:%c\n", opt);
 		switch (opt) {
 		case 'w':
 			wrap = optarg;
@@ -62,7 +61,6 @@ int main(int argc, char *argv[])
 	}
 	if (optind >= argc)
 		usage(argv);
-	t_printf("%s\n", argv[0]);
 	argv += optind;
 	sigemptyset(&set);
 	sigaddset(&set, SIGCHLD);
