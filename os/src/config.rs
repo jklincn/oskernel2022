@@ -8,7 +8,11 @@ pub const USER_STACK_SIZE:      usize = 4096 * 25;
 pub const KERNEL_STACK_SIZE:    usize = 4096 * 2;
 pub const KERNEL_HEAP_SIZE:     usize = 4096 * (512+256);
 /// 指定内存终止物理地址，内存大小为8MiB（左闭右开）
+#[cfg(feature = "board_k210")]
 pub const MEMORY_END:           usize = 0x80800000;
+#[cfg(not(any(feature = "board_k210")))]
+pub const MEMORY_END:           usize = 0x88000000;
+
 /// 页面大小：4KiB
 pub const PAGE_SIZE:            usize = 0x1000;
 /// 页内偏移：12bit

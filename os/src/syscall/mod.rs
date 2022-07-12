@@ -43,6 +43,7 @@ const SYSCALL_EXIT:     usize = 93;
 const SYSCALL_EXIT_GROUP:     usize = 94;
 const SYSCALL_SET_TID_ADDRESS:     usize = 96;
 const SYSCALL_NANOSLEEP:usize = 101;
+const SYSCALL_CLOCK_GETTIME:usize = 113;
 const SYSCALL_YIELD:    usize = 124;
 const SYSCALL_KILL:     usize = 129;
 const SYSCALL_RT_SIGACTION: usize = 134;
@@ -96,6 +97,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_EXIT_GROUP =>     sys_exit_group(args[0] as i32),
         SYSCALL_SET_TID_ADDRESS => sys_set_tid_address(args[0] as *mut usize),
         SYSCALL_NANOSLEEP=> sys_nanosleep(args[0] as *const u8),
+        SYSCALL_CLOCK_GETTIME=> sys_clock_gettime(args[0] as *mut usize),
         SYSCALL_YIELD =>    sys_yield(),
         SYSCALL_KILL =>     sys_kill(args[0], args[1] as u32),
         SYSCALL_RT_SIGACTION => sys_rt_sigaction(),
