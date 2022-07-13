@@ -12,12 +12,9 @@ int offset = 0;
 
 void read_test_name()
 {
-    // skip space
     for (int i = 0; i < 40; i++)
-    {
         *(prog_name + i) = '\0';
-    }
-    
+    // skip space
     for (int k = 0; k < 3; k++)
     {
         for (; buf[offset] != ' '; offset++)
@@ -27,7 +24,6 @@ void read_test_name()
     int k;
     for (k = 0; buf[offset] != '\n'; k++, offset++)
         *(prog_name + k) = buf[offset];
-    // *(prog_name + k + 1) = '\0';
     offset++;
 }
 
