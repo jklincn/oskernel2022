@@ -17,10 +17,11 @@ int main(void)
 	char foo[6];
 	int fd;
 	FILE *f;
-
 	TEST((fd = mkstemp(tmp)) > 2);
 	TEST(write(fd, "hello", 6)==6);
+	t_printf("fdopen!");
 	TEST(f = fdopen(fd, "rb"));
+	t_printf("fdopen done!");
 	if (f) {
 		TEST(ftello(f)==6);
 		TEST(fseeko(f, 0, SEEK_SET)==0);

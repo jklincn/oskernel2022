@@ -361,7 +361,7 @@ pub fn sys_prlimit64()->isize{
     0
 }
 
-pub fn sys_clock_gettime(ts:*mut usize) -> isize{
+pub fn sys_clock_gettime(clk_id:usize,ts:*mut usize) -> isize{
     let token = current_user_token();
     *translated_refmut(token, ts) = 0 as usize;
     0

@@ -75,7 +75,7 @@ pub fn list_apps() {
             println!("{}", app.0);
         }
     }
-    open("/", "tmp", OpenFlags::O_DIRECTROY);
+    open("/", "tmp", OpenFlags::O_DIRECTROY);  // 决赛内容：创建tmp目录
     println!("**************/");
 }
 
@@ -88,6 +88,9 @@ bitflags! {
         const O_CREATE = 1 << 6;
         const O_TRUNC = 1 << 10;
         const O_DIRECTROY = 1 << 21;
+        // 决赛添加
+        const O_EXCL = 1 << 7;
+        const O_LARGEFILE = 1 << 15;
     }
 }
 
@@ -203,6 +206,7 @@ impl File for OSInode {
             let write_size = inner.inode.write_at(inner.offset, *slice);
             assert_eq!(write_size, slice.len());
             inner.offset += write_size;
+            println!("inner:{}",inner.offset);
             total_write_size += write_size;
         }
         total_write_size
@@ -236,6 +240,10 @@ impl File for OSInode {
         self.name()
     }
 
+    fn get_offset(&self) -> usize{
+        let inner = self.inner.lock();
+        inner.offset
+    }
     fn set_offset(&self, offset: usize){
         let mut inner = self.inner.lock();
         inner.offset = offset;

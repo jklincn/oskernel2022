@@ -23,6 +23,8 @@ pub trait File: Send + Sync {
 
     fn get_name(&self) -> String;
 
+    fn get_offset(&self) -> usize;
+
     fn set_offset(&self, offset: usize);
 }
 

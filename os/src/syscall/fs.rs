@@ -1,3 +1,7 @@
+use crate::fs::{chdir, make_pipe, open, Dirent, Kstat, OpenFlags, MNT_TABLE};
+use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
+use crate::task::{current_task, current_user_token};
+use alloc::sync::Arc;
 /// # 文件读写模块
 /// `os/src/syscall/fs.rs`
 /// ## 实现功能
@@ -9,10 +13,6 @@
 /// ```
 //
 use core::mem::size_of;
-use crate::fs::{chdir, make_pipe, open, Dirent, Kstat, OpenFlags, MNT_TABLE};
-use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
-use crate::task::{current_task, current_user_token};
-use alloc::sync::Arc;
 
 const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
@@ -368,5 +368,23 @@ pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
         total_len as isize
     } else {
         -1
+    }
+}
+
+/// 暂未考虑 whence 标志，默认为 SEEK_SET
+pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    // 文件描述符不合法
+    if fd >= inner.fd_table.len() {
+        return -1;
+    }
+    if let Some(file) = &inner.fd_table[fd] {
+        file.set_offset(off_t);
+        let file = file.clone();
+        drop(inner);
+        file.get_offset() as isize
+    } else {
+        -2
     }
 }

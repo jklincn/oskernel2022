@@ -227,7 +227,7 @@ impl MemorySet {
             if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
                 let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
                 let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
-                println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
+                // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
                 let mut map_perm = MapPermission::U;
                 let ph_flags = ph.flags();
                 if ph_flags.is_read() {

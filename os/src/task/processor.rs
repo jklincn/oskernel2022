@@ -14,6 +14,7 @@
 //
 
 use super::__switch;
+use super::manager::{TaskManager, TASK_MANAGER};
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
 use crate::sync::UPSafeCell;
@@ -68,6 +69,7 @@ lazy_static! {
 pub fn run_tasks() {
     loop {
         let mut processor = PROCESSOR.exclusive_access();
+        // TASK_MANAGER.exclusive_access().list_alltask();
         if let Some(task) = fetch_task() {
             let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
             // access coming task TCB exclusively

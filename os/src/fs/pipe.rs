@@ -223,6 +223,10 @@ impl File for Pipe {
         panic!("pipe not implement get_name");
     }
 
+    fn get_offset(&self) -> usize{
+        panic!("pipe not implement get_offset");
+    }
+    
     fn set_offset(&self, offset: usize) {
         panic!("pipe not implement set_offset");
     }
