@@ -371,20 +371,47 @@ pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
     }
 }
 
-/// 暂未考虑 whence 标志，默认为 SEEK_SET
+// 暂时放在这里
+bitflags! {
+    pub struct SeekFlags: usize {
+        const SEEK_SET = 0;   // 参数 offset 即为新的读写位置
+        const SEEK_CUR = 1;   // 以目前的读写位置往后增加 offset 个位移量
+        const SEEK_END = 2;   // 将读写位置指向文件尾后再增加 offset 个位移量
+    }
+}
+
 pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
+    println!("enter lseek!,fd:{},off_t:{},whence:{}", fd, off_t, whence);
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     // 文件描述符不合法
     if fd >= inner.fd_table.len() {
         return -1;
     }
+
     if let Some(file) = &inner.fd_table[fd] {
-        file.set_offset(off_t);
-        let file = file.clone();
-        drop(inner);
-        file.get_offset() as isize
+        let flag = SeekFlags::from_bits(whence).unwrap();
+        match flag {
+            SeekFlags::SEEK_SET => {
+                file.set_offset(off_t);
+                drop(inner);
+                off_t as isize
+            }
+            SeekFlags::SEEK_CUR => {
+                let current_offset = file.get_offset();
+                file.set_offset(off_t + current_offset);
+                drop(inner);
+                (off_t + current_offset) as isize
+            }
+            SeekFlags::SEEK_END => {
+                drop(inner);
+                unimplemented!()
+            }
+            // flag wrong
+            _ => -2,
+        }
     } else {
-        -2
+        // file not exists
+        -3
     }
 }

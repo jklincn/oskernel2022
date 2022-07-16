@@ -77,6 +77,7 @@ copy_to_fs_custom:
 	&& cd ../../../simple-fat32 \
 	&& rm -f ./fat32.img \
 	&& sh ./create_img.sh \
+	&& sudo rm -rf fs \
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
 	&& sudo cp ../test_program/final/custom-test/disk/* fs/ \

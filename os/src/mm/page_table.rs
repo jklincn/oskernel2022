@@ -326,6 +326,7 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
 
 /// ### 应用地址空间中的一段缓冲区（即内存）的抽象
 /// - `buffers`：位于应用地址空间中，内核无法直接通过用户地址空间的虚拟地址来访问，因此需要进行封装
+#[derive(Debug)]
 pub struct UserBuffer {
     pub buffers: Vec<&'static mut [u8]>,
 }

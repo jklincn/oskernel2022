@@ -41,21 +41,21 @@ int main(void)
 		close(p[1]);
 		return 1;
 	}
-
 	TEST(i, write(p[1], "hello, world\n", 13), 13, "write error %d!=%d (%s)");
 	TEST(i, fscanf(f, "%s %[own]", a, b), 2, "got %d fields, expected %d");
 	TEST_S(a, "hello,", "wrong result for %s");
 	TEST_S(b, "wo", "wrong result for %[own]");
 	TEST(i, fgetc(f), 'r', "'%c' != '%c') (%s)");
-
 	TEST(i, write(p[1], " 0x12 0x34", 10), 10, "write error %d!=%d (%s)");
 	TEST(i, fscanf(f, "ld %5i%2i", &x, &y), 1, "got %d fields, expected %d");
 	TEST(i, x, 0x12, "%d != %d");
 	TEST(i, fgetc(f), '3', "'%c' != '%c'");
-
+	t_printf("t_status:%d\n",t_status);
+	t_printf("4412312312312144444444444444\n");
 	fclose(f);
+	t_printf("4444444444444\n");
 	close(p[1]);
-
+	t_printf("4444444444444\n");
 	TEST(i, !!(f=writetemp("      42")), 1, "failed to make temp file");
 	if (f) {
 		x=y=-1;
