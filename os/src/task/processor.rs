@@ -68,6 +68,7 @@ lazy_static! {
 /// 功能是循环调用 fetch_task 直到顺利从任务管理器中取出一个任务，随后便准备通过任务切换的方式来执行
 pub fn run_tasks() {
     loop {
+        println!("run_tasks loop!");
         let mut processor = PROCESSOR.exclusive_access();
         // TASK_MANAGER.exclusive_access().list_alltask();
         if let Some(task) = fetch_task() {

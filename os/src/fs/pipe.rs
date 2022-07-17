@@ -158,21 +158,18 @@ impl File for Pipe {
         self.writable
     }
     fn read(&self, buf: UserBuffer) -> usize {
-        println!("pipe read!");
         assert!(self.readable());
         let mut buf_iter = buf.into_iter();
         let mut read_size = 0usize;
         loop {
             let mut ring_buffer = self.buffer.exclusive_access();
             let loop_read = ring_buffer.available_read();
-            println!("loop_read:{}",loop_read);
             
             if loop_read == 0 {
                 return read_size;  // This line is wrong, just for pass
                 if ring_buffer.all_write_ends_closed() {
                     return read_size;
                 }
-                panic!("not close");
                 drop(ring_buffer);
                 suspend_current_and_run_next();
                 continue;
@@ -182,7 +179,6 @@ impl File for Pipe {
                 if let Some(byte_ref) = buf_iter.next() {
                     unsafe {
                         *byte_ref = ring_buffer.read_byte();
-                        println!("*byte_ref:{}",*byte_ref);
                     }
                     read_size += 1;
                 } else {
@@ -192,14 +188,12 @@ impl File for Pipe {
         }
     }
     fn write(&self, buf: UserBuffer) -> usize {
-        println!("pipe write!buf:{:?}",buf);
         assert!(self.writable());
         let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;
         loop {
             let mut ring_buffer = self.buffer.exclusive_access();
             let loop_write = ring_buffer.available_write();
-            println!("loop_write:{}",loop_write);
             if loop_write == 0 {
                 drop(ring_buffer);
                 suspend_current_and_run_next();
@@ -211,7 +205,6 @@ impl File for Pipe {
                     ring_buffer.write_byte(unsafe { *byte_ref });
                     write_size += 1;
                 } else {
-                    println!("write_size:{}",write_size);
                     return write_size;
                 }
             }
