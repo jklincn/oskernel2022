@@ -206,7 +206,6 @@ impl File for OSInode {
             let write_size = inner.inode.write_at(inner.offset, *slice);
             assert_eq!(write_size, slice.len());
             inner.offset += write_size;
-            println!("inner:{}",inner.offset);
             total_write_size += write_size;
         }
         total_write_size

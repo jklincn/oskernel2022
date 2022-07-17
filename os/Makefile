@@ -17,13 +17,13 @@ BOARD ?= qemu
 # Binutils
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
 
-build: env initproc_submit $(KERNEL_BIN) 
+build: env initprog_submit $(KERNEL_BIN) 
 
-initproc:
+initprog:
 	@cd ../user_c && make build
 
-initproc_submit:
-	@cd ../user_c && make build_initproc_submit
+initprog_submit:
+	@cd ../user_c && make build_initprog_submit
 
 env:
 	rustup target add $(TARGET)

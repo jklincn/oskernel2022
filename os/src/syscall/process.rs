@@ -178,7 +178,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
 
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
-    println!("exec name:{},argvs:{:?}", path, args_vec);
+    // println!("exec name:{},argvs:{:?}", path, args_vec);
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         if path == "entry-static.exe"{
             drop(inner);

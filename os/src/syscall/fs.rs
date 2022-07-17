@@ -381,7 +381,7 @@ bitflags! {
 }
 
 pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
-    println!("enter lseek!,fd:{},off_t:{},whence:{}", fd, off_t, whence);
+    // println!("enter lseek!,fd:{},off_t:{},whence:{}", fd, off_t, whence);
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     // 文件描述符不合法
