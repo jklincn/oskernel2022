@@ -394,24 +394,80 @@ pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
         match flag {
             SeekFlags::SEEK_SET => {
                 file.set_offset(off_t);
-                drop(inner);
                 off_t as isize
             }
             SeekFlags::SEEK_CUR => {
                 let current_offset = file.get_offset();
                 file.set_offset(off_t + current_offset);
-                drop(inner);
                 (off_t + current_offset) as isize
             }
             SeekFlags::SEEK_END => {
-                drop(inner);
                 unimplemented!()
             }
             // flag wrong
-            _ => -2,
+            _ => panic!("sys_lseek: unsupported whence!"),
         }
     } else {
         // file not exists
         -3
+    }
+}
+
+// 暂时放在这里
+const TIOCGWINSZ: usize = 0x5413;
+pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    // 文件描述符不合法
+    if fd >= inner.fd_table.len() {
+        return -1;
+    }
+    match request {
+        TIOCGWINSZ => *translated_refmut(token, argp) = 0 as u8,
+        _ => panic!("sys_ioctl: unsupported request!"),
+    }
+    0
+}
+// 暂时放在这里
+#[derive(Clone, Copy)]
+pub struct Iovec {
+    iov_base: *const u8,
+    iov_len: usize,
+}
+
+pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
+    println!("enter sys_writev!iovp:{:?},iovcnt:{}", iovp, iovcnt);
+    panic!("sys_writev");
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    // 文件描述符不合法
+    if fd >= inner.fd_table.len() {
+        return -1;
+    }
+    if let Some(file) = &inner.fd_table[fd] {
+        // 文件不可写
+        if !file.writable() {
+            return -1;
+        }
+        let file = file.clone();
+        let mut total_write_len = 0;
+        drop(inner);
+        // let mut iovp : usize = iovp as usize;
+        // for _ in 0..iovcnt {
+        //     let mut p;
+        //     let r = unsafe {
+        //         p = core::ptr::NonNull::new(iovp as *mut Iovec).unwrap();
+        //         p.as_mut()
+        //     };
+        //     let buf = r.iov_base;
+        //     let len = r.iov_len;
+        //     total_write_len += file.write(UserBuffer::new(translated_byte_buffer(token, buf, len)));
+        //     iovp = iovp + core::mem::size_of::<Iovec>();
+        // }
+        total_write_len as isize
+    } else {
+        -1
     }
 }

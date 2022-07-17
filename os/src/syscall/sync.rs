@@ -148,3 +148,7 @@ pub fn sys_rt_sigaction()->isize{
 pub fn sys_rt_sigtimedwait()->isize{
     0
 }
+
+pub fn sys_futex()->isize{
+    0
+}

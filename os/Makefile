@@ -19,8 +19,6 @@ OBJCOPY := rust-objcopy --binary-architecture=riscv64
 
 build: env initproc_submit $(KERNEL_BIN) 
 
-build_submit: env initproc_submit $(KERNEL_BIN) 
-
 initproc:
 	@cd ../user_c && make build
 
@@ -44,23 +42,14 @@ kernel:
 	@cargo build --release --offline --features "board_$(BOARD)"
 	@rm src/linker.ld
 
-submit: build_submit
+submit: build
 	@cp $(BOOTLOADER) $(BOOTLOADER).copy
 	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
 	@mv $(BOOTLOADER).copy ../os.bin
 
 run: run-inner
 
-run-custom: build copy_to_fs_custom
-	@qemu-system-riscv64 \
-		-machine virt \
-		-nographic \
-		-bios ../bootloader/rustsbi-qemu.bin \
-		-device loader,file=$(KERNEL_BIN),addr=0x80200000 \
-		-drive file=../simple-fat32/fat32.img,if=none,format=raw,id=x0 \
-        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
-
-copy_to_fs: 
+copy-to-fs: 
 	@cd ../simple-fat32 \
 	&& rm -f ./fat32.img \
 	&& sh ./create_img.sh \
@@ -70,7 +59,7 @@ copy_to_fs:
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
-copy_to_fs_custom: 
+build-custom-test: 
 	@cd ../test_program/final/custom-test \
 	&& make disk \
 	&& make clean \
@@ -84,7 +73,7 @@ copy_to_fs_custom:
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
-run-inner: build copy_to_fs
+run-inner: build
 	@qemu-system-riscv64 \
 		-machine virt \
 		-nographic \

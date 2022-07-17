@@ -1,32 +1,11 @@
 /// # 系统调用模块
 /// `os/src/syscall/mod.rs`
-/// ## 实现功能
-/// ```
-/// const SYSCALL_DUP:      usize = 24;
-/// const SYSCALL_OPEN:     usize = 56;
-/// const SYSCALL_CLOSE:    usize = 57;
-/// const SYSCALL_PIPE:     usize = 59;
-/// const SYSCALL_READ:     usize = 63;
-/// const SYSCALL_WRITE:    usize = 64;
-/// const SYSCALL_EXIT:     usize = 93;
-/// const SYSCALL_NANOSLEEP:usize = 101;
-/// const SYSCALL_YIELD:    usize = 124;
-/// const SYSCALL_KILL:     usize = 129;
-/// const SYSCALL_TIMES:    usize = 153;
-/// const SYSCALL_UNAME:    usize = 160;
-/// const SYSCALL_GET_TIME: usize = 169;
-/// const SYSCALL_GETPID:   usize = 172;
-/// const SYSCALL_FORK:     usize = 220;
-/// const SYSCALL_EXEC:     usize = 221;
-/// const SYSCALL_MMAP:     usize = 222;
-/// const SYSCALL_WAITPID:  usize = 260;
-/// pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize
-/// ```
-//
+
 
 const SYSCALL_GETCWD:   usize = 17;
 const SYSCALL_DUP:      usize = 23;
 const SYSCALL_DUP3:     usize = 24;
+const SYSCALL_IOCTL:     usize = 29;
 const SYSCALL_MKDIRAT:  usize = 34;
 const SYSCALL_UNLINKAT: usize = 35;
 const SYSCALL_UMOUNT2:  usize = 39;
@@ -39,10 +18,12 @@ const SYSCALL_GETDENTS64: usize = 61;
 const SYSCALL_LSEEK: usize = 62;
 const SYSCALL_READ:     usize = 63;
 const SYSCALL_WRITE:    usize = 64;
+const SYSCALL_WRITEV:   usize = 66;
 const SYSCALL_FSTAT:    usize = 80;
 const SYSCALL_EXIT:     usize = 93;
 const SYSCALL_EXIT_GROUP:     usize = 94;
 const SYSCALL_SET_TID_ADDRESS:     usize = 96;
+const SYSCALL_FUTEX:     usize = 98;
 const SYSCALL_NANOSLEEP:usize = 101;
 const SYSCALL_CLOCK_GETTIME:usize = 113;
 const SYSCALL_YIELD:    usize = 124;
@@ -82,6 +63,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GETCWD =>   sys_getcwd(args[0] as *mut u8, args[1]),
         SYSCALL_DUP =>      sys_dup(args[0]),
         SYSCALL_DUP3 =>     sys_dup3(args[0], args[1]),
+        SYSCALL_IOCTL=>     sys_ioctl(args[0],args[1],args[2] as *mut u8),
         SYSCALL_MKDIRAT =>  sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         SYSCALL_UNLINKAT=>  sys_unlinkat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         SYSCALL_UMOUNT2=>   sys_umount(args[0] as *const u8, args[1]),
@@ -94,10 +76,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_READ =>     sys_read(args[0], args[1] as *const u8, args[2]),
         SYSCALL_LSEEK=>     sys_lseek(args[0],args[1],args[2]),
         SYSCALL_WRITE =>    sys_write(args[0], args[1] as *const u8, args[2]),
+        SYSCALL_WRITEV =>   sys_writev(args[0], args[1] as *const usize, args[2]),
         SYSCALL_FSTAT=>     sys_fstat(args[0] as isize, args[1] as *mut u8),
         SYSCALL_EXIT =>     sys_exit(args[0] as i32),
         SYSCALL_EXIT_GROUP =>     sys_exit_group(args[0] as i32),
         SYSCALL_SET_TID_ADDRESS => sys_set_tid_address(args[0] as *mut usize),
+        SYSCALL_FUTEX => sys_futex(),
         SYSCALL_NANOSLEEP=> sys_nanosleep(args[0] as *const u8),
         SYSCALL_CLOCK_GETTIME=> sys_clock_gettime(args[0],args[1] as *mut usize),
         SYSCALL_YIELD =>    sys_yield(),

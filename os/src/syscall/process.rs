@@ -117,7 +117,6 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
     let current_task = current_task().unwrap();
     let new_task = current_task.fork(false);
     // let tid = new_task.getpid();
-
     let flags = CloneFlags::from_bits(flags).unwrap();
     // if flags.contains(CloneFlags::CLONE_CHILD_SETTID) && ctid != 0{
     //     new_task.inner_exclusive_access().address.set_child_tid = ctid;
@@ -126,9 +125,9 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
     // if flags.contains(CloneFlags::CLONE_CHILD_CLEARTID) && ctid != 0{
     //     new_task.inner_exclusive_access().address.clear_child_tid = ctid;
     // }
-    if !flags.contains(CloneFlags::SIGCHLD) {
-        panic!("sys_fork: FLAG not supported!");
-    }
+    // if !flags.contains(CloneFlags::SIGCHLD) {
+    //     panic!("sys_fork: FLAG not supported!");
+    // }
 
     if stack_ptr != 0 {
         let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
@@ -179,7 +178,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
 
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
-    println!("exec name:{},argvs:{:?}", path, args_vec);
+    // println!("exec name:{},argvs:{:?}", path, args_vec);
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         if path == "entry-static.exe"{
             drop(inner);
