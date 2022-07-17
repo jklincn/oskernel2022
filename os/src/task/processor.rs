@@ -67,8 +67,13 @@ lazy_static! {
 /// 进入 idle 控制流，它运行在这个 CPU 核的启动栈上，
 /// 功能是循环调用 fetch_task 直到顺利从任务管理器中取出一个任务，随后便准备通过任务切换的方式来执行
 pub fn run_tasks() {
+    let mut loop_times :u64=0;
     loop {
-        println!("run_tasks loop!");
+        loop_times = loop_times + 1;
+        if loop_times % 5 ==0 {
+            println!("run_tasks loop!");
+        }
+
         let mut processor = PROCESSOR.exclusive_access();
         // TASK_MANAGER.exclusive_access().list_alltask();
         if let Some(task) = fetch_task() {
