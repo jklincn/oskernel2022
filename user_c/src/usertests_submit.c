@@ -11,7 +11,7 @@ char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
 int offset = 0;
 
 #define PROG_PASS_LENGTH 26
-char *prog_pass[] = {"fdopen","fscanf","fwscanf","memstream","pthread_cancel_points", "pthread_cancel", "pthread_cond", "pthread_tsd", "socket", "stat",
+char *prog_pass[] = {"fdopen","fscanf","fwscanf","memstream","pthread_cancel_points", "pthread_cancel", "pthread_cond", "pthread_tsd", "search_hsearch","socket", "stat",
                      "ungetc", "utime", "daemon_failure", "fflush_exit", "ftello_unflushed_append", "getpwnam_r_crash", "getpwnam_r_errno",
                      "pthread_robust_detach", "pthread_cancel_sem_wait", "pthread_cond_smasher", "pthread_condattr_setclock",
                      "pthread_exit_cancel", "pthread_once_deadlock", "pthread_rwlock_ebusy", "rewind_clear_error", "rlimit_open_files",
