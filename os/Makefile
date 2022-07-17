@@ -82,4 +82,7 @@ run-inner: build
 		-drive file=../simple-fat32/fat32.img,if=none,format=raw,id=x0 \
         -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
+dump:
+	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) >> os_dump
+
 .PHONY: build env kernel
