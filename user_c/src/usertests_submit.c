@@ -10,7 +10,7 @@ char buf[6000];
 char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
 int offset = 0;
 
-#define PROG_PASS_LENGTH 29
+#define PROG_PASS_LENGTH 30
 char *prog_pass[] = {"fdopen",
                      "fscanf",
                      "fwscanf",
@@ -37,6 +37,7 @@ char *prog_pass[] = {"fdopen",
                      "pthread_exit_cancel",
                      "pthread_once_deadlock",
                      "pthread_rwlock_ebusy",
+                     "putenv_doublefree",
                      "rewind_clear_error",
                      "rlimit_open_files",
                      "statvfs"};
