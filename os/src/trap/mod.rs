@@ -80,6 +80,7 @@ pub fn trap_handler() -> ! {
             let mut cx = current_trap_cx();
             cx.sepc += 4;   // 我们希望trap返回后应用程序从下一条指令开始执行
             // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值放到 a0
+            // println!("syscall_id: {}",cx.x[17]);
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();

@@ -8,9 +8,9 @@ pub const USER_STACK_SIZE:      usize = 4096 * 25;
 pub const KERNEL_STACK_SIZE:    usize = 4096 * 2;
 
 #[cfg(feature = "board_k210")]
-pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 3;
+pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 3;  // 3MB
 #[cfg(not(any(feature = "board_k210")))]
-pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 10;
+pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 10; // 10MB
 
 /// 指定内存终止物理地址，内存大小为8MiB（左闭右开）
 #[cfg(feature = "board_k210")]
@@ -31,5 +31,4 @@ pub const TRAP_CONTEXT:         usize = TRAMPOLINE - PAGE_SIZE;
 
 pub use crate::board::{CLOCK_FREQ, MMIO};
 
-pub const KMMAP_BASE: usize = 0x90000000;
 pub const MMAP_BASE: usize = 0x60000000;

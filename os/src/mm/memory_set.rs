@@ -246,7 +246,6 @@ impl MemorySet {
                 xmas_elf::program::Type::Load => {
                     let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
                     let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
-                    println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
                     let mut map_perm = MapPermission::U;
                     let ph_flags = ph.flags();
                     if ph_flags.is_read() {
@@ -260,6 +259,9 @@ impl MemorySet {
                     }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
                     max_end_vpn = map_area.vpn_range.get_end();
+                    // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
+                    // println!("vpnrange:{:?}",map_area.vpn_range);
+                    // println!("offset:0x{:x},file_size:0x{:x}",ph.offset(),ph.file_size());
                     memory_set.push(
                         // 将生成的逻辑段加入到程序地址空间
                         map_area,
@@ -288,7 +290,6 @@ impl MemorySet {
                     xmas_elf::program::Type::Load => {
                         let start_va: VirtAddr = (ph.virtual_addr() as usize+ base_address).into() ;
                         let end_va: VirtAddr = (ph.virtual_addr() as usize+ ph.mem_size() as usize+ base_address).into();
-                        println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
                         let mut map_perm = MapPermission::U;
                         let ph_flags = ph.flags();
                         if ph_flags.is_read() {
@@ -301,6 +302,9 @@ impl MemorySet {
                             map_perm |= MapPermission::X;
                         }
                         let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
+                        // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
+                        // println!("vpnrange:{:?}",map_area.vpn_range);
+                        // println!("offset:0x{:x},file_size:0x{:x}",ph.offset(),ph.file_size());
                         memory_set.push(
                             // 将生成的逻辑段加入到程序地址空间
                             map_area,
@@ -312,7 +316,7 @@ impl MemorySet {
 
             }
         }
-
+        // println!("[info] other");
         // 分配用户栈
         let max_end_va: VirtAddr = max_end_vpn.into();
         let mut user_stack_bottom: usize = max_end_va.into();
@@ -650,8 +654,9 @@ impl MapArea {
             }
             MapType::Framed => {
                 // 获取一个物理页帧
-                let frame = frame_alloc().unwrap();
+                let frame = frame_alloc().unwrap();      
                 ppn = frame.ppn;
+                // println!("current vpn:0x{:x},get ppn:0x{:x}",vpn.0,ppn.0);
                 // 将vpn和分配到的物理页帧配对
                 self.data_frames.insert(vpn, frame);
             }

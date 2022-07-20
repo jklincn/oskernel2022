@@ -5,7 +5,8 @@ KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 
 # BOARD
-BOOTLOADER := ../bootloader/rustsbi-k210.bin
+BOOTLOADER := ../bootloader/rustsbi-k210.bin.old
+# BOOTLOADER := ../bootloader/rustsbi-k210.bin
 K210_BOOTLOADER_SIZE := 131072
 
 BOARD ?= qemu
@@ -85,4 +86,4 @@ run-inner: build
 dump:
 	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) >> os_dump
 
-.PHONY: build env kernel
+.PHONY: dump run submit build-custom-test
