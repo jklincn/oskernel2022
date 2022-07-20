@@ -203,9 +203,7 @@ lazy_static!{
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
         if let Some(app_inode) = open(inner.current_path.as_str(), "entry-static.exe", OpenFlags::O_RDONLY) {
-            let data = app_inode.read_all();
-            drop(inner);
-            data
+            app_inode.read_all()
         }
         else {
             panic!("can't find entry-static.exe");
@@ -218,9 +216,7 @@ lazy_static!{
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
         if let Some(app_inode) = open(inner.current_path.as_str(), "./runtest.exe", OpenFlags::O_RDONLY) {
-            let data = app_inode.read_all();
-            drop(inner);
-            data
+            app_inode.read_all()
         }
         else {
             panic!("can't find ./runtest.exe");
