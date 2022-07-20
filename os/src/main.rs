@@ -70,6 +70,7 @@ fn clear_memory(){
     extern "C" {
         fn ekernel();
     }
+    println!("ekernel:0x{:x},memory_end:0x{:x},len:0x{:x}",ekernel as usize ,MEMORY_END as usize ,MEMORY_END as usize - ekernel as usize);
     unsafe {
         core::slice::from_raw_parts_mut(ekernel as usize as *mut u8, MEMORY_END as usize - ekernel as usize).fill(0);
     }
