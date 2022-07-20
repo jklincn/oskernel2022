@@ -32,8 +32,6 @@ mod trap; // 提供 Trap 管理
 
 use core::arch::global_asm;
 
-use crate::config::MEMORY_END;
-
 global_asm!(include_str!("entry.asm")); // 代码的第一条语句，执行指定的汇编文件，汇编程序再调用Rust实现的内核
 global_asm!(include_str!("buildin_app.S")); // 将 c_usertests 程序放入内核区内存空间
 
@@ -42,7 +40,6 @@ global_asm!(include_str!("buildin_app.S")); // 将 c_usertests 程序放入内�
 #[no_mangle]
 pub fn rust_main() -> ! {
     clear_bss();
-    clear_memory();
     println!("[kernel] Hello, world!");
     mm::init();
     trap::init();
@@ -63,15 +60,5 @@ fn clear_bss() {
     }
     unsafe {
         core::slice::from_raw_parts_mut(sbss as usize as *mut u8, ebss as usize - sbss as usize).fill(0);
-    }
-}
-
-fn clear_memory(){
-    extern "C" {
-        fn ekernel();
-    }
-    println!("ekernel:0x{:x},memory_end:0x{:x},len:0x{:x}",ekernel as usize ,MEMORY_END as usize ,MEMORY_END as usize - ekernel as usize);
-    unsafe {
-        core::slice::from_raw_parts_mut(ekernel as usize as *mut u8, MEMORY_END as usize - ekernel as usize).fill(0);
     }
 }
