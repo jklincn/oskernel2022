@@ -179,13 +179,17 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     println!("exec name:{},argvs:{:?}", path, args_vec);
-    if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-        if path == "entry-static.exe"{
-            drop(inner);
-            let argc = args_vec.len();
-            task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
-            return argc as isize
-        }
+    if path == "./runtest.exe"{
+        drop(inner);
+        let argc = args_vec.len();
+        task.exec(RUNTEST_EXE.as_slice(), args_vec, envs_vec);
+        return argc as isize
+    } else if path == "entry-static.exe"{
+        drop(inner);
+        let argc = args_vec.len();
+        task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
+        return argc as isize
+    } else if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
         drop(inner);
         let argc = args_vec.len();   
@@ -209,6 +213,21 @@ lazy_static!{
         }
         else {
             panic!("can't find entry-static.exe");
+        }
+    };
+}
+
+lazy_static!{
+    pub static ref RUNTEST_EXE: Vec<u8> = {
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+        if let Some(app_inode) = open(inner.current_path.as_str(), "./runtest.exe", OpenFlags::O_RDONLY) {
+            let data = app_inode.read_all();
+            drop(inner);
+            data
+        }
+        else {
+            panic!("can't find ./runtest.exe");
         }
     };
 }
