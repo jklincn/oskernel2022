@@ -60,7 +60,6 @@ impl VFile {
         }
     }
 
-
     fn read_short_dirent<V>(&self, f: impl FnOnce(&ShortDirEntry) -> V) -> V {
         if self.short_sector == 0 {
             // 根目录项

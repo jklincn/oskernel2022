@@ -6,14 +6,14 @@
 /// pub enum TaskStatus
 /// ```
 //
-use super::{aux::*, TaskContext};
+use super::{aux, TaskContext};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, translated_str, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{translated_refmut, translated_str, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, translated_byte_buffer};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -136,8 +136,9 @@ impl TaskControlBlock {
 
     /// 通过 elf 数据新建一个任务控制块，目前仅用于内核中手动创建唯一一个初始进程 initproc
     pub fn new(elf_data: &[u8]) -> Self {
+        let mut auxs = aux::new();
         // 解析传入的 ELF 格式数据构造应用的地址空间 memory_set 并获得其他信息
-        let (memory_set, user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data);
+        let (memory_set, user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data,&mut auxs);
         // 从地址空间 memory_set 中查多级页表找到应用地址空间中的 Trap 上下文实际被放在哪个物理页帧
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 为进程分配 PID 以及内核栈，并记录下内核栈在内核地址空间的位置
@@ -191,19 +192,37 @@ impl TaskControlBlock {
 
     /// 用来实现 exec 系统调用，即当前进程加载并执行另一个 ELF 格式可执行文件
     pub fn exec(&self, elf_data: &[u8], args: Vec<String>, envs: Vec<String>) {
+        let mut auxs = aux::new();
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data);
+        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data,&mut auxs);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
-
+        let mut envs :Vec<String>= Vec::new();
+        envs.push("LD_LIBRARY_PATH=/".to_string());
         // 计算对齐位置
         let mut total_len = 0;
+        for i in 0..envs.len() {
+            total_len += envs[i].len() + 1;
+        }
         for i in 0..args.len() {
             total_len += args[i].len() + 1;
         }
+        // 进行对齐
         user_sp -= (8 - total_len % 8) * core::mem::size_of::<u8>();
-        // 分配 envs 的空间(目前暂不考虑env，故为0）
-        user_sp -= 0 * core::mem::size_of::<usize>();
-        let envv_base = 0;
+
+        // 分配 envs 的空间，加入动态链接库位置
+        let envv: Vec<_> = (0..envs.len())
+            .map(|env| {
+                user_sp -= envs[env].len() + 1; //1是手动添加结束标记的空间
+                let mut p = user_sp;
+                for c in envs[env].as_bytes() {
+                    // 将参数写入到用户栈
+                    *translated_refmut(memory_set.token(), p as *mut u8) = *c;
+                    p += 1;
+                } // 写入字符串结束标记
+                *translated_refmut(memory_set.token(), p as *mut u8) = 0;
+                user_sp
+            })
+            .collect();
 
         // 分配 args 的空间，并写入字符串数据，把字符串首地址保存在 argv 中
         // 这里高地址放前面的参数，即先存放 argv[0]
@@ -222,22 +241,33 @@ impl TaskControlBlock {
             .collect();
 
         // 分配 auxs 空间，并写入数据
-        for i in 0..AUX_NUM {
-            user_sp -= core::mem::size_of::<AuxEntry>();
-            *translated_refmut(memory_set.token(), user_sp as *mut AuxEntry) = AUX_VEC[i];
+        for i in 0..auxs.len() {
+            user_sp -= core::mem::size_of::<aux::AuxEntry>();
+            *translated_refmut(memory_set.token(), user_sp as *mut aux::AuxEntry) = auxs[i];
         }
+
         // envp，0，表示结束
         user_sp -= core::mem::size_of::<usize>();
         *translated_refmut(memory_set.token(), user_sp as *mut usize) = 0;
+
+        // envp
+        user_sp -= (envs.len()) * core::mem::size_of::<usize>();
+        let envp_base = user_sp; // 参数字符串指针起始地址
+        for i in 0..envs.len() {
+            *translated_refmut(memory_set.token(), (envp_base + i * core::mem::size_of::<usize>()) as *mut usize) = envv[i];
+        }
+
         // argv, 0, 表示结束
         user_sp -= core::mem::size_of::<usize>();
         *translated_refmut(memory_set.token(), user_sp as *mut usize) = 0;
+
         // argv
         user_sp -= (args.len()) * core::mem::size_of::<usize>();
         let argv_base = user_sp; // 参数字符串指针起始地址
         for i in 0..args.len() {
             *translated_refmut(memory_set.token(), (argv_base + i * core::mem::size_of::<usize>()) as *mut usize) = argv[i];
         }
+
         // argc
         user_sp -= core::mem::size_of::<usize>();
         *translated_refmut(memory_set.token(), user_sp as *mut usize) = args.len();

@@ -3,7 +3,6 @@ use crate::config::PAGE_SIZE;
 use crate::fs::File;
 use alloc::vec::Vec;
 use alloc::sync::Arc;
-use crate::fs::Kstat;
 
 bitflags! {
     pub struct MmapProts: usize {

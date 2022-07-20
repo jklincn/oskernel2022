@@ -110,6 +110,7 @@ impl PageTableEntry {
 /// PageTable::translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry>
 /// PageTable::token(&self) -> usize
 /// ```
+#[derive(Debug)]
 pub struct PageTable {
     /// 根节点的物理页号,作为页表唯一的区分标志
     root_ppn: PhysPageNum,

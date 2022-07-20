@@ -7,7 +7,15 @@
 
 char prog_name[PROG_NAME_MAX_LENGTH];
 char buf[6000];
-char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
+
+// #define DYNAMIC
+
+#ifndef DYNAMIC
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
+#else
+    char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
+#endif
+
 int offset = 0;
 
 #define PROG_PASS_LENGTH 36
