@@ -175,24 +175,20 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
 
     // 空数组
     let mut envs_vec: Vec<String> = Vec::new();
-
+    let argc = args_vec.len();
     let task = current_task().unwrap();
-    let inner = task.inner_exclusive_access();
     println!("exec name:{},argvs:{:?}", path, args_vec);
     if path == "./runtest.exe"{
-        drop(inner);
-        let argc = args_vec.len();
         task.exec(RUNTEST_EXE.as_slice(), args_vec, envs_vec);
-        return argc as isize
+        return argc as isize;
     } else if path == "entry-static.exe"{
-        drop(inner);
-        let argc = args_vec.len();
         task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
-        return argc as isize
-    } else if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+        return argc as isize;
+    }
+    let inner = task.inner_exclusive_access();
+    if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
-        drop(inner);
-        let argc = args_vec.len();   
+        drop(inner); 
         task.exec(all_data.as_slice(), args_vec, envs_vec);
         // return argc because cx.x[10] will be covered with it later
         // println!("sys_exec return!");
