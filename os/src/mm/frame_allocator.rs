@@ -77,9 +77,9 @@ trait FrameAllocator {
 /// ```
 pub struct StackFrameAllocator {
     /// 空闲内存的起始物理页号
-    current: usize,
+    pub current: usize,
     /// 空闲内存的结束物理页号
-    end: usize,
+    pub end: usize,
     /// 以后入先出的方式保存被回收的物理页号
     recycled: Vec<usize>,
 }

@@ -12,6 +12,7 @@ use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
+use crate::mm::frame_allocator::FRAME_ALLOCATOR;
 use crate::sync::UPSafeCell;
 use crate::task::{AuxEntry, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM, AT_BASE};
 use alloc::collections::BTreeMap;
@@ -231,6 +232,9 @@ impl MemorySet {
         // 动态加载器入口地址
         let mut interpreter_entry = 0;
 
+        let t_current = FRAME_ALLOCATOR.exclusive_access().current;
+        let t_end = FRAME_ALLOCATOR.exclusive_access().end;
+        println!("current:0x{:x},end:0x{:x}",t_current,t_end);
         // 遍历程序段进行加载
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
@@ -259,7 +263,7 @@ impl MemorySet {
                     }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
                     max_end_vpn = map_area.vpn_range.get_end();
-                    // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
+                    println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
                     // println!("vpnrange:{:?}",map_area.vpn_range);
                     // println!("offset:0x{:x},file_size:0x{:x}",ph.offset(),ph.file_size());
                     memory_set.push(
@@ -267,6 +271,8 @@ impl MemorySet {
                         map_area,
                         Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
                     );
+                    let t_current = FRAME_ALLOCATOR.exclusive_access().current;
+                    println!("current:0x{:x}",t_current);
                 }
                 _ => continue,
             }
@@ -316,7 +322,7 @@ impl MemorySet {
 
             }
         }
-        // println!("[info] other");
+        println!("push stack");
         // 分配用户栈
         let max_end_va: VirtAddr = max_end_vpn.into();
         let mut user_stack_bottom: usize = max_end_va.into();
@@ -333,8 +339,10 @@ impl MemorySet {
             ),
             None,
         );
-
+        let t_current = FRAME_ALLOCATOR.exclusive_access().current;
+        println!("current:0x{:x}",t_current);
         // 在应用地址空间中映射次高页面来存放 Trap 上下文
+        println!("push trap");
         memory_set.push(
             MapArea::new(
                 TRAP_CONTEXT.into(),
@@ -344,14 +352,15 @@ impl MemorySet {
             ),
             None,
         );
-
+        let t_current = FRAME_ALLOCATOR.exclusive_access().current;
+        println!("current:0x{:x}",t_current);
         // 分配用户堆
         let mut user_heap_bottom: usize = user_stack_top;
         //放置一个保护页
         user_heap_bottom += PAGE_SIZE;
         let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
 
-        // println!("user heap top:0x{:x}",user_heap_top);
+        println!("push user heap");
         memory_set.push(
             MapArea::new(
                 user_heap_bottom.into(),
@@ -361,7 +370,8 @@ impl MemorySet {
             ),
             None,
         );
-
+        let t_current = FRAME_ALLOCATOR.exclusive_access().current;
+        println!("current:0x{:x}",t_current);
         if elf_interpreter {
             (memory_set, user_stack_top, user_heap_bottom, interpreter_entry)
         } else {

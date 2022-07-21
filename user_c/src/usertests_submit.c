@@ -11,7 +11,7 @@ char buf[6000];
 // #define DYNAMIC
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "fdopen", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
@@ -19,8 +19,7 @@ char buf[6000];
 int offset = 0;
 
 #define PROG_PASS_LENGTH 36
-char *prog_pass[] = {"fdopen",
-                     "fscanf",
+char *prog_pass[] = {"fscanf",
                      "fwscanf",
                      "memstream",
                      "pthread_cancel_points",
