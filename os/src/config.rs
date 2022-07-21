@@ -14,7 +14,7 @@ pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 10; // 10MB
 
 /// 指定内存终止物理地址，内存大小为8MiB（左闭右开）
 #[cfg(feature = "board_k210")]
-pub const MEMORY_END:           usize = 0x80800000;
+pub const MEMORY_END:           usize = 0x80600000;
 #[cfg(not(any(feature = "board_k210")))]
 pub const MEMORY_END:           usize = 0x88000000;
 
