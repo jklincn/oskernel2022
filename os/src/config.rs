@@ -4,13 +4,15 @@
 /// 定义了一些参数
 //
 
-pub const USER_STACK_SIZE:      usize = 4096 * 25;
+pub const USER_STACK_SIZE:      usize = 4096 * 2;
 pub const KERNEL_STACK_SIZE:    usize = 4096 * 2;
 
 #[cfg(feature = "board_k210")]
 pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 3;  // 3MB
 #[cfg(not(any(feature = "board_k210")))]
 pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 10; // 10MB
+
+pub const USER_HEAP_SIZE: usize = 4096 * 2;
 
 /// 指定内存终止物理地址，内存大小为8MiB（左闭右开）
 #[cfg(feature = "board_k210")]
@@ -23,7 +25,6 @@ pub const PAGE_SIZE:            usize = 0x1000;
 /// 页内偏移：12bit
 pub const PAGE_SIZE_BITS:       usize = 0xc;
 
-pub const USER_HEAP_SIZE: usize = PAGE_SIZE * 64;
 /// 跳板虚拟内存中的起始地址，虚拟内存最高页
 pub const TRAMPOLINE:           usize = usize::MAX - PAGE_SIZE + 1;
 /// Trap 上下文在应用地址空间中的位置
