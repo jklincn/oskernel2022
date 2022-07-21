@@ -64,6 +64,8 @@ trait FrameAllocator {
     fn alloc(&mut self) -> Option<PhysPageNum>;
     /// 回收物理页
     fn dealloc(&mut self, ppn: PhysPageNum);
+
+    fn usage(&self) -> (usize,usize,usize,usize);
 }
 
 
@@ -77,11 +79,12 @@ trait FrameAllocator {
 /// ```
 pub struct StackFrameAllocator {
     /// 空闲内存的起始物理页号
-    pub current: usize,
+    current: usize,
     /// 空闲内存的结束物理页号
-    pub end: usize,
+    end: usize,
     /// 以后入先出的方式保存被回收的物理页号
     recycled: Vec<usize>,
+    base_num: usize,
 }
 
 impl StackFrameAllocator {
@@ -91,6 +94,7 @@ impl StackFrameAllocator {
     pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
         self.current = l.0;
         self.end = r.0;
+        self.base_num = self.current;
     }
 }
 impl FrameAllocator for StackFrameAllocator {
@@ -99,6 +103,7 @@ impl FrameAllocator for StackFrameAllocator {
             current: 0,
             end: 0,
             recycled: Vec::new(),
+            base_num:0,
         }
     }
     fn alloc(&mut self) -> Option<PhysPageNum> {
@@ -123,6 +128,9 @@ impl FrameAllocator for StackFrameAllocator {
         }
         // 回收，压栈
         self.recycled.push(ppn);
+    }
+    fn usage(&self) -> (usize,usize,usize,usize){
+        (self.current,self.recycled.len(),self.end,self.base_num)
     }
 }
 
@@ -163,21 +171,8 @@ pub fn frame_dealloc(ppn: PhysPageNum) {
     FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
 }
 
-#[allow(unused)]
-pub fn frame_allocator_test() {
-    let mut v: Vec<FrameTracker> = Vec::new();
-    for i in 0..5 {
-        let frame = frame_alloc().unwrap();
-        println!("{:?}", frame);
-        v.push(frame);  // 将分配到的 FrameTracker move到一个向量中，
-        // 他的生命周期被延长，否则在循环结束后循环作用域中的临时变量的生命周期就结束了
-    }
-    v.clear();  // 被清空时里面的内容也会被释放
-    for i in 0..5 {
-        let frame = frame_alloc().unwrap();
-        println!("{:?}", frame);
-        v.push(frame);
-    }
-    drop(v);
-    println!("frame_allocator_test passed!");
+pub fn frame_usage(){
+    let (current,recycled,end,base_num) = FRAME_ALLOCATOR.exclusive_access().usage();
+    let usage = (current - base_num - recycled) * 100 / (end - base_num) ; 
+    println!("page usage: {}% ({}/{})",usage,current-base_num-recycled,end - base_num);
 }

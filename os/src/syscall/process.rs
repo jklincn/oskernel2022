@@ -12,7 +12,7 @@
 /// ```
 //
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, frame_usage};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, SignalFlags,
 };
@@ -177,7 +177,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     let mut envs_vec: Vec<String> = Vec::new();
     let argc = args_vec.len();
     let task = current_task().unwrap();
-    // println!("exec name:{},argvs:{:?}", path, args_vec);
+    println!("exec name:{},argvs:{:?}", path, args_vec);
     if path == "./runtest.exe"{
         task.exec(RUNTEST_EXE.as_slice(), args_vec, envs_vec);
         return argc as isize;

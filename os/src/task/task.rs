@@ -11,7 +11,7 @@ use super::{aux, TaskContext};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, translated_byte_buffer};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, translated_byte_buffer, frame_usage};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::{String, ToString};
@@ -291,7 +291,6 @@ impl TaskControlBlock {
             self.kernel_stack.get_top(),
             trap_handler as usize,
         );
-
         // 修改 Trap 上下文中的 a0/a1 寄存器
         trap_cx.x[10] = args.len(); // a0 表示命令行参数的个数
         trap_cx.x[11] = argv_base; // a1 则表示 参数字符串首地址数组 的起始地址
