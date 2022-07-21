@@ -14,7 +14,6 @@
 //
 
 use super::__switch;
-use super::manager::{TaskManager, TASK_MANAGER};
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
 use crate::sync::UPSafeCell;

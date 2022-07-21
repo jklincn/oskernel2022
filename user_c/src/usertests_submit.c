@@ -11,7 +11,7 @@ char buf[6000];
 // #define DYNAMIC
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "setjmp", 0};
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
@@ -95,6 +95,24 @@ int main()
 {
     int fd = open("./run-static.sh", 0);
     read(fd, buf, 6000);
+
+
+    // //test only one program
+    int npid = fork();
+    assert(npid >= 0);
+    int child_return;
+    if (npid == 0)
+    {
+        execve("./runtest.exe", argv, NULL);
+    }
+    else
+    {
+            // parent
+            child_return = -1;
+            waitpid(npid, &child_return, 0);
+    }
+
+    return 0;
 
     // run tests
     for (int row = 0; row < PROG_NUM; row++)

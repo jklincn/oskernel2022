@@ -12,7 +12,6 @@ int main(void)
 	sigjmp_buf sjb;
 	volatile sigset_t oldset;
 	sigset_t set, set2;
-
 	if (!setjmp(jb)) {
 		x = 1;
 		longjmp(jb, 1);
@@ -26,16 +25,12 @@ int main(void)
 		longjmp(jb, 0);
 	}
 	TEST(r==1, "longjmp(jb, 0) caused setjmp to return %d\n", r);
-
 	sigemptyset(&set);
 	sigaddset(&set, SIGUSR1);
 	sigprocmask(SIG_UNBLOCK, &set, &set2);
 	oldset = set2;
-
 	/* Improve the chances of catching failure of sigsetjmp to
 	 * properly save the signal mask in the sigjmb_buf. */
-	memset(&sjb, -1, sizeof sjb);
-
 	if (!sigsetjmp(sjb, 1)) {
 		sigemptyset(&set);
 		sigaddset(&set, SIGUSR1);

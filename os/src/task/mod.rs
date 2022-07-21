@@ -35,7 +35,7 @@ pub use pid::{pid_alloc, KernelStack, PidHandle};
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
 };
-pub use signal::SignalFlags;
+pub use signal::*;
 pub use aux::*;
 
 /// 将当前任务置为就绪态，放回到进程管理器中的就绪队列中，重新选择一个进程运行

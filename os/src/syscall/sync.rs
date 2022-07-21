@@ -133,22 +133,3 @@
 //     0
 // }
 
-pub fn sys_rt_sigprocmask(setptr: *mut usize) -> isize{
-    0
-}
-
-pub fn sys_rt_sigreturn(setptr: *mut usize) -> isize{
-    0
-}
-
-pub fn sys_rt_sigaction()->isize{
-    0
-}
-
-pub fn sys_rt_sigtimedwait()->isize{
-    0
-}
-
-pub fn sys_futex()->isize{
-    0
-}

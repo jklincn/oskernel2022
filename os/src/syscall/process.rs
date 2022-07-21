@@ -177,7 +177,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     let mut envs_vec: Vec<String> = Vec::new();
     let argc = args_vec.len();
     let task = current_task().unwrap();
-    println!("exec name:{},argvs:{:?}", path, args_vec);
+    // println!("exec name:{},argvs:{:?}", path, args_vec);
     if path == "./runtest.exe"{
         task.exec(RUNTEST_EXE.as_slice(), args_vec, envs_vec);
         return argc as isize;

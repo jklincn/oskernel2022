@@ -1,3 +1,4 @@
+use super::signal::SigSet;
 /// # 进程控制块
 /// `os/src/task/task.rs`
 /// ```
@@ -97,6 +98,9 @@ pub struct TaskControlBlockInner {
     // 状态信息
     pub signals: SignalFlags,
     pub current_path: String,
+
+    // 决赛添加：信号集
+    pub sigset : SigSet,
 }
 
 impl TaskControlBlockInner {
@@ -174,6 +178,7 @@ impl TaskControlBlock {
                     signals: SignalFlags::empty(),
                     current_path: String::from("/"),
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
+                    sigset:SigSet::new(),
                 })
             },
         };
@@ -340,6 +345,7 @@ impl TaskControlBlock {
                     signals: SignalFlags::empty(),
                     current_path: parent_inner.current_path.clone(),
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
+                    sigset:SigSet::new(),
                 })
             },
         });

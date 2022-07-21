@@ -49,12 +49,12 @@ const SYSCALL_PRLIMIT64:usize = 261;
 mod fs;         // 文件读写模块
 mod process;    // 进程控制模块
 mod thread;
-mod sync;
+mod sigset;
 
 use fs::*;
 use process::*;
 use thread::*;
-use sync::*;
+use sigset::*;
 
 
 /// 系统调用分发函数
@@ -87,7 +87,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_YIELD =>    sys_yield(),
         SYSCALL_KILL =>     sys_kill(args[0], args[1] as u32),
         SYSCALL_RT_SIGACTION => sys_rt_sigaction(),
-        SYSCALL_RT_SIGPROCMASK =>     sys_rt_sigprocmask(args[0] as *mut usize),
+        SYSCALL_RT_SIGPROCMASK =>     sys_rt_sigprocmask(args[0] as i32,args[1] as *const usize,args[2] as *const usize,args[3]),
         SYSCALL_RT_SIGTIMEDWAIT => sys_rt_sigtimedwait(),
         SYSCALL_RT_SIGRETURN =>     sys_rt_sigreturn(args[0] as *mut usize),
         SYSCALL_TIMES =>    sys_times(args[0] as *const u8),

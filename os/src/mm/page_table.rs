@@ -94,7 +94,7 @@ impl PageTableEntry {
     }
     // only X+W+R can be set
     pub fn set_pte_flags(&mut self, flags: usize) {
-        self.bits = (self.bits & !(0b1110 as usize)) | ( flags & (0b1110 as usize));
+        self.bits = (self.bits & !(0b1110 as usize)) | (flags & (0b1110 as usize));
     }
 }
 
@@ -232,7 +232,7 @@ impl PageTable {
 
     // only X+W+R can be set
     // return -1 if find no such pte
-    pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: usize) -> isize{
+    pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: usize) -> isize {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         for i in 0..3 {
@@ -242,7 +242,7 @@ impl PageTable {
                 //     panic!("set_pte_flags: no such pte");
                 // }
                 // else{
-                    pte.set_pte_flags(flags);
+                pte.set_pte_flags(flags);
                 // }
                 break;
             }
@@ -269,14 +269,12 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
-        
+
         match page_table.translate(vpn) {
             None => {
                 println!("[kernel] mm: 0x{:x} not mapped", start);
             }
-            _ => {
-                
-            }
+            _ => {}
         }
 
         let ppn = page_table.translate(vpn).unwrap().ppn();
@@ -362,14 +360,14 @@ impl UserBuffer {
         return len;
     }
 
-    pub fn write_at(&mut self, offset:usize, buff: &[u8])->isize{
+    pub fn write_at(&mut self, offset: usize, buff: &[u8]) -> isize {
         let len = buff.len();
         if offset + len > self.len() {
-            return -1
+            return -1;
         }
         let mut head = 0; // offset of slice in UBuffer
         let mut current = 0; // current offset of buff
-    
+
         for sub_buff in self.buffers.iter_mut() {
             let sblen = (*sub_buff).len();
             if head + sblen < offset {
@@ -382,7 +380,8 @@ impl UserBuffer {
                         return len as isize;
                     }
                 }
-            } else {  //head + sblen > offset and head > offset
+            } else {
+                //head + sblen > offset and head > offset
                 for j in 0..sblen {
                     (*sub_buff)[j] = buff[current];
                     current += 1;
@@ -394,6 +393,23 @@ impl UserBuffer {
             head += sblen;
         }
         0
+    }
+    
+    // 将UserBuffer的数据读入一个Buffer，返回读取长度
+    pub fn read(&self, buff: &mut [u8]) -> usize {
+        let len = self.len().min(buff.len());
+        let mut current = 0;
+        for sub_buff in self.buffers.iter() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                buff[current] = (*sub_buff)[j];
+                current += 1;
+                if current == len {
+                    return len;
+                }
+            }
+        }
+        return len;
     }
 }
 

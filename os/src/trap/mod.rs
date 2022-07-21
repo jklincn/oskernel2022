@@ -141,6 +141,7 @@ pub fn trap_handler() -> ! {
             // println!("[kernel] IllegalInstruction in application, kernel killed it.");
             // // illegal instruction exit code
             // exit_current_and_run_next(-3);
+            println!("stval:{}",stval);
             current_add_signal(SignalFlags::SIGILL);
         }
 

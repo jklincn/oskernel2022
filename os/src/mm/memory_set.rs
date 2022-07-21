@@ -351,6 +351,7 @@ impl MemorySet {
         user_heap_bottom += PAGE_SIZE;
         let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
 
+        // println!("user heap top:0x{:x}",user_heap_top);
         memory_set.push(
             MapArea::new(
                 user_heap_bottom.into(),

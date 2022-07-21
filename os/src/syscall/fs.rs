@@ -170,7 +170,6 @@ pub fn sys_dup(fd: usize) -> isize {
     if inner.fd_table[fd].is_none() {
         return -1;
     }
-
     let new_fd = inner.alloc_fd();
     inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd].as_ref().unwrap()));
     new_fd as isize
