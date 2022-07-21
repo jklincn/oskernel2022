@@ -18,7 +18,7 @@ char buf[6000];
 
 int offset = 0;
 
-#define PROG_PASS_LENGTH 36
+#define PROG_PASS_LENGTH 35
 char *prog_pass[] = {"fscanf",
                      "fwscanf",
                      "memstream",
