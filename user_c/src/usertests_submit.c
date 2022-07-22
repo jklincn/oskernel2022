@@ -18,7 +18,7 @@ char buf[6000];
 
 int offset = 0;
 
-#define PROG_PASS_LENGTH 35
+#define PROG_PASS_LENGTH 29
 char *prog_pass[] = {"fscanf",
                      "fwscanf",
                      "memstream",
@@ -45,12 +45,12 @@ char *prog_pass[] = {"fscanf",
                      "pthread_once_deadlock",
                      "pthread_rwlock_ebusy",
                      "putenv_doublefree",
-                     "regex_backref_0",
-                     "regex_bracket_icase",
-                     "regex_ere_backref",
-                     "regex_escaped_high_byte",
-                     "regex_negated_range",
-                     "regexec_nosub",
+                    //  "regex_backref_0",
+                    //  "regex_bracket_icase",
+                    //  "regex_ere_backref",
+                    //  "regex_escaped_high_byte",
+                    //  "regex_negated_range",
+                    //  "regexec_nosub",
                      "rewind_clear_error",
                      "rlimit_open_files",
                      "statvfs"};
