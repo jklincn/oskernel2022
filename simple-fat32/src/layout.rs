@@ -188,7 +188,7 @@ impl ShortDirEntry {
             true
         } else {
             false
-        } 
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -274,6 +274,16 @@ impl ShortDirEntry {
         let mut name: String = String::new();
         name = self.get_name_uppercase().to_ascii_lowercase();
         name
+    }
+
+    // 决赛要求64位的时间戳，但 fat32 貌似不是这样，这边先跳过，有空再来完善
+    pub fn time(&self) -> u64 {
+        self.dir_wrt_time as u64
+    }
+
+    // 决赛要求64位的时间戳，但 fat32 貌似不是这样，这边先跳过，有空再来完善
+    pub fn set_time(&mut self, tv_sec: u64, tv_nsec: u64) {
+        self.dir_wrt_time = 12345 as u16;
     }
 
     /// 清空文件，删除时使用

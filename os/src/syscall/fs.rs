@@ -1,4 +1,4 @@
-use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, MNT_TABLE};
+use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Timespec, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::sync::Arc;
@@ -429,7 +429,7 @@ pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
     0
 }
 // 暂时放在这里
-#[derive(Clone, Copy,Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Iovec {
     iov_base: usize,
     iov_len: usize,
@@ -448,16 +448,21 @@ pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
         if !file.writable() {
             return -1;
         }
-        let iovp_buf = translated_byte_buffer(token, iovp as *const u8, iovcnt*size_of::<Iovec>()).pop().unwrap();
+        let iovp_buf = translated_byte_buffer(token, iovp as *const u8, iovcnt * size_of::<Iovec>())
+            .pop()
+            .unwrap();
         let file = file.clone();
         let mut addr = iovp_buf.as_ptr() as *const _ as usize;
         let mut total_write_len = 0;
         drop(inner);
         for _ in 0..iovcnt {
             let iovp = unsafe { &*(addr as *const Iovec) };
-            total_write_len += file.write(UserBuffer::new(translated_byte_buffer(token, iovp.iov_base as *const u8, iovp.iov_len)));
+            total_write_len += file.write(UserBuffer::new(translated_byte_buffer(
+                token,
+                iovp.iov_base as *const u8,
+                iovp.iov_len,
+            )));
             addr += size_of::<Iovec>();
-
         }
         total_write_len as isize
     } else {
@@ -505,5 +510,28 @@ pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, fla
         } else {
             -1
         }
+    }
+}
+
+pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flags: usize) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    let timespec_buf = translated_byte_buffer(token, time as *const u8, size_of::<Kstat>()).pop().unwrap();
+    let addr = timespec_buf.as_ptr() as *const _ as usize;
+    let timespec = unsafe { &*(addr as *const Timespec) };
+    _ = flags;
+
+    if pathname as usize == 0 {
+        if dirfd >= inner.fd_table.len() as isize || dirfd < 0 {
+            return 0;
+        }
+        if let Some(file) = &inner.fd_table[dirfd as usize] {
+            file.set_time(timespec);
+        }
+        0
+    } else {
+        // unimplemented!();
+        0
     }
 }

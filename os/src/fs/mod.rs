@@ -19,6 +19,8 @@ pub trait File: Send + Sync {
 
     fn get_fstat(&self, kstat: &mut Kstat);
 
+    fn set_time(&self, timespec: &Timespec);
+
     fn get_dirent(&self, dirent: &mut Dirent) -> isize;
 
     fn get_name(&self) -> String;
@@ -32,5 +34,5 @@ pub use dirent::Dirent;
 pub use inode::{chdir, list_apps, open, OSInode, OpenFlags};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
-pub use stat::Kstat;
+pub use stat::*;
 pub use stdio::{Stdin, Stdout};

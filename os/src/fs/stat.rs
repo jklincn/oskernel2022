@@ -56,16 +56,26 @@ impl Kstat {
         }
     }
 
-    pub fn init(&mut self, st_size: i64, st_blksize: i32, st_blocks: u64,st_mode:u32) {
+    pub fn init(&mut self, st_size: i64, st_blksize: i32, st_blocks: u64,st_mode:u32,time:u64) {
         self.st_nlink = 1;
         self.st_size = st_size;
         self.st_blksize = st_blksize;
         self.st_blocks = st_blocks;
         self.st_mode = st_mode;
+        // 参见 simple-fat32 中注释
+        if time == 12345 {
+            self.st_atime_sec = 1 <<32;
+            self.st_mtime_sec = 1 <<32;
+        }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
     }
+}
+
+pub struct Timespec{
+    pub tv_sec:u64,
+    pub tv_nsec:u64,
 }

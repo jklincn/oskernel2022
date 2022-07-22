@@ -6,7 +6,7 @@
 /// ```
 //
 
-use super::{File, Kstat, Dirent};
+use super::{File, Kstat, Dirent, Timespec};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
@@ -54,6 +54,11 @@ impl File for Stdin {
     }
 
     #[allow(unused_variables)]
+    fn set_time(&self, timespec: &Timespec){
+        panic!("Stdin not implement set_time");
+    }
+
+    #[allow(unused_variables)]
     fn get_dirent(&self, dirent: &mut Dirent) -> isize {
         panic!("Stdin not implement get_dirent");
     }
@@ -91,6 +96,11 @@ impl File for Stdout {
     #[allow(unused_variables)]
     fn get_fstat(&self, kstat: &mut Kstat) {
         panic!("Stdout not implement get_fstat");
+    }
+
+    #[allow(unused_variables)]
+    fn set_time(&self, timespec: &Timespec){
+        panic!("Stdout not implement set_time");
     }
 
     #[allow(unused_variables)]

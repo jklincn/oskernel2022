@@ -332,6 +332,8 @@ pub fn sys_uname(buf: *const u8) -> isize {
 /// - syscall_id:222
 pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
     let task = current_task().unwrap();
+    println!("enter mmap!");
+    println!("start:{},len:{},prot:{},flags:{},fd:{},off:{}",start,len,prot,flags,fd,off);
     if len == 0 {
         panic!("mmap:len == 0");
     }

@@ -21,7 +21,7 @@
 int main()
 {
 	ENTRY *e;
-
+	t_printf("enter hsearch\n");
 	if (hcreate(-1) || errno != ENOMEM)
 		t_error("hcreate((size_t)-1) should fail with ENOMEM got %s\n", strerror(errno));
 	if (!hcreate(13))

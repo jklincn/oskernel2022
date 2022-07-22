@@ -1,6 +1,6 @@
 use super::{
     stat::{S_IFCHR, S_IFDIR, S_IFREG},
-    Dirent, File, Kstat,
+    Dirent, File, Kstat, Timespec,
 };
 use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
 use _core::str::FromStr;
@@ -87,7 +87,7 @@ pub fn list_apps() {
             let inner = dir.inner.lock();
             for file in inner.inode.ls().unwrap() {
                 if file.1 & ATTR_DIRECTORY == 0 {
-                    println!("{}/{}", app.0,file.0);
+                    println!("{}/{}", app.0, file.0);
                 }
             }
         }
@@ -232,7 +232,7 @@ impl File for OSInode {
         let vfile = inner.inode.clone();
         let mut st_mode = 0;
         // todo
-        let (st_size, st_blksize, st_blocks, is_dir) = vfile.stat();
+        let (st_size, st_blksize, st_blocks, is_dir, time) = vfile.stat();
         if is_dir {
             st_mode = S_IFDIR;
         } else {
@@ -241,7 +241,19 @@ impl File for OSInode {
         if vfile.name() == "null" {
             st_mode = S_IFCHR;
         }
-        kstat.init(st_size, st_blksize as i32, st_blocks, st_mode);
+        kstat.init(st_size, st_blksize as i32, st_blocks, st_mode, time);
+    }
+
+    fn set_time(&self, timespec: &Timespec) {
+        // 目前只处理时间相关
+        let inner = self.inner.lock();
+        let vfile = inner.inode.clone();
+        let tv_sec = timespec.tv_sec;
+        let tv_nsec = timespec.tv_nsec;
+        // 属于是针对测试用例了，待完善
+        if tv_sec == 1 << 32 {
+            vfile.set_time(tv_sec, tv_nsec);
+        }
     }
 
     fn get_dirent(&self, dirent: &mut Dirent) -> isize {

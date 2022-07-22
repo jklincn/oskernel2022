@@ -8,7 +8,7 @@
 /// pub fn make_pipe()
 /// ```
 //
-use super::{Dirent, File, Kstat};
+use super::{Dirent, File, Kstat, Timespec};
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
 use alloc::{
@@ -214,6 +214,11 @@ impl File for Pipe {
     #[allow(unused_variables)]
     fn get_fstat(&self, kstat: &mut Kstat) {
         panic!("pipe not implement get_fstat");
+    }
+
+    #[allow(unused_variables)]
+    fn set_time(&self, timespec: &Timespec){
+        panic!("pipe not implement set_time");
     }
 
     #[allow(unused_variables)]

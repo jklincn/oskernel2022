@@ -545,9 +545,9 @@ impl VFile {
         return all_clusters.len();
     }
 
-    /// 返回：(st_size, st_blksize, st_blocks, is_dir)
+    /// 返回：(st_size, st_blksize, st_blocks, is_dir, time)
     /// todo：时间等
-    pub fn stat(&self) -> (i64, i64, u64, bool) {
+    pub fn stat(&self) -> (i64, i64, u64, bool, u64) {
         self.read_short_dirent(|short_entry: &ShortDirEntry| {
             let first_cluster = short_entry.first_cluster();
             let mut file_size = short_entry.size();
@@ -560,7 +560,13 @@ impl VFile {
                 // 目录文件的 dir_file_size 字段为 0
                 file_size = cluster_num * fs_reader.bytes_per_cluster();
             }
-            (file_size as i64, 512 as i64, blocks as u64,self.is_dir())
+            (file_size as i64, 512 as i64, blocks as u64, self.is_dir(), short_entry.time())
+        })
+    }
+
+    pub fn set_time(&self, tv_sec: u64, tv_nsec: u64) {
+        self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
+            short_entry.set_time(tv_sec, tv_nsec);
         })
     }
 

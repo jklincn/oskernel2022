@@ -11,17 +11,15 @@ char buf[6000];
 // #define DYNAMIC
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "fwscanf", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
 
 int offset = 0;
 
-#define PROG_PASS_LENGTH 29
-char *prog_pass[] = {"fscanf",
-                     "fwscanf",
-                     "memstream",
+#define PROG_PASS_LENGTH 31
+char *prog_pass[] = {"memstream",
                      "pthread_cancel_points",
                      "pthread_cancel",
                      "pthread_cond",
@@ -29,7 +27,6 @@ char *prog_pass[] = {"fscanf",
                      "search_hsearch",
                      "socket",
                      "ungetc",
-                     "utime",
                      "daemon_failure",
                      "fflush_exit",
                      "ftello_unflushed_append",
