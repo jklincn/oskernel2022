@@ -1,10 +1,13 @@
-use super::{Dirent, File, Kstat};
+use super::{
+    stat::{S_IFCHR, S_IFDIR, S_IFREG},
+    Dirent, File, Kstat,
+};
 use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
 use lazy_static::*;
-use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
+use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY, END_CLUSTER};
 use spin::Mutex;
 
 /// 表示进程中一个被打开的常规文件或目录
@@ -30,7 +33,7 @@ impl OSInode {
     pub fn read_all(&self) -> Vec<u8> {
         let mut inner = self.inner.lock();
         let mut buffer = [0u8; 512];
-        let mut v:Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::new();
         loop {
             let len = inner.inode.read_at(inner.offset, &mut buffer);
             if len == 0 {
@@ -68,15 +71,28 @@ lazy_static! {
 }
 
 pub fn list_apps() {
-    println!("/**** APPS ****");
+    // 决赛内容:
+    open("/", "tmp", OpenFlags::O_DIRECTROY);
+    open("/", "dev", OpenFlags::O_DIRECTROY);
+    open("/dev", "null", OpenFlags::O_CREATE);
+    println!("/**** All Files  ****");
     for app in ROOT_INODE.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
             println!("{}", app.0);
+        } else {
+            // 暂不考虑二级目录，待改写
+            println!("{}/", app.0);
+            let dir = open("/", app.0.as_str(), OpenFlags::O_RDONLY).unwrap();
+            let inner = dir.inner.lock();
+            for file in inner.inode.ls().unwrap() {
+                if file.1 & ATTR_DIRECTORY == 0 {
+                    println!("{}/{}", app.0,file.0);
+                }
+            }
         }
     }
-    open("/", "tmp", OpenFlags::O_DIRECTROY);  // 决赛内容：创建tmp目录
-    println!("**************/");
+    println!("**********************/");
 }
 
 // 定义一份打开文件的标志
@@ -214,9 +230,18 @@ impl File for OSInode {
     fn get_fstat(&self, kstat: &mut Kstat) {
         let inner = self.inner.lock();
         let vfile = inner.inode.clone();
+        let mut st_mode = 0;
         // todo
-        let (st_size, st_blksize, st_blocks) = vfile.stat();
-        kstat.init(st_size, st_blksize, st_blocks);
+        let (st_size, st_blksize, st_blocks, is_dir) = vfile.stat();
+        if is_dir {
+            st_mode = S_IFDIR;
+        } else {
+            st_mode = S_IFREG;
+        }
+        if vfile.name() == "null" {
+            st_mode = S_IFCHR;
+        }
+        kstat.init(st_size, st_blksize as i32, st_blocks, st_mode);
     }
 
     fn get_dirent(&self, dirent: &mut Dirent) -> isize {
@@ -239,11 +264,11 @@ impl File for OSInode {
         self.name()
     }
 
-    fn get_offset(&self) -> usize{
+    fn get_offset(&self) -> usize {
         let inner = self.inner.lock();
         inner.offset
     }
-    fn set_offset(&self, offset: usize){
+    fn set_offset(&self, offset: usize) {
         let mut inner = self.inner.lock();
         inner.offset = offset;
     }

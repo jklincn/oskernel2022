@@ -27,7 +27,7 @@ int main(void)
 	if (TEST(stat("/dev/null",&st)==0, "errno = %s\n", strerror(errno))) {
 		TEST(S_ISCHR(st.st_mode), "\n");
 	}
-
+	
 	if ((f = tmpfile())) {
 		fputs("hello", f);
 		fflush(f);

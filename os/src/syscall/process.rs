@@ -377,3 +377,12 @@ pub fn sys_clock_gettime(clk_id:usize,ts:*mut usize) -> isize{
     *translated_refmut(token, ts) = 0 as usize;
     0
 }
+
+pub fn sys_geteuid()->isize{
+    0
+}
+
+
+pub fn sys_getegid()->isize{
+    0
+}

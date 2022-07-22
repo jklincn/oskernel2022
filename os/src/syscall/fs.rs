@@ -1,4 +1,4 @@
-use crate::fs::{chdir, make_pipe, open, Dirent, Kstat, OpenFlags, MNT_TABLE};
+use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::sync::Arc;
@@ -429,15 +429,13 @@ pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
     0
 }
 // 暂时放在这里
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy,Debug)]
 pub struct Iovec {
-    iov_base: *const u8,
+    iov_base: usize,
     iov_len: usize,
 }
 
 pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
-    println!("enter sys_writev!iovp:{:?},iovcnt:{}", iovp, iovcnt);
-    panic!("sys_writev");
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -450,23 +448,62 @@ pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
         if !file.writable() {
             return -1;
         }
+        let iovp_buf = translated_byte_buffer(token, iovp as *const u8, iovcnt*size_of::<Iovec>()).pop().unwrap();
         let file = file.clone();
+        let mut addr = iovp_buf.as_ptr() as *const _ as usize;
         let mut total_write_len = 0;
         drop(inner);
-        // let mut iovp : usize = iovp as usize;
-        // for _ in 0..iovcnt {
-        //     let mut p;
-        //     let r = unsafe {
-        //         p = core::ptr::NonNull::new(iovp as *mut Iovec).unwrap();
-        //         p.as_mut()
-        //     };
-        //     let buf = r.iov_base;
-        //     let len = r.iov_len;
-        //     total_write_len += file.write(UserBuffer::new(translated_byte_buffer(token, buf, len)));
-        //     iovp = iovp + core::mem::size_of::<Iovec>();
-        // }
+        for _ in 0..iovcnt {
+            let iovp = unsafe { &*(addr as *const Iovec) };
+            total_write_len += file.write(UserBuffer::new(translated_byte_buffer(token, iovp.iov_base as *const u8, iovp.iov_len)));
+            addr += size_of::<Iovec>();
+
+        }
         total_write_len as isize
     } else {
         -1
+    }
+}
+
+pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, flags: usize) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+
+    // todo
+    _ = flags;
+    let buf_vec = translated_byte_buffer(token, satabuf as *const u8, size_of::<Kstat>());
+    let mut userbuf = UserBuffer::new(buf_vec);
+    let mut kstat = Kstat::new();
+    let path = translated_str(token, pathname);
+
+    if dirfd == AT_FDCWD {
+        // 如果是当前工作目录
+        if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+            let file: Arc<dyn File + Send + Sync> = inode;
+            file.get_fstat(&mut kstat);
+            userbuf.write(kstat.as_bytes());
+            0
+        } else {
+            -1
+        }
+    } else {
+        let dirfd = dirfd as usize;
+        // dirfd 不合法
+        if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
+            return -1;
+        }
+        if let Some(file) = &inner.fd_table[dirfd] {
+            if let Some(tar_f) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+                let file: Arc<dyn File + Send + Sync> = tar_f;
+                file.get_fstat(&mut kstat);
+                userbuf.write(kstat.as_bytes());
+                0
+            } else {
+                -1
+            }
+        } else {
+            -1
+        }
     }
 }
