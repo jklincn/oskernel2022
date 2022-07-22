@@ -15,23 +15,13 @@
 
 static FILE *writetemp(const char *data)
 {
-	t_printf("aaaaaaaaaa\n");
 	FILE *f = tmpfile();
-	
-
 	if (!f) return 0;
-	t_printf("bbbbbbbbb\n");
 	if (!fwrite(data, strlen(data), 1, f)) {
-	t_printf("ccccccccc\n");
-
 		fclose(f);
-	t_printf("ddddddddddd\n");
-
 		return 0;
 	}
 	rewind(f);
-	t_printf("eeeeeeeeeee\n");
-
 	return f;
 }
 
@@ -63,9 +53,7 @@ int main(void)
 	t_printf("t_status:%d\n",t_status);
 	fclose(f);
 	close(p[1]);
-	t_printf("00000000000000000\n");
 	TEST(i, !!(f=writetemp("      42")), 1, "failed to make temp file");
-	t_printf("111111111111\n");
 	if (f) {
 		x=y=-1;
 		TEST(i, fscanf(f, " %n%*d%n", &x, &y), 0, "%d != %d");
@@ -75,7 +63,6 @@ int main(void)
 		TEST(i, !!feof(f), 1, "%d != %d");
 		fclose(f);
 	}
-	t_printf("111111111111\n");
 	TEST(i, !!(f=writetemp("[abc123]....x")), 1, "failed to make temp file");
 	if (f) {
 		x=y=-1;
@@ -89,7 +76,6 @@ int main(void)
 		TEST(i, fgetc(f), 'x', "%d != %d");
 		fclose(f);
 	}
-	t_printf("222222222222\n");
 	TEST(i, !!(f=writetemp("0x1p 12")), 1, "failed to make temp file");
 	if (f) {
 		x=y=-1;
@@ -113,7 +99,6 @@ int main(void)
 		TEST(i, !!feof(f), 1, "%d != %d");
 		fclose(f);
 	}
-	t_printf("33333333333333\n");
 	TEST(i, !!(f=writetemp("0x.1p4    012")), 1, "failed to make temp file");
 	if (f) {
 		x=y=-1;

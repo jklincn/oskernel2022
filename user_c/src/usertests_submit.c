@@ -11,7 +11,7 @@ char buf[6000];
 // #define DYNAMIC
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "stat", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "fscanf", 0};
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
@@ -28,7 +28,6 @@ char *prog_pass[] = {"fscanf",
                      "pthread_tsd",
                      "search_hsearch",
                      "socket",
-                     "stat",
                      "ungetc",
                      "utime",
                      "daemon_failure",
