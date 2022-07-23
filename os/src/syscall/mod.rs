@@ -5,7 +5,8 @@
 const SYSCALL_GETCWD:   usize = 17;
 const SYSCALL_DUP:      usize = 23;
 const SYSCALL_DUP3:     usize = 24;
-const SYSCALL_IOCTL:     usize = 29;
+const SYSCALL_FCNTL:    usize = 25;
+const SYSCALL_IOCTL:    usize = 29;
 const SYSCALL_MKDIRAT:  usize = 34;
 const SYSCALL_UNLINKAT: usize = 35;
 const SYSCALL_UMOUNT2:  usize = 39;
@@ -15,7 +16,7 @@ const SYSCALL_OPENAT:   usize = 56;
 const SYSCALL_CLOSE:    usize = 57;
 const SYSCALL_PIPE:     usize = 59;
 const SYSCALL_GETDENTS64: usize = 61;
-const SYSCALL_LSEEK: usize = 62;
+const SYSCALL_LSEEK:    usize = 62;
 const SYSCALL_READ:     usize = 63;
 const SYSCALL_WRITE:    usize = 64;
 const SYSCALL_READV:    usize = 65;
@@ -26,7 +27,7 @@ const SYSCALL_UTIMENSAT:usize = 88;
 const SYSCALL_EXIT:     usize = 93;
 const SYSCALL_EXIT_GROUP:     usize = 94;
 const SYSCALL_SET_TID_ADDRESS:     usize = 96;
-const SYSCALL_FUTEX:     usize = 98;
+const SYSCALL_FUTEX:    usize = 98;
 const SYSCALL_NANOSLEEP:usize = 101;
 const SYSCALL_CLOCK_GETTIME:usize = 113;
 const SYSCALL_YIELD:    usize = 124;
@@ -42,7 +43,16 @@ const SYSCALL_GETPID:   usize = 172;
 const SYSCALL_GETPPID:  usize = 173;
 const SYSCALL_GETEUID:  usize = 175;
 const SYSCALL_GETEGID:  usize = 177;
-const SYSCALL_GETTID:  usize = 178;
+const SYSCALL_GETTID:   usize = 178;
+const SYSCALL_SOCKET:   usize = 198;
+const SYSCALL_BIND:     usize = 200;
+const SYSCALL_LISTEN:   usize = 201;
+const SYSCALL_ACCEPT:   usize = 202;
+const SYSCALL_CONNECT:  usize = 203;
+const SYSCALL_GETSOCKNAME: usize = 204;
+const SYSCALL_SENDTO:   usize = 206;
+const SYSCALL_RECVFROM: usize = 207;
+const SYSCALL_SETSOCKOPT: usize = 208;
 const SYSCALL_BRK:      usize = 214;
 const SYSCALL_MUNMAP:   usize = 215;
 const SYSCALL_FORK:     usize = 220;
@@ -55,11 +65,13 @@ mod fs;         // 文件读写模块
 mod process;    // 进程控制模块
 mod thread;
 mod sigset;
+mod socket;
 
 use fs::*;
 use process::*;
 use thread::*;
 use sigset::*;
+use socket::*;
 
 
 /// 系统调用分发函数
@@ -68,6 +80,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_GETCWD =>   sys_getcwd(args[0] as *mut u8, args[1]),
         SYSCALL_DUP =>      sys_dup(args[0]),
         SYSCALL_DUP3 =>     sys_dup3(args[0], args[1]),
+        SYSCALL_FCNTL =>    sys_fcntl(args[0] as isize,args[1], Option::<usize>::from(args[2])),
         SYSCALL_IOCTL=>     sys_ioctl(args[0],args[1],args[2] as *mut u8),
         SYSCALL_MKDIRAT =>  sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         SYSCALL_UNLINKAT=>  sys_unlinkat(args[0] as isize, args[1] as *const u8, args[2] as u32),
@@ -108,6 +121,15 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_FORK =>     sys_fork(args[0], args[1], args[2], args[3], args[4]),
         SYSCALL_EXEC =>     sys_exec(args[0] as *const u8, args[1] as *const usize,args[2] as *const usize),
         SYSCALL_GETTID =>   sys_gettid(),
+        SYSCALL_SOCKET =>   sys_socket(),
+        SYSCALL_BIND   =>   sys_bind(),
+        SYSCALL_LISTEN =>   sys_listen(),
+        SYSCALL_ACCEPT =>   sys_accept(),
+        SYSCALL_CONNECT=>   sys_connect(),
+        SYSCALL_GETSOCKNAME=> sys_getsockname(),
+        SYSCALL_SENDTO =>   sys_sendto(),
+        SYSCALL_RECVFROM=>  sys_recvfrom(),
+        SYSCALL_SETSOCKOPT => sys_setsockopt(),
         SYSCALL_BRK =>      sys_brk(args[0]),
         SYSCALL_MMAP=>      sys_mmap(args[0], args[1], args[2], args[3], args[4] as isize, args[5]),
         SYSCALL_MUNMAP =>   sys_munmap(args[0], args[1]),

@@ -28,6 +28,8 @@ pub trait File: Send + Sync {
     fn get_offset(&self) -> usize;
 
     fn set_offset(&self, offset: usize);
+
+    fn set_flags(&self,flag: OpenFlags);
 }
 
 pub use dirent::Dirent;

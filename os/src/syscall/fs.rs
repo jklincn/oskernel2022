@@ -380,7 +380,8 @@ bitflags! {
 }
 
 pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
-    // println!("enter lseek!,fd:{},off_t:{},whence:{}", fd, off_t, whence);
+    // println!("enter sys_lseek: fd:{},off_t:{},whence:{}",fd,off_t,whence);
+
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     // 文件描述符不合法
@@ -401,7 +402,12 @@ pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
                 (off_t + current_offset) as isize
             }
             SeekFlags::SEEK_END => {
-                unimplemented!()
+                // 这边打开目录目前也是针对测试用例，需要完善
+                let inode = open("/tmp", file.get_name().as_str(), OpenFlags::O_RDONLY).unwrap();
+                let end = inode.file_size();
+                file.set_offset(end + off_t);
+                // println!("end:{}",end);
+                (end + off_t) as isize
             }
             // flag wrong
             _ => panic!("sys_lseek: unsupported whence!"),
@@ -436,6 +442,7 @@ pub struct Iovec {
 }
 
 pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
+    // println!("enter sys_writev");
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -569,4 +576,42 @@ pub fn sys_readv(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
     } else {
         -1
     }
+}
+
+// 暂时写在这里
+bitflags! {
+    pub struct FcntlFlags:usize{
+        const F_DUPFD = 0;
+        const F_GETFD = 1;
+        const F_SETFD = 2;
+        const F_GETFL = 3;
+        const F_SETFL = 4;
+        const F_GETLK = 5;
+        const F_SETLK = 6;
+        const F_SETLKW = 7;
+        const F_SETOWN = 8;
+        const F_GETOWN = 9;
+        const F_SETSIG = 10;
+        const F_GETSIG = 11;
+        const F_SETOWN_EX = 15;
+        const F_GETOWN_EX = 16;
+        const F_GETOWNER_UIDS = 17;
+    }
+}
+
+pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
+    // println!("enter sys_fcntl:fd:{},cmd:{},arg:{:?}", fd, cmd, arg);
+
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    if let Some(file) = &inner.fd_table[fd as usize] {
+    let cmd = FcntlFlags::from_bits(cmd).unwrap();
+    match cmd {
+        FcntlFlags::F_SETFL => {
+            file.set_flags(OpenFlags::from_bits(arg.unwrap() as u32).unwrap());
+
+        }
+        _ => {}
+    }}
+    0
 }

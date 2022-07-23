@@ -164,9 +164,9 @@ impl File for Pipe {
         loop {
             let mut ring_buffer = self.buffer.exclusive_access();
             let loop_read = ring_buffer.available_read();
-            
+
             if loop_read == 0 {
-                return read_size;  // This line is wrong, just for pass
+                return read_size; // This line is wrong, just for pass
                 if ring_buffer.all_write_ends_closed() {
                     return read_size;
                 }
@@ -217,7 +217,7 @@ impl File for Pipe {
     }
 
     #[allow(unused_variables)]
-    fn set_time(&self, timespec: &Timespec){
+    fn set_time(&self, timespec: &Timespec) {
         panic!("pipe not implement set_time");
     }
 
@@ -230,13 +230,17 @@ impl File for Pipe {
         panic!("pipe not implement get_name");
     }
 
-    fn get_offset(&self) -> usize{
-        return 0;  // just for pass
+    fn get_offset(&self) -> usize {
+        return 0; // just for pass
         panic!("pipe not implement get_offset");
     }
-    
+
     fn set_offset(&self, offset: usize) {
-        return;  // just for pass
+        return; // just for pass
         panic!("pipe not implement set_offset");
+    }
+
+    fn set_flags(&self, flag: OpenFlags) {
+        panic!("pipe not implement set_flags");
     }
 }

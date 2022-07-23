@@ -24,7 +24,6 @@ int main(void)
 	ASSERT((fd = mkstemp(tmp)) > 2);
 	ASSERT(write(fd, "abcd", 4) == 4);
 	ASSERT(close(fd) == 0);
-
 	ASSERT((fd = open(tmp, O_WRONLY)) > 2);
 	ASSERT(f = fdopen(fd, "a"));
 	if (f) {

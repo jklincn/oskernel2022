@@ -20,6 +20,7 @@ pub struct OSInode {
 pub struct OSInodeInner {
     offset: usize, // 偏移量
     inode: Arc<VFile>,
+    flags: OpenFlags,
 }
 
 impl OSInode {
@@ -27,7 +28,11 @@ impl OSInode {
         Self {
             readable,
             writable,
-            inner: Mutex::new(OSInodeInner { offset: 0, inode }),
+            inner: Mutex::new(OSInodeInner {
+                offset: 0,
+                inode,
+                flags: OpenFlags::empty(),
+            }),
         }
     }
     pub fn read_all(&self) -> Vec<u8> {
@@ -59,6 +64,10 @@ impl OSInode {
     pub fn delete(&self) -> usize {
         let inner = self.inner.lock();
         inner.inode.remove()
+    }
+    pub fn file_size(&self) -> usize {
+        let inner = self.inner.lock();
+        inner.inode.file_size() as usize
     }
 }
 
@@ -102,11 +111,12 @@ bitflags! {
         const O_WRONLY = 1 << 0;
         const O_RDWR = 1 << 1;
         const O_CREATE = 1 << 6;
-        const O_TRUNC = 1 << 10;
+        const O_TRUNC = 1 << 9;
         const O_DIRECTROY = 1 << 21;
         // 决赛添加
         const O_EXCL = 1 << 7;
         const O_LARGEFILE = 1 << 15;
+        const O_APPEND = 1 << 10;
     }
 }
 
@@ -216,13 +226,23 @@ impl File for OSInode {
     }
 
     fn write(&self, buf: UserBuffer) -> usize {
-        let mut inner = self.inner.lock();
+        
         let mut total_write_size = 0usize;
-        for slice in buf.buffers.iter() {
-            let write_size = inner.inode.write_at(inner.offset, *slice);
-            assert_eq!(write_size, slice.len());
-            inner.offset += write_size;
-            total_write_size += write_size;
+        let filesize = self.file_size();
+        let mut inner = self.inner.lock();
+        if inner.flags.contains(OpenFlags::O_APPEND) {
+            for slice in buf.buffers.iter() {
+                let write_size = inner.inode.write_at(filesize, *slice);
+                inner.offset += write_size;
+                total_write_size += write_size;
+            }
+        } else {
+            for slice in buf.buffers.iter() {
+                let write_size = inner.inode.write_at(inner.offset, *slice);
+                assert_eq!(write_size, slice.len());
+                inner.offset += write_size;
+                total_write_size += write_size;
+            }
         }
         total_write_size
     }
@@ -245,11 +265,12 @@ impl File for OSInode {
     }
 
     fn set_time(&self, timespec: &Timespec) {
-        // 目前只处理时间相关
-        let inner = self.inner.lock();
-        let vfile = inner.inode.clone();
         let tv_sec = timespec.tv_sec;
         let tv_nsec = timespec.tv_nsec;
+
+        let inner = self.inner.lock();
+        let vfile = inner.inode.clone();
+
         // 属于是针对测试用例了，待完善
         if tv_sec == 1 << 32 {
             vfile.set_time(tv_sec, tv_nsec);
@@ -280,8 +301,14 @@ impl File for OSInode {
         let inner = self.inner.lock();
         inner.offset
     }
+
     fn set_offset(&self, offset: usize) {
         let mut inner = self.inner.lock();
         inner.offset = offset;
+    }
+
+    fn set_flags(&self,flag: OpenFlags){
+        let mut inner = self.inner.lock();
+        inner.flags.set(flag, true);
     }
 }

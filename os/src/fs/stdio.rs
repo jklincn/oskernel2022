@@ -5,8 +5,7 @@
 /// pub struct Stdout
 /// ```
 //
-
-use super::{File, Kstat, Dirent, Timespec};
+use super::{Dirent, File, Kstat, Timespec};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
@@ -54,7 +53,7 @@ impl File for Stdin {
     }
 
     #[allow(unused_variables)]
-    fn set_time(&self, timespec: &Timespec){
+    fn set_time(&self, timespec: &Timespec) {
         panic!("Stdin not implement set_time");
     }
 
@@ -65,14 +64,18 @@ impl File for Stdin {
 
     fn get_name(&self) -> String {
         panic!("Stdin not implement get_name");
-    }    
+    }
 
-    fn get_offset(&self) -> usize{
+    fn get_offset(&self) -> usize {
         panic!("Stdin not implement get_offset");
     }
 
     fn set_offset(&self, offset: usize) {
         panic!("Stdin not implement set_offset");
+    }
+
+    fn set_flags(&self, flag: OpenFlags) {
+        panic!("Stdin not implement set_flags");
     }
 }
 
@@ -99,7 +102,7 @@ impl File for Stdout {
     }
 
     #[allow(unused_variables)]
-    fn set_time(&self, timespec: &Timespec){
+    fn set_time(&self, timespec: &Timespec) {
         panic!("Stdout not implement set_time");
     }
 
@@ -112,11 +115,15 @@ impl File for Stdout {
         panic!("Stdout not implement get_name");
     }
 
-    fn get_offset(&self) -> usize{
+    fn get_offset(&self) -> usize {
         panic!("Stdput not implement get_offset");
     }
 
     fn set_offset(&self, offset: usize) {
         panic!("Stdput not implement set_offset");
+    }
+
+    fn set_flags(&self, flag: OpenFlags) {
+        panic!("Stdput not implement set_flags");
     }
 }
