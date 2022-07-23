@@ -535,3 +535,38 @@ pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flag
         0
     }
 }
+
+pub fn sys_readv(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    // 文件描述符不合法
+    if fd >= inner.fd_table.len() {
+        return -1;
+    }
+    if let Some(file) = &inner.fd_table[fd] {
+        // 文件不可读
+        if !file.readable() {
+            return -1;
+        }
+        let iovp_buf = translated_byte_buffer(token, iovp as *const u8, iovcnt * size_of::<Iovec>())
+            .pop()
+            .unwrap();
+        let file = file.clone();
+        let mut addr = iovp_buf.as_ptr() as *const _ as usize;
+        let mut total_read_len = 0;
+        drop(inner);
+        for _ in 0..iovcnt {
+            let iovp = unsafe { &*(addr as *const Iovec) };
+            total_read_len += file.read(UserBuffer::new(translated_byte_buffer(
+                token,
+                iovp.iov_base as *const u8,
+                iovp.iov_len,
+            )));
+            addr += size_of::<Iovec>();
+        }
+        total_read_len as isize
+    } else {
+        -1
+    }
+}
