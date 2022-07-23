@@ -18,14 +18,19 @@ char buf[6000];
 
 int offset = 0;
 
-#define PROG_PASS_LENGTH 22
-char *prog_pass[] = {"memstream",
+#define PROG_PASS_LENGTH 26
+char *prog_pass[] = {
+                     "env",
+                     "memstream",
                      "pthread_cancel_points",
                      "pthread_cancel",
                      "pthread_cond",
                      "pthread_tsd",
                      "search_hsearch",
                      "socket",
+                     "sscanf_long",
+                     "strftime",
+                     "strptime",
                      "daemon_failure",
                      "fflush_exit",
                      "pthread_robust_detach",
