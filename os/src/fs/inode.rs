@@ -84,6 +84,7 @@ pub fn list_apps() {
     open("/", "tmp", OpenFlags::O_DIRECTROY);
     open("/", "dev", OpenFlags::O_DIRECTROY);
     open("/dev", "null", OpenFlags::O_CREATE);
+    open("/dev", "zero", OpenFlags::O_CREATE);
     println!("/**** All Files  ****");
     for app in ROOT_INODE.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {
@@ -213,8 +214,17 @@ impl File for OSInode {
     }
 
     fn read(&self, mut buf: UserBuffer) -> usize {
+
+        // 对 /dev/zero 的处理，暂时先加在这里
+        if self.name() == "zero" {
+            let zero: Vec<u8> = (0..buf.buffers.len()).map(|_| 0).collect();
+            buf.write(zero.as_slice());
+            return buf.buffers.len();
+        }
+
         let mut inner = self.inner.lock();
         let mut total_read_size = 0usize;
+
         // 这边要使用 iter_mut()，因为要将数据写入
         for slice in buf.buffers.iter_mut() {
             let read_size = inner.inode.read_at(inner.offset, *slice);
@@ -228,7 +238,6 @@ impl File for OSInode {
     }
 
     fn write(&self, buf: UserBuffer) -> usize {
-        
         let mut total_write_size = 0usize;
         let filesize = self.file_size();
         let mut inner = self.inner.lock();
@@ -309,7 +318,7 @@ impl File for OSInode {
         inner.offset = offset;
     }
 
-    fn set_flags(&self,flag: OpenFlags){
+    fn set_flags(&self, flag: OpenFlags) {
         let mut inner = self.inner.lock();
         inner.flags.set(flag, true);
     }
