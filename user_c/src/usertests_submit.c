@@ -105,7 +105,7 @@ int main()
     //         waitpid(npid, &child_return, 0);
     // }
 
-    return 0;
+    // return 0;
 
     // run tests
     for (int row = 0; row < PROG_NUM; row++)
