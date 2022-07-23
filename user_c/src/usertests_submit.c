@@ -11,7 +11,7 @@ char buf[6000];
 // #define DYNAMIC
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "rewind_clear_error", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "regex_escaped_high_byte", 0};
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
@@ -42,7 +42,6 @@ char *prog_pass[] = {"memstream",
                      "regex_escaped_high_byte",
                      "regex_negated_range",
                      "regexec_nosub",
-                     "rewind_clear_error",
                      "rlimit_open_files",
                      "statvfs"};
 
