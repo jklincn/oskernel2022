@@ -11,14 +11,14 @@ char buf[6000];
 // #define DYNAMIC
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "syscall_sign_extend", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
 
 int offset = 0;
 
-#define PROG_PASS_LENGTH 27
+#define PROG_PASS_LENGTH 22
 char *prog_pass[] = {"memstream",
                      "pthread_cancel_points",
                      "pthread_cancel",
@@ -85,21 +85,21 @@ int main()
 
 
     // test only one program
-    int npid = fork();
-    assert(npid >= 0);
-    int child_return;
-    if (npid == 0)
-    {
-        execve("./runtest.exe", argv, NULL);
-    }
-    else
-    {
-            // parent
-            child_return = -1;
-            waitpid(npid, &child_return, 0);
-    }
+    // int npid = fork();
+    // assert(npid >= 0);
+    // int child_return;
+    // if (npid == 0)
+    // {
+    //     execve("./runtest.exe", argv, NULL);
+    // }
+    // else
+    // {
+    //         // parent
+    //         child_return = -1;
+    //         waitpid(npid, &child_return, 0);
+    // }
 
-    return 0;
+    // return 0;
 
     // run tests
     for (int row = 0; row < PROG_NUM; row++)

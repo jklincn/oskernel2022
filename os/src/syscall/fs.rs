@@ -1,4 +1,4 @@
-use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statvfs, Timespec, MNT_TABLE};
+use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statfs, Timespec, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token, RLIMIT_NOFILE};
 use alloc::sync::Arc;
@@ -633,7 +633,7 @@ pub fn sys_statfs(path: *const u8, buf: *const u8) -> isize {
 
     _ = path;
 
-    let mut userbuf = UserBuffer::new(translated_byte_buffer(token, buf, size_of::<Statvfs>()));
-    userbuf.write(Statvfs::new().as_bytes());
+    let mut userbuf = UserBuffer::new(translated_byte_buffer(token, buf, size_of::<Statfs>()));
+    userbuf.write(Statfs::new().as_bytes());
     0
 }

@@ -80,36 +80,36 @@ pub struct Timespec {
 }
 
 #[repr(C)]
-pub struct Statvfs {
+pub struct Statfs {
+    f_type: u64,
     f_bsize: u64,
-    f_frsize: u64,
     f_blocks: u64,
     f_bfree: u64,
     f_bavail: u64,
     f_files: u64,
     f_ffree: u64,
-    f_favail: u64,
     f_fsid: u64,
+    f_namelen: u64,
+    f_frsize: u64,
     f_flag: u64,
-    f_namemax: u64,
-    __reserved: [u32; 6],
+    f_spare: [u64; 4],
 }
 
-impl Statvfs {
+impl Statfs {
     pub fn new() -> Self {
         Self {
+            f_type:1,
             f_bsize: 512,
-            f_frsize: 4096,
             f_blocks: 12345,
             f_bfree: 1234,
             f_bavail: 123,
             f_files: 1000,
             f_ffree: 100,
-            f_favail: 123,
-            f_fsid: 10,  // 很奇怪，测试程序把它识别成了 f_namemax
+            f_fsid: 1,
+            f_namelen: 123,
+            f_frsize: 4096,
             f_flag: 123,
-            f_namemax: 123,
-            __reserved: [0; 6],
+            f_spare: [0; 4],
         }
     }
     pub fn as_bytes(&self) -> &[u8] {
