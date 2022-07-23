@@ -71,7 +71,8 @@ impl File for Stdin {
     }
 
     fn set_offset(&self, offset: usize) {
-        panic!("Stdin not implement set_offset");
+        _ = offset;
+        return;
     }
 
     fn set_flags(&self, flag: OpenFlags) {

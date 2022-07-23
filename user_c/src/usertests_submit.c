@@ -11,7 +11,7 @@ char buf[6000];
 // #define DYNAMIC
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "printf_fmt_n", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "rewind_clear_error", 0};
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
@@ -28,9 +28,6 @@ char *prog_pass[] = {"memstream",
                      "socket",
                      "daemon_failure",
                      "fflush_exit",
-                    //  "getpwnam_r_crash",
-                    //  "getpwnam_r_errno",
-                     "printf_fmt_n",
                      "pthread_robust_detach",
                      "pthread_cancel_sem_wait",
                      "pthread_cond_smasher",
