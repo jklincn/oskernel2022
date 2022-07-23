@@ -91,19 +91,19 @@ int main()
 
 
     // test only one program
-    int npid = fork();
-    assert(npid >= 0);
-    int child_return;
-    if (npid == 0)
-    {
-        execve("./runtest.exe", argv, NULL);
-    }
-    else
-    {
-            // parent
-            child_return = -1;
-            waitpid(npid, &child_return, 0);
-    }
+    // int npid = fork();
+    // assert(npid >= 0);
+    // int child_return;
+    // if (npid == 0)
+    // {
+    //     execve("./runtest.exe", argv, NULL);
+    // }
+    // else
+    // {
+    //         // parent
+    //         child_return = -1;
+    //         waitpid(npid, &child_return, 0);
+    // }
 
     return 0;
 
