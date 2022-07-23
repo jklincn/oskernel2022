@@ -7,7 +7,7 @@ use super::signal::SigSet;
 /// pub enum TaskStatus
 /// ```
 //
-use super::{aux, TaskContext};
+use super::{aux, TaskContext, RLimit, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
@@ -101,6 +101,7 @@ pub struct TaskControlBlockInner {
 
     // 决赛添加：信号集
     pub sigset : SigSet,
+    pub resource: [RLimit;RESOURCE_KIND_NUMBER],
 }
 
 impl TaskControlBlockInner {
@@ -179,6 +180,7 @@ impl TaskControlBlock {
                     current_path: String::from("/"),
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
                     sigset:SigSet::new(),
+                    resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
                 })
             },
         };
@@ -345,6 +347,7 @@ impl TaskControlBlock {
                     current_path: parent_inner.current_path.clone(),
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
                     sigset:SigSet::new(),
+                    resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
                 })
             },
         });

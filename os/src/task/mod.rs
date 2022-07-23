@@ -20,6 +20,7 @@ mod switch; // 任务上下文切换模块
 mod task;   // 进程控制块
 mod info;   // 系统信息模块
 mod aux;
+mod resource;
 
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -37,6 +38,7 @@ pub use processor::{
 };
 pub use signal::*;
 pub use aux::*;
+pub use resource::*;
 
 /// 将当前任务置为就绪态，放回到进程管理器中的就绪队列中，重新选择一个进程运行
 pub fn suspend_current_and_run_next() {

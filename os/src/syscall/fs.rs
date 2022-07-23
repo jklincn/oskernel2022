@@ -1,6 +1,6 @@
-use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Timespec, MNT_TABLE};
+use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statvfs, Timespec, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
-use crate::task::{current_task, current_user_token};
+use crate::task::{current_task, current_user_token, RLIMIT_NOFILE};
 use alloc::sync::Arc;
 /// # 文件读写模块
 /// `os/src/syscall/fs.rs`
@@ -160,9 +160,22 @@ pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
 ///     - 能够访问已打开文件的新文件描述符。
 ///     - 如果出现了错误则返回 -1，可能的错误原因是：传入的 fd 并不对应一个合法的已打开文件。
 /// - syscall ID：23
+
+// 暂时写在这里
+const EMFILE: usize = 24;
+
 pub fn sys_dup(fd: usize) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
+
+    // 做资源检查，目前只检查 RLIMIT_NOFILE 这一种
+    let rlim_cur = inner.resource[RLIMIT_NOFILE].rlim_cur;
+    let rlim_max = inner.resource[RLIMIT_NOFILE].rlim_max;
+    println!("cur:{},max:{}", rlim_cur, rlim_max);
+    if rlim_cur == rlim_max {
+        return -1;
+    }
+
     // 检查传入 fd 的合法性
     if fd >= inner.fd_table.len() {
         return -1;
@@ -601,17 +614,26 @@ bitflags! {
 
 pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
     // println!("enter sys_fcntl:fd:{},cmd:{},arg:{:?}", fd, cmd, arg);
-
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     if let Some(file) = &inner.fd_table[fd as usize] {
-    let cmd = FcntlFlags::from_bits(cmd).unwrap();
-    match cmd {
-        FcntlFlags::F_SETFL => {
-            file.set_flags(OpenFlags::from_bits(arg.unwrap() as u32).unwrap());
-
+        let cmd = FcntlFlags::from_bits(cmd).unwrap();
+        match cmd {
+            FcntlFlags::F_SETFL => {
+                file.set_flags(OpenFlags::from_bits(arg.unwrap() as u32).unwrap());
+            }
+            _ => {}
         }
-        _ => {}
-    }}
+    }
+    0
+}
+
+pub fn sys_statfs(path: *const u8, buf: *const u8) -> isize {
+    let token = current_user_token();
+
+    _ = path;
+
+    let mut userbuf = UserBuffer::new(translated_byte_buffer(token, buf, size_of::<Statvfs>()));
+    userbuf.write(Statvfs::new().as_bytes());
     0
 }

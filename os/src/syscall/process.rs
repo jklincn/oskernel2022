@@ -12,15 +12,16 @@
 /// ```
 //
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, frame_usage};
+use crate::mm::{frame_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, SignalFlags,
+    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags, new,
 };
 use crate::timer::{get_TimeVal, get_time_ms, tms, TimeVal};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
+use core::mem::size_of;
 // use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 pub use crate::task::{CloneFlags, Utsname, UTSNAME};
 use lazy_static::*;
@@ -178,17 +179,17 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     let argc = args_vec.len();
     let task = current_task().unwrap();
     println!("exec name:{},argvs:{:?}", path, args_vec);
-    if path == "./runtest.exe"{
+    if path == "./runtest.exe" {
         task.exec(RUNTEST_EXE.as_slice(), args_vec, envs_vec);
         return argc as isize;
-    } else if path == "entry-static.exe"{
+    } else if path == "entry-static.exe" {
         task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
         return argc as isize;
     }
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
-        drop(inner); 
+        drop(inner);
         task.exec(all_data.as_slice(), args_vec, envs_vec);
         // return argc because cx.x[10] will be covered with it later
         // println!("sys_exec return!");
@@ -198,27 +199,25 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     }
 }
 
-lazy_static!{
+lazy_static! {
     pub static ref ENTRY_STATIC_EXE: Vec<u8> = {
-    let task = current_task().unwrap();
-    let inner = task.inner_exclusive_access();
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
         if let Some(app_inode) = open(inner.current_path.as_str(), "entry-static.exe", OpenFlags::O_RDONLY) {
             app_inode.read_all()
-        }
-        else {
+        } else {
             panic!("can't find entry-static.exe");
         }
     };
 }
 
-lazy_static!{
+lazy_static! {
     pub static ref RUNTEST_EXE: Vec<u8> = {
-    let task = current_task().unwrap();
-    let inner = task.inner_exclusive_access();
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
         if let Some(app_inode) = open(inner.current_path.as_str(), "./runtest.exe", OpenFlags::O_RDONLY) {
             app_inode.read_all()
-        }
-        else {
+        } else {
             panic!("can't find ./runtest.exe");
         }
     };
@@ -333,7 +332,7 @@ pub fn sys_uname(buf: *const u8) -> isize {
 pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
     let task = current_task().unwrap();
     println!("enter mmap!");
-    println!("start:{},len:{},prot:{},flags:{},fd:{},off:{}",start,len,prot,flags,fd,off);
+    println!("start:{},len:{},prot:{},flags:{},fd:{},off:{}", start, len, prot, flags, fd, off);
     if len == 0 {
         panic!("mmap:len == 0");
     }
@@ -366,25 +365,52 @@ pub fn sys_brk(brk_addr: usize) -> isize {
     addr_new as isize
 }
 
-pub fn sys_gettid()->isize{
+pub fn sys_gettid() -> isize {
     0
 }
 
-pub fn sys_prlimit64()->isize{
+pub fn sys_prlimit64(pid: usize, resource: usize, new_limit: *const u8, old_limit: *const u8) -> isize {
+    let token = current_user_token();
+    // println!("enter sys_prlimit64: pid:{},resource:{},new_limit:{},old_limit:{}",pid,resource,new_limit as usize,old_limit as usize);
+    if old_limit as usize != 0 {
+        let mut buf = UserBuffer::new(translated_byte_buffer(token, old_limit as *const u8, size_of::<RLimit>()));
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
+        let old_resource = inner.resource[resource];
+        let old_limit = RLimit {
+            rlim_cur: old_resource.rlim_cur,
+            rlim_max: old_resource.rlim_max,
+        };
+        buf.write(old_limit.as_bytes());
+    }
+
+    if new_limit as usize != 0 {
+        let buf = translated_byte_buffer(token, new_limit as *const u8, size_of::<RLimit>())
+            .pop()
+            .unwrap();
+        let addr = buf.as_ptr() as *const _ as usize;
+        let new_limit = unsafe { &*(addr as *const RLimit) };
+        let task = current_task().unwrap();
+        let mut inner = task.inner_exclusive_access();
+        let rlimit = RLimit {
+            rlim_cur: new_limit.rlim_cur,
+            rlim_max: new_limit.rlim_max,
+        };
+        inner.resource[resource] = rlimit;
+    }
     0
 }
 
-pub fn sys_clock_gettime(clk_id:usize,ts:*mut usize) -> isize{
+pub fn sys_clock_gettime(clk_id: usize, ts: *mut usize) -> isize {
     let token = current_user_token();
     *translated_refmut(token, ts) = 0 as usize;
     0
 }
 
-pub fn sys_geteuid()->isize{
+pub fn sys_geteuid() -> isize {
     0
 }
 
-
-pub fn sys_getegid()->isize{
+pub fn sys_getegid() -> isize {
     0
 }

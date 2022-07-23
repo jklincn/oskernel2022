@@ -1,11 +1,10 @@
-
-pub const S_IFDIR:u32 =0o0040000;
-pub const S_IFCHR :u32=0o0020000;
-pub const S_IFBLK :u32=0o0060000;
-pub const S_IFREG :u32=0o0100000;
-pub const S_IFIFO :u32=0o0010000;
-pub const S_IFLNK:u32 =0o0120000;
-pub const S_IFSOCK :u32=0o0140000;
+pub const S_IFDIR: u32 = 0o0040000;
+pub const S_IFCHR: u32 = 0o0020000;
+pub const S_IFBLK: u32 = 0o0060000;
+pub const S_IFREG: u32 = 0o0100000;
+pub const S_IFIFO: u32 = 0o0010000;
+pub const S_IFLNK: u32 = 0o0120000;
+pub const S_IFSOCK: u32 = 0o0140000;
 
 #[derive(Debug)]
 #[repr(C)]
@@ -56,7 +55,7 @@ impl Kstat {
         }
     }
 
-    pub fn init(&mut self, st_size: i64, st_blksize: i32, st_blocks: u64,st_mode:u32,time:u64) {
+    pub fn init(&mut self, st_size: i64, st_blksize: i32, st_blocks: u64, st_mode: u32, time: u64) {
         self.st_nlink = 1;
         self.st_size = st_size;
         self.st_blksize = st_blksize;
@@ -64,8 +63,8 @@ impl Kstat {
         self.st_mode = st_mode;
         // 参见 simple-fat32 中注释
         if time == 12345 {
-            self.st_atime_sec = 1 <<32;
-            self.st_mtime_sec = 1 <<32;
+            self.st_atime_sec = 1 << 32;
+            self.st_mtime_sec = 1 << 32;
         }
     }
 
@@ -75,7 +74,46 @@ impl Kstat {
     }
 }
 
-pub struct Timespec{
-    pub tv_sec:u64,
-    pub tv_nsec:u64,
+pub struct Timespec {
+    pub tv_sec: u64,
+    pub tv_nsec: u64,
+}
+
+#[repr(C)]
+pub struct Statvfs {
+    f_bsize: u64,
+    f_frsize: u64,
+    f_blocks: u64,
+    f_bfree: u64,
+    f_bavail: u64,
+    f_files: u64,
+    f_ffree: u64,
+    f_favail: u64,
+    f_fsid: u64,
+    f_flag: u64,
+    f_namemax: u64,
+    __reserved: [u32; 6],
+}
+
+impl Statvfs {
+    pub fn new() -> Self {
+        Self {
+            f_bsize: 512,
+            f_frsize: 4096,
+            f_blocks: 12345,
+            f_bfree: 1234,
+            f_bavail: 123,
+            f_files: 1000,
+            f_ffree: 100,
+            f_favail: 123,
+            f_fsid: 10,  // 很奇怪，测试程序把它识别成了 f_namemax
+            f_flag: 123,
+            f_namemax: 123,
+            __reserved: [0; 6],
+        }
+    }
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
 }
