@@ -112,11 +112,13 @@ bitflags! {
         const O_RDWR = 1 << 1;
         const O_CREATE = 1 << 6;
         const O_TRUNC = 1 << 9;
-        const O_DIRECTROY = 1 << 21;
+        const O_DIRECTROY = 1 << 16;
         // 决赛添加
         const O_EXCL = 1 << 7;
         const O_LARGEFILE = 1 << 15;
         const O_APPEND = 1 << 10;
+        const O_NOFOLLOW = 1 << 17;
+        const O_CLOEXEC = 1 << 19;
     }
 }
 
