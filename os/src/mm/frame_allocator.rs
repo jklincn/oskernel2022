@@ -113,6 +113,7 @@ impl FrameAllocator for StackFrameAllocator {
             Some(ppn.into())
         }   // 空间满返回 None
         else if self.current == self.end {
+            frame_usage();
             None
         }   // 否则就返回最低的物理页号
         else {
