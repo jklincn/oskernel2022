@@ -12,7 +12,7 @@
 /// ```
 //
 use crate::fs::{open, OpenFlags};
-use crate::mm::{frame_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{frame_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, MemorySet};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags, new,
 };
@@ -24,7 +24,6 @@ use core::arch::asm;
 use core::mem::size_of;
 // use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 pub use crate::task::{CloneFlags, Utsname, UTSNAME};
-use lazy_static::*;
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -179,49 +178,37 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     let argc = args_vec.len();
     let task = current_task().unwrap();
     println!("exec name:{},argvs:{:?}", path, args_vec);
-    if path == "./runtest.exe" {
-        task.exec(RUNTEST_EXE.as_slice(), args_vec, envs_vec);
-        return argc as isize;
-    } else if path == "entry-static.exe" {
-        task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
-        return argc as isize;
-    }
+    
+    // if path == "entry-static.exe" {
+    //     task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
+    //     return argc as isize;
+    // }
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-        let all_data = app_inode.read_all();
+        let elf_data = app_inode.read_all();
         drop(inner);
-        task.exec(all_data.as_slice(), args_vec, envs_vec);
+        // MemorySet::load_elf(app_inode,&mut Vec::new());
+        task.exec(elf_data.as_slice(), args_vec, envs_vec);
+        drop(elf_data);
         // return argc because cx.x[10] will be covered with it later
-        // println!("sys_exec return!");
         argc as isize
     } else {
         -1
     }
 }
 
-lazy_static! {
-    pub static ref ENTRY_STATIC_EXE: Vec<u8> = {
-        let task = current_task().unwrap();
-        let inner = task.inner_exclusive_access();
-        if let Some(app_inode) = open(inner.current_path.as_str(), "entry-static.exe", OpenFlags::O_RDONLY) {
-            app_inode.read_all()
-        } else {
-            panic!("can't find entry-static.exe");
-        }
-    };
-}
+// lazy_static! {
+//     pub static ref ENTRY_STATIC_EXE: Vec<u8> = {
+//         let task = current_task().unwrap();
+//         let inner = task.inner_exclusive_access();
+//         if let Some(app_inode) = open(inner.current_path.as_str(), "entry-static.exe", OpenFlags::O_RDONLY) {
+//             app_inode.read_all()
+//         } else {
+//             panic!("can't find entry-static.exe");
+//         }
+//     };
+// }
 
-lazy_static! {
-    pub static ref RUNTEST_EXE: Vec<u8> = {
-        let task = current_task().unwrap();
-        let inner = task.inner_exclusive_access();
-        if let Some(app_inode) = open(inner.current_path.as_str(), "./runtest.exe", OpenFlags::O_RDONLY) {
-            app_inode.read_all()
-        } else {
-            panic!("can't find ./runtest.exe");
-        }
-    };
-}
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
 /// - 参数：
 ///     - pid 表示要等待的子进程的进程 ID，如果为 -1 的话表示等待任意一个子进程；
@@ -305,47 +292,24 @@ pub fn sys_uname(buf: *const u8) -> isize {
     0
 }
 
-// not support full flags: MAP_FIXED
-
 /// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
-/// - 参数
-///     - `start`, `len`：映射空间起始地址及长度，起始地址必须4k对齐
-///     - `prot`：映射空间读写权限
-///         ```c
-///         #define PROT_NONE  0b0000
-///         #define PROT_READ  0b0001
-///         #define PROT_WRITE 0b0010
-///         #define PROT_EXEC  0b0100
-///         ```
-///     - `flags`：映射方式
-///         ```rust
-///         const MAP_FILE = 0;
-///         const MAP_SHARED  = 0x01;
-///         const MAP_PRIVATE = 0x02;
-///         const MAP_FIXED   = 0x10;
-///         const MAP_ANONYMOUS = 0x20;
-///         ```
-///     - `fd`：映射文件描述符
-///     - `off`: 从文件的哪个位置开始映射
-/// - 返回值：mmap映射空间的起始地址
-/// - syscall_id:222
-pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
-    let task = current_task().unwrap();
-    println!("enter mmap!");
-    println!("start:{},len:{},prot:{},flags:{},fd:{},off:{}", start, len, prot, flags, fd, off);
-    if len == 0 {
-        panic!("mmap:len == 0");
-    }
-    let result_addr = task.mmap(start, len, prot, flags, fd, off);
-    return result_addr as isize;
-}
+// pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
+//     let task = current_task().unwrap();
+//     println!("enter mmap!");
+//     println!("start:{},len:{},prot:{},flags:{},fd:{},off:{}", start, len, prot, flags, fd, off);
+//     if len == 0 {
+//         panic!("mmap:len == 0");
+//     }
+//     let result_addr = task.mmap(start, len, prot, flags, fd, off);
+//     return result_addr as isize;
+// }
 
-//use crate::mm::HEAP_ALLOCATOR;
-pub fn sys_munmap(start: usize, len: usize) -> isize {
-    let task = current_task().unwrap();
-    let ret = task.munmap(start, len);
-    ret
-}
+// //use crate::mm::HEAP_ALLOCATOR;
+// pub fn sys_munmap(start: usize, len: usize) -> isize {
+//     let task = current_task().unwrap();
+//     let ret = task.munmap(start, len);
+//     ret
+// }
 
 pub fn sys_sbrk(grow_size: isize, _is_shrink: usize) -> isize {
     let current_va = current_task().unwrap().grow_proc(grow_size) as isize;

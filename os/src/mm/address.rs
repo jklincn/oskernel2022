@@ -140,7 +140,7 @@ impl VirtAddr {
     pub fn floor(&self) -> VirtPageNum {
         VirtPageNum(self.0 / PAGE_SIZE)
     }
-    /// 从虚拟地址计算虚拟页号（下取整）
+    /// 从虚拟地址计算虚拟页号（上取整）
     pub fn ceil(&self) -> VirtPageNum {
         VirtPageNum((self.0 - 1 + PAGE_SIZE) / PAGE_SIZE)
     }

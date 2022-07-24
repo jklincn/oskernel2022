@@ -86,6 +86,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
         // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags) {
             let fd = inner.alloc_fd();
+            // println!("fd:{},path:{}",fd,path);
             inner.fd_table[fd] = Some(inode);
             fd as isize
         } else {

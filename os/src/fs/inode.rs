@@ -9,12 +9,19 @@ use bitflags::*;
 use lazy_static::*;
 use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY, END_CLUSTER};
 use spin::Mutex;
+use core::fmt::{self, Debug, Formatter};
 
 /// 表示进程中一个被打开的常规文件或目录
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     inner: Mutex<OSInodeInner>,
+}
+
+impl Debug for OSInode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("OSInode debug:{{todo}}"))
+    }
 }
 
 pub struct OSInodeInner {
@@ -50,6 +57,29 @@ impl OSInode {
         v
     }
 
+    pub fn read_vec(&self, offset:usize, len:usize)->Vec<u8>{
+        let inner = self.inner.lock();
+        let mut len = len;
+        let mut offset = offset;
+
+        let mut buffer = [0u8; 512];
+        let mut v: Vec<u8> = Vec::new();
+        loop {
+            let read_len = inner.inode.read_at(offset, &mut buffer);
+            if read_len == 0 {
+                break;
+            }
+            offset += read_len;
+            v.extend_from_slice(&buffer[..read_len.min(len)]);
+            if len > read_len {
+                len -= read_len;
+            } else {
+                break;
+            }
+        }
+        v
+    }
+
     pub fn is_dir(&self) -> bool {
         let inner = self.inner.lock();
         inner.inode.is_dir()
@@ -80,7 +110,7 @@ lazy_static! {
 }
 
 pub fn list_apps() {
-    // 决赛内容:
+    // 决赛内容：在初始化时创建以下文件
     open("/", "tmp", OpenFlags::O_DIRECTROY);
     open("/", "dev", OpenFlags::O_DIRECTROY);
     open("/dev", "null", OpenFlags::O_CREATE);
@@ -135,6 +165,7 @@ impl OpenFlags {
     }
 }
 
+/// 内核层面的open，不设置fd
 pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     let cur_inode = {
         if work_path == "/" {
@@ -323,3 +354,10 @@ impl File for OSInode {
         inner.flags.set(flag, true);
     }
 }
+
+// lazy_static! {
+//     pub static ref OpenFileSet:Vec<Arc<OSInode>> = {
+//         let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
+//         Arc::new(create_root_vfile(&fat32_manager)) // 返回根目录
+//     };
+// }

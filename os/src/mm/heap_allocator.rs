@@ -36,31 +36,3 @@ pub fn init_heap() {
             // 调用 init 方法告知它能够用来分配的空间的起始地址和大小即可
     }
 }
-
-/// ### 尝试动态内存分配
-/// 其中分别使用智能指针 Box<T> 和向量 Vec<T> 在堆上分配数据并管理它们，
-/// 通过 as_ref 和 as_ptr 方法可以分别看到它们指向的数据的位置，能够确认它们的确在位于 .bss 段的堆上。
-#[allow(unused)]
-pub fn heap_test() {
-    use alloc::boxed::Box;
-    use alloc::vec::Vec;
-    extern "C" {
-        fn sbss();
-        fn ebss();
-    }
-    let bss_range = sbss as usize..ebss as usize;
-    let a = Box::new(5);
-    assert_eq!(*a, 5);
-    assert!(bss_range.contains(&(a.as_ref() as *const _ as usize)));
-    drop(a);
-    let mut v: Vec<usize> = Vec::new();
-    for i in 0..500 {
-        v.push(i);
-    }
-    for (i, val) in v.iter().take(500).enumerate() {
-        assert_eq!(*val, i);
-    }
-    assert!(bss_range.contains(&(v.as_ptr() as usize)));
-    drop(v);
-    println!("heap_test passed!");
-}

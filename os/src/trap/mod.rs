@@ -4,22 +4,21 @@
 /// ```
 /// pub fn init()
 /// pub fn enable_timer_interrupt()
-/// pub fn trap_handler() -> ! 
+/// pub fn trap_handler() -> !
 /// pub fn trap_return() -> !
 /// pub fn trap_from_kernel() -> !
 /// ```
 //
-
 mod context;
 
-use crate::config::{TRAMPOLINE, TRAP_CONTEXT};
+use crate::config::{PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT};
+use crate::mm::{frame_alloc, MmapFlags, PTEFlags, VirtAddr};
 use crate::syscall::syscall;
 use crate::task::{
-    check_signals_of_current, current_add_signal, current_trap_cx, current_user_token,
-    exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,current_task
+    check_signals_of_current, current_add_signal, current_task, current_trap_cx, current_user_token, exit_current_and_run_next,
+    suspend_current_and_run_next, SignalFlags,
 };
 use crate::timer::set_next_trigger;
-use crate::mm::VirtAddr;
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -50,7 +49,7 @@ fn set_kernel_trap_entry() {
 }
 
 /// ### 设置用户态下的 Trap 入口
-/// 我们把 stvec 设置为内核和应用地址空间共享的跳板页面的起始地址 TRAMPOLINE 
+/// 我们把 stvec 设置为内核和应用地址空间共享的跳板页面的起始地址 TRAMPOLINE
 /// 而不是编译器在链接时看到的 __alltraps 的地址。这是因为启用分页模式之后，
 /// 内核只能通过跳板页面上的虚拟地址来实际取得 __alltraps 和 __restore 的汇编代码
 fn set_user_trap_entry() {
@@ -71,16 +70,16 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 pub fn trap_handler() -> ! {
     set_kernel_trap_entry();
-    let scause = scause::read();    // 用于描述 Trap 的原因
-    let stval = stval::read();       // 给出 Trap 附加信息
+    let scause = scause::read(); // 用于描述 Trap 的原因
+    let stval = stval::read(); // 给出 Trap 附加信息
     match scause.cause() {
         // 触发 Trap 的原因是来自 U 特权级的 Environment Call，也就是系统调用
         Trap::Exception(Exception::UserEnvCall) => {
             // 由于应用的 Trap 上下文不在内核地址空间，因此我们调用 current_trap_cx 来获取当前应用的 Trap 上下文的可变引用
             let mut cx = current_trap_cx();
-            cx.sepc += 4;   // 我们希望trap返回后应用程序从下一条指令开始执行
-            // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值放到 a0
-            // println!("syscall_id: {}",cx.x[17]);
+            cx.sepc += 4; // 我们希望trap返回后应用程序从下一条指令开始执行
+                          // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值放到 a0
+                          // println!("syscall_id: {}",cx.x[17]);
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
@@ -92,32 +91,78 @@ pub fn trap_handler() -> ! {
         | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            let is_load: bool;
-            if scause.cause() == Trap::Exception(Exception::LoadFault) || scause.cause() == Trap::Exception(Exception::LoadPageFault) {
-                is_load = true;
-            } else {
-                is_load = false;
-            }
-            println!("stval:{:?}",stval::read());
+
+            println!("1111111111111");
+            // lazy 分配
+            let mut success = false;
+            let task = current_task().unwrap();
+            let mut inner = task.inner_exclusive_access();
+
+            let memory_set = &mut inner.memory_set;
+            let page_table = &mut memory_set.page_table;
+            let vma_vec = &memory_set.vma;
+
             let va: VirtAddr = (stval as usize).into();
-            if va > TRAMPOLINE.into() {
-                println!("[kernel] VirtAddr out of range!");
-                current_add_signal(SignalFlags::SIGSEGV);
-            }
+            let vpn = va.floor(); // 向下取整
 
-            let lazy = current_task().unwrap().check_lazy(va, is_load);
-            if lazy != 0 { 
-                current_add_signal(SignalFlags::SIGSEGV); 
-            }
+            println!("1111111111111");
 
+            // 检查是否在 vma 中
+            for i in vma_vec {
+                if i.vm_start < va && va < i.vm_end {
+                    // 检查一些东西，todo
+                    // 申请分配一个物理页帧
+                    let frame = frame_alloc().unwrap();
+                    let ppn = frame.ppn;
+
+                    // 将物理页帧的生命周期捆绑到 memory_set 上
+                    memory_set.data_frames.push(frame);
+
+                    // 在多级页表中建立映射
+                    let pte_flags = PTEFlags::W | PTEFlags::R | PTEFlags::X | PTEFlags::V;
+                    page_table.map(vpn, ppn, pte_flags);
+                println!("2222222222");
+
+                    match i.vm_flags {
+                        MmapFlags::MAP_ANONYMOUS => {
+                            // alloc 时已经初始化为0
+                        }
+                        MmapFlags::MAP_FILE => {
+                            if va.0 > i.file_len {
+                                // 无需拷贝数据
+                                break;
+                            } else {
+                                // 考虑到load段都是对齐的
+                                let file = i.file.clone().unwrap();
+                                if vpn == i.vm_start_page {
+                                    let offset = va.0 - VirtAddr::from(i.vm_start_page).0;
+                                    let data = file.read_vec(i.offset, PAGE_SIZE - offset);
+                                    let dst = &mut page_table.translate(vpn).unwrap().ppn().get_bytes_array()[offset..PAGE_SIZE];
+                                    println!("dst len:{},data len:{}", dst.len(), data.as_slice().len());
+                                    dst.copy_from_slice(data.as_slice());
+                                } else {
+                                    let data = file.read_vec(i.offset + va.0 - i.vm_start.0, PAGE_SIZE);
+                                    let dst = &mut page_table.translate(vpn).unwrap().ppn().get_bytes_array()[0..PAGE_SIZE];
+                                    println!("dst len:{},data len:{}", dst.len(), data.as_slice().len());
+                                    dst.copy_from_slice(data.as_slice());
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                    success = true;
+                }
+            }
+            if !success {
+                panic!("va don't exist in any vma!");
+            }
 
             // current_trap_cx().debug_show();
             // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
             // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());
         }
 
-        Trap::Exception(Exception::InstructionFault)
-        | Trap::Exception(Exception::InstructionPageFault) => {
+        Trap::Exception(Exception::InstructionFault) | Trap::Exception(Exception::InstructionPageFault) => {
             let task = current_task().unwrap();
             println!(
                 "[kernel] {:?} in application {}, bad addr = {:#x}, bad instruction = {:#x}.",
@@ -126,11 +171,10 @@ pub fn trap_handler() -> ! {
                 stval,
                 current_trap_cx().sepc,
             );
-            drop(task);
 
             // current_trap_cx().debug_show();
             // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
-            
+
             //current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());
 
             current_add_signal(SignalFlags::SIGSEGV);
@@ -141,7 +185,7 @@ pub fn trap_handler() -> ! {
             // println!("[kernel] IllegalInstruction in application, kernel killed it.");
             // // illegal instruction exit code
             // exit_current_and_run_next(-3);
-            println!("stval:{}",stval);
+            println!("stval:{}", stval);
             current_add_signal(SignalFlags::SIGILL);
         }
 
@@ -151,14 +195,10 @@ pub fn trap_handler() -> ! {
             suspend_current_and_run_next();
         }
         _ => {
-            panic!(
-                "Unsupported trap {:?}, stval = {:#x}!",
-                scause.cause(),
-                stval
-            );
+            panic!("Unsupported trap {:?}, stval = {:#x}!", scause.cause(), stval);
         }
     }
-    
+
     // check signals
     if let Some((errno, msg)) = check_signals_of_current() {
         println!("[kernel] {}", msg);

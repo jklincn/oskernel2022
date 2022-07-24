@@ -130,6 +130,7 @@ impl FrameAllocator for StackFrameAllocator {
         // 回收，压栈
         self.recycled.push(ppn);
     }
+    
     fn usage(&self) -> (usize,usize,usize,usize){
         (self.current,self.recycled.len(),self.end,self.base_num)
     }
