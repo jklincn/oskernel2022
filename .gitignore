@@ -2,6 +2,7 @@
 os/os_dump
 os/src/link_app.S
 os/target
+os/output
 simple-fat32/target
 simple-fat32/fat32.img
 simple-fat32/fat32.img.origin

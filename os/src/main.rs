@@ -4,7 +4,7 @@
 #![no_main] // 不使用main函数，而使用汇编代码指定的入口
 #![feature(panic_info_message)] // 让panic函数能通过 PanicInfo::message 获取报错信息
 #![feature(alloc_error_handler)] // 用于处理动态内存分配失败的情形
-
+#![feature(const_mut_refs)]
 extern crate alloc;
 
 #[macro_use]
@@ -47,6 +47,7 @@ pub fn rust_main() -> ! {
     timer::set_next_trigger();
     fs::list_apps();
     task::add_initproc();
+    mm::heap_allocator_stats();
     println!("[kernel] add initproc!");
     task::run_tasks();
     panic!("Unreachable in rust_main!");

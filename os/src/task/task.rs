@@ -195,11 +195,13 @@ impl TaskControlBlock {
     }
 
     /// 用来实现 exec 系统调用，即当前进程加载并执行另一个 ELF 格式可执行文件
-    pub fn exec(&self, elf_data: &[u8], args: Vec<String>, envs: Vec<String>) {
+    // pub fn exec(&self, elf_data: &[u8], args: Vec<String>, envs: Vec<String>) {
+        pub fn exec(&self, elf_data: &[u8], args: Vec<String>, envs: Vec<String>,app_inode:Arc<OSInode>) {
 
         let mut auxs = aux::new();
         // 从 ELF 文件生成一个全新的地址空间并直接替换
         let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data,&mut auxs);
+        // let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf1(app_inode,&mut auxs);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         let mut envs :Vec<String>= Vec::new();
         envs.push("LD_LIBRARY_PATH=/".to_string());

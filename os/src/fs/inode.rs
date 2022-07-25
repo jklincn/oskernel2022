@@ -2,7 +2,7 @@ use super::{
     stat::{S_IFCHR, S_IFDIR, S_IFREG},
     Dirent, File, Kstat, Timespec,
 };
-use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
+use crate::{drivers::BLOCK_DEVICE, mm::{UserBuffer, heap_allocator_stats}};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
@@ -47,13 +47,18 @@ impl OSInode {
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
         loop {
+            heap_allocator_stats();
+            println!("read at");
             let len = inner.inode.read_at(inner.offset, &mut buffer);
+            heap_allocator_stats();
             if len == 0 {
                 break;
             }
             inner.offset += len;
             v.extend_from_slice(&buffer[..len]);
+            println!("len: {},capacity: {}",v.len(),v.capacity());
         }
+        heap_allocator_stats();
         v
     }
 

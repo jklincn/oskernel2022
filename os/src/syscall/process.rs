@@ -12,7 +12,7 @@
 /// ```
 //
 use crate::fs::{open, OpenFlags};
-use crate::mm::{frame_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, MemorySet};
+use crate::mm::{frame_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, MemorySet, heap_allocator_stats};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags, new,
 };
@@ -183,13 +183,18 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     //     task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
     //     return argc as isize;
     // }
+    
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+        heap_allocator_stats();
+        println!("read elf!");
         let elf_data = app_inode.read_all();
+        println!("elf_data len:{}",elf_data.len());
+        heap_allocator_stats();
         drop(inner);
+        
         // MemorySet::load_elf(app_inode,&mut Vec::new());
-        task.exec(elf_data.as_slice(), args_vec, envs_vec);
-        drop(elf_data);
+        task.exec(elf_data.as_slice(), args_vec, envs_vec,app_inode);
         // return argc because cx.x[10] will be covered with it later
         argc as isize
     } else {

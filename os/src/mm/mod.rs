@@ -24,6 +24,7 @@ pub use page_table::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, PageTable,
     PageTableEntry, UserBuffer, UserBufferIterator,
 };
+pub use heap_allocator::heap_allocator_stats;
 // pub use vma::*;
 pub use vm_area::*;
 pub use load::*;

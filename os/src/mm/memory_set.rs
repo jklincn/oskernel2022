@@ -759,6 +759,7 @@ impl MemorySet {
 
         (memory_set, user_stack_top, user_heap_bottom, elf.header.pt2.entry_point() as usize)
     }
+
     pub fn from_elf1(app_inode: Arc<OSInode>, auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
         let mut memory_set = Self::new_bare();
         // 将跳板插入到应用地址空间
@@ -797,7 +798,7 @@ impl MemorySet {
                 // }
                 xmas_elf::program::Type::Load => {
                     let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
-                    let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
+                    let end_va: VirtAddr = ((ph.virtual_addr() + ph.file_size()) as usize).into();
                     let mut map_perm = MapPermission::U;
                     let ph_flags = ph.flags();
                     if ph_flags.is_read() {
@@ -816,20 +817,22 @@ impl MemorySet {
                     memory_set.push(
                         // 将生成的逻辑段加入到程序地址空间
                         map_area,
-                        Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
+                        Some(app_inode.read_vec(ph.offset() as usize, ph.file_size() as usize).as_slice()),
                     );
+
+
                     // println!("start_va:0x{:x},end_va:0x{:x}", start_va.0, end_va.0);
-                    // memory_set.vma.push(VMArea::new(
-                    //     VirtAddr::from(end_va.0 - ph.mem_size() as usize),
-                    //     VirtAddr::from(end_va.0),
-                    //     MmapProts::PROT_READ | MmapProts::PROT_WRITE,
-                    //     MmapFlags::MAP_ANONYMOUS,
-                    //     None,
-                    //     0,
-                    //     0,
-                    // ));
+                    memory_set.vma.push(VMArea::new(
+                        VirtAddr::from(start_va.0),
+                        VirtAddr::from((ph.virtual_addr() +ph.mem_size()) as usize),
+                        MmapProts::PROT_READ | MmapProts::PROT_WRITE | MmapProts::PROT_EXEC,
+                        MmapFlags::MAP_ANONYMOUS,
+                        None,
+                        0,
+                        0,
+                    ));
                     // println!("vma push down!");
-                    // max_end_vpn = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
+                    max_end_vpn = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
                     // let t_current = FRAME_ALLOCATOR.exclusive_access().current;
                     // println!("current:0x{:x}",t_current);
                 }
