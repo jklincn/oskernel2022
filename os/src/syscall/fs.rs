@@ -171,7 +171,7 @@ pub fn sys_dup(fd: usize) -> isize {
     // 做资源检查，目前只检查 RLIMIT_NOFILE 这一种
     let rlim_cur = inner.resource[RLIMIT_NOFILE].rlim_cur;
     let rlim_max = inner.resource[RLIMIT_NOFILE].rlim_max;
-    println!("cur:{},max:{}", rlim_cur, rlim_max);
+    // println!("cur:{},max:{}", rlim_cur, rlim_max);
     if rlim_cur == rlim_max {
         return -1;
     }
