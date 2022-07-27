@@ -13,7 +13,6 @@ CC := riscv64-unknown-elf-gcc -ffreestanding -nostdlib -g -mcmodel=medany -I ./i
 endif
 
 bin:
-	@rm -rf bin
 	@mkdir bin
 
 build: bin

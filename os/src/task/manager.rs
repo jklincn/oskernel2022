@@ -40,6 +40,7 @@ impl TaskManager {
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         self.ready_queue.pop_front()
     }
+    #[allow(unused)]
     pub fn list_alltask(&self){
         let read_queue = self.ready_queue.clone();
         for i in read_queue{

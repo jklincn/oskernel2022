@@ -317,7 +317,7 @@ pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
 
 /// 根据 多级页表token (satp) 和 虚拟地址 获取大小为 T 的空间的切片
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
-    //println!("into translated_refmut!");
+    println!("into translated_refmut!");
     let page_table = PageTable::from_token(token);
     let va = ptr as usize;
     page_table.translate_va(VirtAddr::from(va)).unwrap().get_mut()

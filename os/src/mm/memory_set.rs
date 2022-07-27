@@ -10,7 +10,7 @@
 use super::{frame_alloc, FrameTracker};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
-use super::{StepByOne, VPNRange};
+use super::{StepByOne};
 use crate::config::*;
 use crate::mm::frame_usage;
 use crate::sync::UPSafeCell;
@@ -47,14 +47,12 @@ pub fn kernel_token() -> usize {
 }
 
 /// ### 地址空间
-/// - 符合RAII风格
-/// - 一系列有关联的**不一定**连续的逻辑段，这种关联一般是指这些逻辑段组成的虚拟内存空间与一个运行的程序绑定,
-/// 即这个运行的程序对代码和数据的直接访问范围限制在它关联的虚拟地址空间之内。
 ///
 /// |参数|描述|
 /// |--|--|
-/// |`page_table`|挂着所有多级页表的节点所在的物理页帧|
-/// |`areas`|挂着对应逻辑段中的数据所在的物理页帧|
+/// |`page_table`|页表|
+/// |`chunks`|逻辑段|
+/// |`stack_chunks`|内核栈|
 ///
 /// ```
 /// MemorySet::new_bare() -> Self
@@ -62,13 +60,12 @@ pub fn kernel_token() -> usize {
 /// MemorySet::new_kernel() -> Self
 /// ```
 pub struct MemorySet {
-    /// 挂着所有多级页表的节点所在的物理页帧
+    /// 页表
     page_table: PageTable,
-    /// 挂着对应逻辑段中的数据所在的物理页帧
-    areas: Vec<MapArea>,
-    // chunks: ChunkArea,
-    stack_chunks: ChunkArea,
-    mmap_chunks: Vec<ChunkArea>,
+    /// 逻辑段
+    chunks: Vec<MapArea>,
+    // /// 内核栈
+    // stack_chunks: MapArea,
 }
 
 impl MemorySet {
@@ -76,11 +73,7 @@ impl MemorySet {
     pub fn new_bare() -> Self {
         Self {
             page_table: PageTable::new(),
-            areas: Vec::new(),
-            // chunks: ChunkArea::new(MapType::Framed,
-            //                     MapPermission::R | MapPermission::W | MapPermission::U),
-            mmap_chunks: Vec::new(),
-            stack_chunks: ChunkArea::new(MapType::Framed, MapPermission::R | MapPermission::W | MapPermission::U),
+            chunks: Vec::new(),
         }
     }
 
@@ -95,27 +88,36 @@ impl MemorySet {
     }
 
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
-        if let Some((idx, area)) = self
-            .areas
+        if let Some((idx, chunk)) = self
+            .chunks
             .iter_mut()
             .enumerate()
-            .find(|(_, area)| area.vpn_range.get_start() == start_vpn)
+            .find(|(_, area)| area.start_va.floor() == start_vpn)
         {
-            area.unmap(&mut self.page_table);
-            self.areas.remove(idx);
+            chunk.unmap(&mut self.page_table);
+            self.chunks.remove(idx);
         }
     }
 
     /// ### 在当前地址空间插入一个新的逻辑段
-    /// 如果是以 Framed 方式映射到物理内存,
+    /// - 如果是以 Framed 方式映射到物理内存,
     /// 还可以可选地在那些被映射到的物理页帧上写入一些初始化数据
+    /// - 对于 `Identical`，在 `push` 的时候完成多级页表的建立
+    /// - 对于`Framed`， 在 `copy_data` 时按需分配空间
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
-        map_area.map(&mut self.page_table);
+        if map_area.map_type == MapType::Identical {
+            let mut vpn = map_area.start_va.floor();
+            let end_vpn = map_area.end_va.floor();
+            while vpn != end_vpn {                 
+                map_area.push_vpn(vpn, &mut self.page_table);
+                vpn.step();
+            }
+        }
         if let Some(data) = data {
             // 写入初始化数据，如果数据存在
             map_area.copy_data(&mut self.page_table, data);
         }
-        self.areas.push(map_area); // 将生成的数据段压入 areas 使其生命周期由areas控制
+        self.chunks.push(map_area); // 将生成的数据段压入 chunks 使其生命周期由 chunks 控制
     }
 
     /// 映射跳板的虚拟页号和物理物理页号
@@ -208,10 +210,10 @@ impl MemorySet {
 
     /// ### 从 ELF 格式可执行文件解析出各数据段并对应生成应用的地址空间
     /// - 返回值
-    ///     - Self
+    ///     - Self(MemorySet)
     ///     - 用户栈顶地址
+    ///     - 用户堆底地址
     ///     - 程序入口地址
-    /// 待优化：目前是将elf全部读入后再做解析，对内核堆空间要求较高，可改为先读入elf头部
     pub fn from_elf(elf_data: &[u8], auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
         let mut memory_set = Self::new_bare();
         // 将跳板插入到应用地址空间
@@ -259,9 +261,8 @@ impl MemorySet {
                         map_perm |= MapPermission::X;
                     }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
-                    max_end_vpn = map_area.vpn_range.get_end();
+                    max_end_vpn = map_area.end_va.floor();
                     // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
-                    // println!("vpnrange:{:?}",map_area.vpn_range);
                     // println!("offset:0x{:x},file_size:0x{:x}",ph.offset(),ph.file_size());
                     memory_set.push(
                         // 将生成的逻辑段加入到程序地址空间
@@ -323,7 +324,8 @@ impl MemorySet {
         let mut user_stack_bottom: usize = max_end_va.into();
         // 在已用最大虚拟页之上放置一个保护页
         user_stack_bottom += PAGE_SIZE; // 栈底
-        let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址                                            // 将用户栈加入到程序地址空间
+        let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址
+        // 将用户栈加入到程序地址空间
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
@@ -371,14 +373,25 @@ impl MemorySet {
         // 映射跳板
         memory_set.map_trampoline();
         // 循环拷贝每一个逻辑段到新的地址空间
-        for area in user_space.areas.iter() {
-            let new_area = MapArea::from_another(area);
-            memory_set.push(new_area, None);
-            // 按物理页帧拷贝数据
-            for vpn in area.vpn_range {
-                let src_ppn = user_space.translate(vpn).unwrap().ppn();
-                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
-                dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
+        for area in user_space.chunks.iter() {
+            let mut new_area = MapArea::from_another(area);
+            if area.map_type == MapType::Framed {
+                // 注意：对于 Framed 按物理页帧拷贝数据，需要在获取 dst_ppn 前进行内存分配
+                for vpn in &area.vpn_table {
+                    new_area.push_vpn(*vpn, &mut memory_set.page_table);
+                    let src_ppn = user_space.translate(*vpn).unwrap().ppn();
+                    let dst_ppn = memory_set.translate(*vpn).unwrap().ppn();
+                    dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
+                }
+                memory_set.push(new_area, None);
+            }else{
+                memory_set.push(new_area, None);
+                // 按物理页帧拷贝数据
+                for vpn in &area.vpn_table {
+                    let src_ppn = user_space.translate(*vpn).unwrap().ppn();
+                    let dst_ppn = memory_set.translate(*vpn).unwrap().ppn();
+                    dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
+                }
             }
         }
         memory_set
@@ -386,9 +399,9 @@ impl MemorySet {
 
     /// 为mmap缺页分配空页表
     pub fn lazy_mmap(&mut self, stval: VirtAddr) -> isize {
-        for mmap_chunk in self.mmap_chunks.iter_mut() {
-            if stval >= mmap_chunk.mmap_start && stval < mmap_chunk.mmap_end {
-                mmap_chunk.push_vpn(stval.floor(), &mut self.page_table);
+        for chunk in self.chunks.iter_mut() {
+            if stval >= chunk.start_va && stval < chunk.end_va {
+                chunk.push_vpn(stval.floor(), &mut self.page_table);
                 return 0;
             }
         }
@@ -418,15 +431,15 @@ impl MemorySet {
     }
 
     /// ### 回收应用地址空间
-    /// 将地址空间中的逻辑段列表 areas 清空（即执行 Vec 向量清空），
-    /// 这将导致应用地址空间被回收（即进程的数据和代码对应的物理页帧都被回收），
+    /// 将地址空间中的逻辑段列表 chunks 清空（即执行 Vec 向量清空），<br>
+    /// 这将导致应用地址空间被回收（即进程的数据和代码对应的物理页帧都被回收），<br>
     /// 但用来存放页表的那些物理页帧此时还不会被回收（会由父进程最后回收子进程剩余的占用资源）
     pub fn recycle_data_pages(&mut self) {
         //*self = Self::new_bare();
-        self.areas.clear();
+        self.chunks.clear();
     }
 
-    /// ### 在地址空间中插入一个空的离散逻辑段
+    /// ### 在地址空间中插入一个 mmap 逻辑段
     /// - 已确定：
     ///     - 起止虚拟地址
     ///     - 映射方式：Framed
@@ -435,9 +448,8 @@ impl MemorySet {
     ///     - vpn_table
     ///     - data_frames
     pub fn insert_mmap_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
-        let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission);
-        new_chunk_area.set_mmap_range(start_va, end_va);
-        self.mmap_chunks.push(new_chunk_area);
+        let new_chunk_area = MapArea::new(start_va, end_va, MapType::Framed, permission);
+        self.chunks.push(new_chunk_area);
     }
 
     #[allow(unused)]
@@ -477,88 +489,6 @@ impl MemorySet {
     }
 }
 
-/// ### 离散逻辑段
-pub struct ChunkArea {
-    vpn_table: Vec<VirtPageNum>,
-    data_frames: BTreeMap<VirtPageNum, FrameTracker>,
-    map_type: MapType,
-    map_perm: MapPermission,
-    mmap_start: VirtAddr,
-    mmap_end: VirtAddr,
-}
-
-impl ChunkArea {
-    pub fn new(map_type: MapType, map_perm: MapPermission) -> Self {
-        Self {
-            vpn_table: Vec::new(),
-            data_frames: BTreeMap::new(),
-            map_type,
-            map_perm,
-            mmap_start: 0.into(),
-            mmap_end: 0.into(),
-        }
-    }
-    pub fn set_mmap_range(&mut self, start: VirtAddr, end: VirtAddr) {
-        self.mmap_start = start;
-        self.mmap_end = end;
-    }
-    pub fn push_vpn(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
-        self.vpn_table.push(vpn);
-        self.map_one(page_table, vpn);
-    }
-    pub fn from_another(another: &ChunkArea) -> Self {
-        Self {
-            vpn_table: another.vpn_table.clone(),
-            data_frames: BTreeMap::new(),
-            map_type: another.map_type,
-            map_perm: another.map_perm,
-            mmap_start: another.mmap_start,
-            mmap_end: another.mmap_end,
-        }
-    }
-    // Alloc and map one page
-    pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
-        let ppn: PhysPageNum;
-        match self.map_type {
-            MapType::Identical => {
-                ppn = PhysPageNum(vpn.0);
-            }
-            MapType::Framed => {
-                if let Some(frame) = frame_alloc() {
-                    ppn = frame.ppn;
-                    self.data_frames.insert(vpn, frame);
-                } else {
-                    panic!("No more memory!");
-                }
-            }
-        }
-        let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
-        // [WARNING]:因为没有map，所以不能使用
-        page_table.map(vpn, ppn, pte_flags);
-    }
-    pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
-        match self.map_type {
-            MapType::Framed => {
-                self.data_frames.remove(&vpn);
-            }
-            _ => {}
-        }
-        page_table.unmap(vpn);
-    }
-
-    // Alloc and map all pages
-    // pub fn map(&mut self, page_table: &mut PageTable) {
-    //     for vpn in self.vpn_table {
-    //         self.map_one(page_table, vpn);
-    //     }
-    // }
-    // pub fn unmap(&mut self, page_table: &mut PageTable) {
-    //     for vpn in self.vpn_table {
-    //         self.unmap_one(page_table, vpn);
-    //     }
-    // }
-}
-
 /// ### 虚拟页面映射到物理页帧的方式
 /// |内容|描述|
 /// |--|--|
@@ -582,24 +512,30 @@ bitflags! {
     }
 }
 
-/// ### 连续逻辑段
-/// - 一段虚拟页号连续的区间
+/// ### 逻辑段
 ///
 /// |参数|描述|
 /// |--|--|
-/// |`vpn_range`|描述一段虚拟页号的连续区间，表示该逻辑段在地址区间中的位置和长度
+/// |`vpn_table`|逻辑段中已分配物理内存的页号
 /// |`data_frames`|键值对容器 BTreeMap ,保存了该逻辑段内的每个虚拟页面的 VPN 和被映射到的物理页帧<br>这些物理页帧被用来存放实际内存数据而不是作为多级页表中的中间节点
 /// |`map_type`|描述该逻辑段内的所有虚拟页面映射到物理页帧的方式
 /// |`map_perm`|控制该逻辑段的访问方式，它是页表项标志位 PTEFlags 的一个子集，仅保留 `U` `R` `W` `X` 四个标志位
+/// |`start_va`|逻辑段起始虚拟地址
+/// |`end_va`|逻辑段结束虚拟地址
+/// |`fd`|存放数据的文件描述符
+/// |`offset`|文件偏移量
+/// |`length`|文件中数据长度
 /// ```
-/// MapArea::new(start_va: VirtAddr, end_va: VirtAddr, map_type: MapType, map_perm: MapPermission) -> Self
-/// MapArea::map(&mut self, page_table: &mut PageTable)
-/// MapArea::unmap(&mut self, page_table: &mut PageTable)
-/// MapArea::copy_data(&mut self, page_table: &mut PageTable, data: &[u8])
+/// MapArea::new() -> Self
+/// MapArea::from_another() -> Self
+/// MapArea::map()
+/// MapArea::unmap()
+/// MapArea::copy_data()
+/// MapArea::push_vpn()
 /// ```
 pub struct MapArea {
-    /// 描述一段虚拟页号的连续区间，表示该逻辑段在地址区间中的位置和长度
-    vpn_range: VPNRange,
+    /// 逻辑段中已分配物理内存的页号
+    vpn_table: Vec<VirtPageNum>,
     /// 键值对容器 BTreeMap ,保存了该逻辑段内的每个虚拟页面的 VPN 和被映射到的物理页帧<br>
     /// 这些物理页帧被用来存放实际内存数据而不是作为多级页表中的中间节点
     data_frames: BTreeMap<VirtPageNum, FrameTracker>,
@@ -607,9 +543,9 @@ pub struct MapArea {
     map_type: MapType,
     /// 控制该逻辑段的访问方式，它是页表项标志位 PTEFlags 的一个子集，仅保留 `U` `R` `W` `X` 四个标志位
     map_perm: MapPermission,
-
-    // 决赛补充
+    /// 逻辑段起始虚拟地址
     start_va: VirtAddr,
+    /// 逻辑段结束虚拟地址
     end_va: VirtAddr,
 }
 
@@ -617,10 +553,8 @@ impl MapArea {
     /// ### 根据起始 *(会被下取整)* 和终止 *(会被上取整)* 虚拟地址生成一块逻辑段
     /// - 逻辑段大于等于虚拟地址范围
     pub fn new(start_va: VirtAddr, end_va: VirtAddr, map_type: MapType, map_perm: MapPermission) -> Self {
-        let start_vpn: VirtPageNum = start_va.floor();
-        let end_vpn: VirtPageNum = end_va.ceil();
         Self {
-            vpn_range: VPNRange::new(start_vpn, end_vpn),
+            vpn_table: Vec::new(),
             data_frames: BTreeMap::new(),
             map_type,
             map_perm,
@@ -630,10 +564,10 @@ impl MapArea {
     }
 
     /// ### 从一个逻辑段复制得到一个虚拟地址区间、映射方式和权限控制均相同的逻辑段
-    /// 不同的是由于它还没有真正被映射到物理页帧上，所以 data_frames 字段为空
+    /// 不同的是由于它还没有真正被映射到物理页帧上，所以 `vpn_table` 和 `data_frames` 字段为空
     pub fn from_another(another: &MapArea) -> Self {
         Self {
-            vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
+            vpn_table: another.vpn_table.clone(),
             data_frames: BTreeMap::new(),
             map_type: another.map_type,
             map_perm: another.map_perm,
@@ -643,7 +577,7 @@ impl MapArea {
     }
 
     /// 在多级页表中根据vpn分配空间
-    pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+    fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
         match self.map_type {
             MapType::Identical => {
@@ -663,38 +597,26 @@ impl MapArea {
         page_table.map(vpn, ppn, pte_flags);
     }
 
-    /// 在多级页表中删除指定vpn对应的映射
-    #[allow(unused)]
-    pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
-        if self.map_type == MapType::Framed {
-            self.data_frames.remove(&vpn);
-        }
-        page_table.unmap(vpn);
-    }
-
-    /// 在多级页表中为逻辑块分配空间
-    pub fn map(&mut self, page_table: &mut PageTable) {
-        for vpn in self.vpn_range {
-            self.map_one(page_table, vpn);
-        }
-    }
-
     /// 将当前逻辑段到物理内存的映射从传入的该逻辑段所属的地址空间的多级页表中删除
-    #[allow(unused)]
     pub fn unmap(&mut self, page_table: &mut PageTable) {
-        for vpn in self.vpn_range {
-            self.unmap_one(page_table, vpn);
+        while !self.vpn_table.is_empty() {
+            let vpn = self.vpn_table[0];
+            if self.map_type == MapType::Framed {
+                self.data_frames.remove(&vpn);
+            }
+            page_table.unmap(vpn);
+            assert_eq!(self.vpn_table.remove(0),vpn);
         }
     }
 
     /// ### 将切片 `data` 中的数据拷贝到当前逻辑段实际被内核放置在的各物理页帧上
     /// - 切片 `data` 中的数据大小不超过当前逻辑段的总大小，且切片中的数据会被对齐到逻辑段的开头，然后逐页拷贝到实际的物理页帧
     /// - 只有 `Framed` 可以被拷贝
-    // 决赛修正：需要对齐
+    /// - 真实的内存空间只有在需要填入数据时才会分配给进程
     pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8]) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
-        let mut current_vpn = self.vpn_range.get_start();
+        let mut current_vpn = self.start_va.floor();
         let mut len = data.len();
 
         // 使对齐
@@ -702,7 +624,16 @@ impl MapArea {
         if first_page_offset != 0 {
             let first_page_write_len = (PAGE_SIZE - first_page_offset).min(data.len()); // 起始页中需要写入的长度
             let src = &data[start..first_page_write_len];
-            let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()
+            let dst = &mut page_table.translate(current_vpn)
+                .unwrap_or_else(
+                    // 对于全局lazy的情况，要考虑物理内存还没被分配便需要拷贝数据的情况，即查找失败
+                    || {
+                        self.push_vpn(current_vpn, page_table);
+                        page_table.translate(current_vpn).unwrap()  
+                    }
+                )
+                .ppn()
+                .get_bytes_array()
                 [first_page_offset..first_page_offset + first_page_write_len];
             dst.copy_from_slice(src);
             start += first_page_write_len;
@@ -712,14 +643,31 @@ impl MapArea {
         // 后续拷贝
         loop {
             // 每次取出 4KiB 大小的数据
+            println!("1");
             let src = &data[start..len.min(start + PAGE_SIZE)];
-            let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[..src.len()];
+            let dst = &mut page_table.translate(current_vpn)
+                .unwrap_or_else(    // 查找失败，分配一页后再写入数据
+                    || {
+                        self.push_vpn(current_vpn, page_table);
+                        page_table.translate(current_vpn).unwrap()  
+                    }
+                )
+                .ppn()
+                .get_bytes_array()[..src.len()];
+            println!("2");
             dst.copy_from_slice(src);
+            println!("3");
             start += PAGE_SIZE;
             if start >= len {
                 break;
             }
             current_vpn.step();
         }
+    }
+
+    /// 为指定虚拟页分配物理空间，并加入逻辑段
+    pub fn push_vpn(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
+        self.vpn_table.push(vpn);
+        self.map_one(page_table, vpn);
     }
 }
