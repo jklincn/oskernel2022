@@ -229,8 +229,8 @@ impl MemorySet {
         let mut max_end_vpn = VirtPageNum(0);
         // 是否为动态加载
         let mut elf_interpreter = false;
-        // 动态加载器入口地址
-        let mut interpreter_entry = 0;
+        // 动态链接器加载地址
+        let base_address = 0x2000000000;
 
         // 遍历程序段进行加载
         for i in 0..ph_count {
@@ -280,11 +280,8 @@ impl MemorySet {
             let interp_data = interp.read_all();
             let interp_elf = xmas_elf::ElfFile::new(interp_data.as_slice()).unwrap();
             let interp_elf_header = interp_elf.header;
-            let base_address = 0x2000000000;
-            interpreter_entry = interp_elf_header.pt2.entry_point() as usize + base_address;
             auxs.push(AuxEntry(AT_BASE, base_address));
             // 获取 program header 的数目
-            println!("[info] begin map interp");
             let ph_count = interp_elf_header.pt2.ph_count();
             for i in 0..ph_count{
                 let ph = interp_elf.program_header(i).unwrap();
@@ -361,7 +358,7 @@ impl MemorySet {
             None,
         );
         if elf_interpreter {
-            (memory_set, user_stack_top, user_heap_bottom, interpreter_entry)
+            (memory_set, user_stack_top, user_heap_bottom, base_address)
         } else {
             (memory_set, user_stack_top, user_heap_bottom, elf_header.pt2.entry_point() as usize)
         }
