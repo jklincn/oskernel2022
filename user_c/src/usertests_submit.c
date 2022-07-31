@@ -18,19 +18,12 @@ char buf[6000];
 
 int offset = 0;
 
-#define PROG_PASS_LENGTH 26
+#define PROG_PASS_LENGTH 13
 char *prog_pass[] = {
-                     "env",
-                     "memstream",
                      "pthread_cancel_points",
                      "pthread_cancel",
                      "pthread_cond",
                      "pthread_tsd",
-                     "search_hsearch",
-                     "socket",
-                     "sscanf_long",
-                     "strftime",
-                     "strptime",
                      "daemon_failure",
                      "fflush_exit",
                      "pthread_robust_detach",
@@ -40,12 +33,6 @@ char *prog_pass[] = {
                      "pthread_exit_cancel",
                      "pthread_once_deadlock",
                      "pthread_rwlock_ebusy",
-                     "putenv_doublefree",
-                     "regex_backref_0",
-                     "regex_bracket_icase",
-                     "regex_ere_backref",
-                     "regex_negated_range",
-                     "rlimit_open_files",
                      };
 
 void read_test_name()
@@ -89,7 +76,7 @@ int main()
     read(fd, buf, 6000);
 
 
-    // test only one program
+    //test only one program
     // int npid = fork();
     // assert(npid >= 0);
     // int child_return;

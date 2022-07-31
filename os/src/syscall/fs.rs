@@ -162,18 +162,17 @@ pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
 /// - syscall ID：23
 
 // 暂时写在这里
-const EMFILE: usize = 24;
+const EMFILE: isize = 24;
 
 pub fn sys_dup(fd: usize) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
 
     // 做资源检查，目前只检查 RLIMIT_NOFILE 这一种
-    let rlim_cur = inner.resource[RLIMIT_NOFILE].rlim_cur;
     let rlim_max = inner.resource[RLIMIT_NOFILE].rlim_max;
     // println!("cur:{},max:{}", rlim_cur, rlim_max);
-    if rlim_cur == rlim_max {
-        return -1;
+    if inner.fd_table.len() - 1 == rlim_max - 1 {
+        return -EMFILE;
     }
 
     // 检查传入 fd 的合法性
