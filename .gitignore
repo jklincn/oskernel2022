@@ -11,3 +11,5 @@ os.bin
 */Cargo.lock
 .vscode
 output
+sbi-qemu
+kernel-qemu

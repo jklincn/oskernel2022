@@ -280,9 +280,9 @@ impl MemorySet {
             let interp_data = interp.read_all();
             let interp_elf = xmas_elf::ElfFile::new(interp_data.as_slice()).unwrap();
             let interp_elf_header = interp_elf.header;
-            let base_address = 0x200000;
+            let base_address = 0x2000000000;
             interpreter_entry = interp_elf_header.pt2.entry_point() as usize + base_address;
-            auxs.push(AuxEntry(AT_BASE, interpreter_entry));
+            auxs.push(AuxEntry(AT_BASE, base_address));
             // 获取 program header 的数目
             println!("[info] begin map interp");
             let ph_count = interp_elf_header.pt2.ph_count();
@@ -317,6 +317,8 @@ impl MemorySet {
                 }
 
             }
+        }else{
+            auxs.push(AuxEntry(AT_BASE, 0));
         }
         // 分配用户栈
         let max_end_va: VirtAddr = max_end_vpn.into();

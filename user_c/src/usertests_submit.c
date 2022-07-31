@@ -8,7 +8,7 @@
 char prog_name[PROG_NAME_MAX_LENGTH];
 char buf[6000];
 
-// #define DYNAMIC
+#define DYNAMIC
 
 #ifndef DYNAMIC
     char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
