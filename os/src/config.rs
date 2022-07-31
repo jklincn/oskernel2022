@@ -4,17 +4,19 @@
 /// 定义了一些参数
 //
 
-pub const USER_STACK_SIZE:      usize = 4096 * 10;
+pub const USER_STACK_SIZE:      usize = 4096 * 20;
 pub const KERNEL_STACK_SIZE:    usize = 4096 * 2;
 
-pub const USER_HEAP_SIZE: usize = 4096 * 2;
-pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 3;  // 3MB
+pub const USER_HEAP_SIZE: usize = 4096 * 20;
+
+// 由于决赛最终将评测转移到了 qemu 平台中,因此不存在内存限制
+pub const KERNEL_HEAP_SIZE:     usize = 4096 * 256 * 30;  // 30MB
 
 /// 指定内存终止物理地址，内存大小为6MiB（左闭右开）(8M有大坑，会随机卡死)
 #[cfg(feature = "board_k210")]
 pub const MEMORY_END:           usize = 0x80600000;
 #[cfg(not(any(feature = "board_k210")))]
-pub const MEMORY_END:           usize = 0x807E0000;
+pub const MEMORY_END:           usize = 0x88000000; // 128MB
 
 /// 页面大小：4KiB
 pub const PAGE_SIZE:            usize = 0x1000;

@@ -10,3 +10,4 @@ os.bin
 .gdb_history
 */Cargo.lock
 .vscode
+output

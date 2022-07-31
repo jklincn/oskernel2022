@@ -142,6 +142,8 @@ pub fn trap_handler() -> ! {
             // // illegal instruction exit code
             // exit_current_and_run_next(-3);
             println!("stval:{}",stval);
+            let sepc =riscv::register::sepc::read();
+            println!("sepc:0x{:x}",sepc);
             current_add_signal(SignalFlags::SIGILL);
         }
 

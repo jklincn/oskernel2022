@@ -43,15 +43,11 @@ kernel:
 	@cargo build --release --offline --features "board_$(BOARD)"
 	@rm src/linker.ld
 
-submit: build
-	@cp $(BOOTLOADER) $(BOOTLOADER).copy
-	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
-	@mv $(BOOTLOADER).copy ../os.bin
-
 run: run-inner
 
 copy-to-fs: 
 	@cd ../simple-fat32 \
+	&& rm -rf fs \
 	&& rm -f ./fat32.img \
 	&& sh ./create_img.sh \
 	&& sudo mkdir fs \
