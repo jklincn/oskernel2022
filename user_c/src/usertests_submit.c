@@ -8,10 +8,11 @@
 char prog_name[PROG_NAME_MAX_LENGTH];
 char buf[6000];
 
-#define DYNAMIC
+// #define DYNAMIC
+#define TEST_ONE
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "daemon_failure", 0};
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
@@ -76,23 +77,7 @@ int main()
     read(fd, buf, 6000);
 
 
-    //test only one program
-    // int npid = fork();
-    // assert(npid >= 0);
-    // int child_return;
-    // if (npid == 0)
-    // {
-    //     execve("./runtest.exe", argv, NULL);
-    // }
-    // else
-    // {
-    //         // parent
-    //         child_return = -1;
-    //         waitpid(npid, &child_return, 0);
-    // }
-
-    // return 0;
-
+#ifndef TEST_ONE
     // run all tests
     for (int row = 0; row < PROG_NUM; row++)
     {
@@ -118,4 +103,22 @@ int main()
         }
     }
     return 0;
+#else
+    //test only one program
+    int npid = fork();
+    assert(npid >= 0);
+    int child_return;
+    if (npid == 0)
+    {
+        execve("./runtest.exe", argv, NULL);
+    }
+    else
+    {
+        // parent
+        child_return = -1;
+        waitpid(npid, &child_return, 0);
+    }
+
+    return 0;
+#endif
 }
