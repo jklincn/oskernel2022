@@ -100,10 +100,11 @@ pub fn trap_handler() -> ! {
             }
             println!("stval:{}",stval::read());
             let va: VirtAddr = (stval as usize).into();
+            current_trap_cx().debug_show();
             if va > TRAMPOLINE.into() {
                 println!("va:0x{},TRAMPOLINE:0x{}",va.0,VirtAddr::from(TRAMPOLINE).0);
                 println!("[kernel] VirtAddr out of range!");
-                current_trap_cx().debug_show();
+
                 current_add_signal(SignalFlags::SIGSEGV);
             }
 

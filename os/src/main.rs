@@ -32,6 +32,8 @@ mod trap; // 提供 Trap 管理
 
 use core::arch::asm;
 use core::arch::global_asm;
+use riscv;
+use riscv::register::sstatus::FS;
 global_asm!(include_str!("entry.asm")); // 代码的第一条语句，执行指定的汇编文件，汇编程序再调用Rust实现的内核
 global_asm!(include_str!("buildin_app.S")); // 将 c_usertests 程序放入内核区内存空间
 
@@ -50,6 +52,7 @@ pub fn rust_main() -> ! {
     clear_bss();
     if id() == 0 {
         println!("[kernel] Hello, world!");
+        unsafe{riscv::register::sstatus::set_fs(FS::Dirty);}
         mm::init();
         trap::init();
         trap::enable_timer_interrupt();

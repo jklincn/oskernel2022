@@ -5,7 +5,7 @@
 //
 
 pub const USER_STACK_SIZE:      usize = 4096 * 20;
-pub const KERNEL_STACK_SIZE:    usize = 4096 * 2;
+pub const KERNEL_STACK_SIZE:    usize = 4096 * 32;
 
 pub const USER_HEAP_SIZE: usize = 4096 * 20;
 

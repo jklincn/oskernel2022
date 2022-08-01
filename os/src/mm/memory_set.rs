@@ -12,10 +12,9 @@ use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
-use crate::console::print;
 use crate::mm::frame_usage;
 use crate::sync::UPSafeCell;
-use crate::task::{AuxEntry, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM, AT_BASE};
+use crate::task::{current_task, AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -24,7 +23,7 @@ use lazy_static::*;
 use riscv::register::satp;
 
 // 动态链接部分
-use crate::fs::{OpenFlags,open};
+use crate::fs::{open, OpenFlags};
 
 extern "C" {
     fn stext();
@@ -92,7 +91,7 @@ impl MemorySet {
 
     /// 在当前地址空间插入一个 `Framed` 方式映射到物理内存的逻辑段
     pub fn insert_framed_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
-        self.push(MapArea::new(start_va, end_va, MapType::Framed, permission), None);
+        self.push(MapArea::new(start_va, end_va, MapType::Framed, permission), None, 0);
     }
 
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
@@ -110,14 +109,26 @@ impl MemorySet {
     /// ### 在当前地址空间插入一个新的逻辑段
     /// 如果是以 Framed 方式映射到物理内存,
     /// 还可以可选地在那些被映射到的物理页帧上写入一些初始化数据
-    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
+    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>, offset: usize) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             // 写入初始化数据，如果数据存在
-            map_area.copy_data(&mut self.page_table, data);
+            map_area.copy_data(&mut self.page_table, data, offset);
         }
         self.areas.push(map_area); // 将生成的数据段压入 areas 使其生命周期由areas控制
     }
+
+    // fn push_with_offset(&mut self, mut map_area: MapArea, offset: usize, data: Option<&[u8]>){
+    //     // println!("Inside push_with_offset!");
+    //     map_area.map(&mut self.page_table);
+    //     // println!("After map_area.map");
+    //     // println!("data: {:?}, offset: {:?}", data, offset);
+    //     if let Some(data) = data {
+    //         map_area.copy_data(&mut self.page_table, data, offset);
+    //     }
+    //     self.areas.push(map_area);
+    //     // println!("After self.areas.push");
+    // }
 
     /// 映射跳板的虚拟页号和物理物理页号
     fn map_trampoline(&mut self) {
@@ -150,6 +161,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::X,
             ),
             None,
+            0,
         );
         println!("mapping .rodata section");
         memory_set.push(
@@ -160,6 +172,7 @@ impl MemorySet {
                 MapPermission::R,
             ),
             None,
+            0,
         );
         println!("mapping .data section");
         memory_set.push(
@@ -170,6 +183,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
+            0,
         );
         println!("mapping .bss section");
         memory_set.push(
@@ -180,6 +194,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
+            0,
         );
         println!("mapping physical memory");
         memory_set.push(
@@ -190,6 +205,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
+            0,
         );
         println!("mapping memory-mapped registers");
         for pair in MMIO {
@@ -202,6 +218,7 @@ impl MemorySet {
                     MapPermission::R | MapPermission::W,
                 ),
                 None,
+                0,
             );
         }
         memory_set
@@ -228,7 +245,7 @@ impl MemorySet {
         // 是否为动态加载
         let mut elf_interpreter = false;
         // 动态链接器加载地址
-        let mut interp_entry_point =0;
+        let mut interp_entry_point = 0;
 
         // 遍历程序段进行加载
         for i in 0..ph_count {
@@ -245,76 +262,52 @@ impl MemorySet {
                 xmas_elf::program::Type::Load => {
                     let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
                     let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
-                    let mut map_perm = MapPermission::U;
-                    let ph_flags = ph.flags();
-                    if ph_flags.is_read() {
-                        map_perm |= MapPermission::R;
-                    }
-                    if ph_flags.is_write() {
-                        map_perm |= MapPermission::W;
-                    }
-                    if ph_flags.is_execute() {
-                        map_perm |= MapPermission::X;
-                    }
+                    let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
+                    // let mut map_perm = MapPermission::U;
+                    // let ph_flags = ph.flags();
+                    // if ph_flags.is_read() {
+                    //     map_perm |= MapPermission::R;
+                    // }
+                    // if ph_flags.is_write() {
+                    //     map_perm |= MapPermission::W;
+                    // }
+                    // if ph_flags.is_execute() {
+                    //     map_perm |= MapPermission::X;
+                    // }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
                     max_end_vpn = map_area.vpn_range.get_end();
-                    // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
-                    // println!("vpnrange:{:?}",map_area.vpn_range);
-                    // println!("offset:0x{:x},file_size:0x{:x}",ph.offset(),ph.file_size());
                     memory_set.push(
-                        // 将生成的逻辑段加入到程序地址空间
                         map_area,
                         Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
+                        start_va.page_offset(),
                     );
-                    // let t_current = FRAME_ALLOCATOR.exclusive_access().current;
-                    // println!("current:0x{:x}",t_current);
                 }
                 _ => continue,
             }
         }
         if elf_interpreter {
             // 动态链接
-            let interp = open("/", "libc.so", OpenFlags::O_RDONLY).unwrap();
-            let interp_data = interp.read_all();
-            let interp_elf = xmas_elf::ElfFile::new(interp_data.as_slice()).unwrap();
+            let interp_elf = xmas_elf::ElfFile::new(LIBC_SO.as_slice()).unwrap();
             let interp_elf_header = interp_elf.header;
             let base_address = 0x2000000000;
             auxs.push(AuxEntry(AT_BASE, base_address));
             interp_entry_point = base_address + interp_elf_header.pt2.entry_point() as usize;
             // 获取 program header 的数目
             let ph_count = interp_elf_header.pt2.ph_count();
-            for i in 0..ph_count{
+            for i in 0..ph_count {
                 let ph = interp_elf.program_header(i).unwrap();
-                match ph.get_type().unwrap() {
-                    xmas_elf::program::Type::Load => {
-                        let start_va: VirtAddr = (ph.virtual_addr() as usize+ base_address).into() ;
-                        let end_va: VirtAddr = (ph.virtual_addr() as usize+ ph.mem_size() as usize+ base_address).into();
-                        let mut map_perm = MapPermission::U;
-                        let ph_flags = ph.flags();
-                        if ph_flags.is_read() {
-                            map_perm |= MapPermission::R;
-                        }
-                        if ph_flags.is_write() {
-                            map_perm |= MapPermission::W;
-                        }
-                        if ph_flags.is_execute() {
-                            map_perm |= MapPermission::X;
-                        }
-                        let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
-                        // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
-                        // println!("vpnrange:{:?}",map_area.vpn_range);
-                        // println!("offset:0x{:x},file_size:0x{:x}",ph.offset(),ph.file_size());
-                        memory_set.push(
-                            // 将生成的逻辑段加入到程序地址空间
-                            map_area,
-                            Some(&interp_elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
-                        );
-                    }
-                    _ => continue,
+                if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
+                    let start_va: VirtAddr = (ph.virtual_addr() as usize + base_address).into();
+                    let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
+                    let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
+                    memory_set.push(
+                        MapArea::new(start_va, end_va, MapType::Framed, map_perm),
+                        Some(&interp_elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
+                        start_va.page_offset(),
+                    );
                 }
-
             }
-        }else{
+        } else {
             auxs.push(AuxEntry(AT_BASE, 0));
         }
         // 分配用户栈
@@ -322,7 +315,7 @@ impl MemorySet {
         let mut user_stack_bottom: usize = max_end_va.into();
         // 在已用最大虚拟页之上放置一个保护页
         user_stack_bottom += PAGE_SIZE; // 栈底
-        let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址                                            // 将用户栈加入到程序地址空间
+        let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
@@ -331,6 +324,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W | MapPermission::U,
             ),
             None,
+            0,
         );
         // 在应用地址空间中映射次高页面来存放 Trap 上下文
         memory_set.push(
@@ -341,7 +335,8 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-        ); 
+            0,
+        );
         // 分配用户堆
         let mut user_heap_bottom: usize = user_stack_top;
         //放置一个保护页
@@ -356,7 +351,10 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W | MapPermission::U,
             ),
             None,
+            0,
         );
+        // memory_set.debug_show_layout();
+        // memory_set.debug_show_data(VirtAddr::from(0x50610));
         if elf_interpreter {
             (memory_set, user_stack_top, user_heap_bottom, interp_entry_point)
         } else {
@@ -372,7 +370,7 @@ impl MemorySet {
         // 循环拷贝每一个逻辑段到新的地址空间
         for area in user_space.areas.iter() {
             let new_area = MapArea::from_another(area);
-            memory_set.push(new_area, None);
+            memory_set.push(new_area, None, 0);
             // 按物理页帧拷贝数据
             for vpn in area.vpn_range {
                 let src_ppn = user_space.translate(vpn).unwrap().ppn();
@@ -446,7 +444,7 @@ impl MemorySet {
         let findpte = self.translate(va.floor());
         if let Some(pte) = findpte {
             println!("VirtAddr 0x{:x} ", va.0);
-            println!("ppn:     0x{:x}XXX", pte.ppn().0);
+            println!("ppn:     0x{:x}---", pte.ppn().0);
             println!("pte_raw: 0b{:b}", pte.bits);
             println!("executable: {}", pte.executable());
             println!("readable:   {}", pte.readable());
@@ -476,21 +474,63 @@ impl MemorySet {
     }
 
     #[allow(unused)]
-    pub fn debug_show_layout(&self){
+    pub fn debug_show_layout(&self) {
         println!("-----------------------MM Layout-----------------------");
         for area in &self.areas {
-            print!("MapArea  : {:010x}--{:010x} len:{:08x} ", area.start_va.0, area.end_va.0, area.end_va.0 - area.start_va.0);
-            if area.map_perm.is_user() {print!("U");}else{print!("-");};
-            if area.map_perm.is_read() {print!("R");}else{print!("-");};
-            if area.map_perm.is_write() {print!("W");}else{print!("-");};
-            if area.map_perm.is_execute() {println!("X");}else{println!("-");};
+            print!(
+                "MapArea  : {:010x}--{:010x} len:{:08x} ",
+                area.start_va.0,
+                area.end_va.0,
+                area.end_va.0 - area.start_va.0
+            );
+            if area.map_perm.is_user() {
+                print!("U");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_read() {
+                print!("R");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_write() {
+                print!("W");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_execute() {
+                println!("X");
+            } else {
+                println!("-");
+            };
         }
         for chunk in &self.mmap_chunks {
-            print!("ChunkArea: {:010x}--{:010x} len:{:08x} ", chunk.mmap_start.0, chunk.mmap_end.0, chunk.mmap_end.0 - chunk.mmap_start.0);
-            if chunk.map_perm.is_user() {print!("U");}else{print!("-");};
-            if chunk.map_perm.is_read() {print!("R");}else{print!("-");};
-            if chunk.map_perm.is_write() {print!("W");}else{print!("-");};
-            if chunk.map_perm.is_execute() {println!("X");}else{println!("-");};
+            print!(
+                "ChunkArea: {:010x}--{:010x} len:{:08x} ",
+                chunk.mmap_start.0,
+                chunk.mmap_end.0,
+                chunk.mmap_end.0 - chunk.mmap_start.0
+            );
+            if chunk.map_perm.is_user() {
+                print!("U");
+            } else {
+                print!("-");
+            };
+            if chunk.map_perm.is_read() {
+                print!("R");
+            } else {
+                print!("-");
+            };
+            if chunk.map_perm.is_write() {
+                print!("W");
+            } else {
+                print!("-");
+            };
+            if chunk.map_perm.is_execute() {
+                println!("X");
+            } else {
+                println!("-");
+            };
         }
         println!("-------------------------------------------------------");
     }
@@ -685,7 +725,7 @@ impl MapArea {
             }
             MapType::Framed => {
                 // 获取一个物理页帧
-                let frame = frame_alloc().unwrap();      
+                let frame = frame_alloc().unwrap();
                 ppn = frame.ppn;
                 // println!("current vpn:0x{:x},get ppn:0x{:x}",vpn.0,ppn.0);
                 // 将vpn和分配到的物理页帧配对
@@ -725,35 +765,67 @@ impl MapArea {
     /// - 切片 `data` 中的数据大小不超过当前逻辑段的总大小，且切片中的数据会被对齐到逻辑段的开头，然后逐页拷贝到实际的物理页帧
     /// - 只有 `Framed` 可以被拷贝
     // 决赛修正：需要对齐
-    pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8]) {
+    // pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8]) {
+    //     assert_eq!(self.map_type, MapType::Framed);
+    //     let mut start: usize = 0;
+    //     let mut current_vpn = self.vpn_range.get_start();
+    //     let mut len = data.len();
+
+    //     // 使对齐
+    //     let first_page_offset = self.start_va.0 % PAGE_SIZE; // 起始页中偏移
+    //     if first_page_offset != 0 {
+    //         let first_page_write_len = (PAGE_SIZE - first_page_offset).min(data.len()); // 起始页中需要写入的长度
+    //         let src = &data[start..first_page_write_len];
+    //         let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()
+    //             [first_page_offset..first_page_offset + first_page_write_len];
+    //         dst.copy_from_slice(src);
+    //         start += first_page_write_len;
+    //         current_vpn.step();
+    //         len -= first_page_write_len;
+    //     }
+    //     // 后续拷贝
+    //     loop {
+    //         // 每次取出 4KiB 大小的数据
+    //         let src = &data[start..len.min(start + PAGE_SIZE)];
+    //         let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[..src.len()];
+    //         dst.copy_from_slice(src);
+    //         start += PAGE_SIZE;
+    //         if start >= len {
+    //             break;
+    //         }
+    //         current_vpn.step();
+    //     }
+    // }
+    pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8], offset: usize) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
+        let mut page_offset: usize = offset;
         let mut current_vpn = self.vpn_range.get_start();
-        let mut len = data.len();
-
-        // 使对齐
-        let first_page_offset = self.start_va.0 % PAGE_SIZE; // 起始页中偏移
-        if first_page_offset != 0 {
-            let first_page_write_len = (PAGE_SIZE - first_page_offset).min(data.len()); // 起始页中需要写入的长度
-            let src = &data[start..first_page_write_len];
-            let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()
-                [first_page_offset..first_page_offset + first_page_write_len];
-            dst.copy_from_slice(src);
-            start += first_page_write_len;
-            current_vpn.step();
-            len -= first_page_write_len;
-        }
-        // 后续拷贝
+        let len = data.len();
         loop {
-            // 每次取出 4KiB 大小的数据
-            let src = &data[start..len.min(start + PAGE_SIZE)];
-            let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[..src.len()];
+            let src = &data[start..len.min(start + PAGE_SIZE - page_offset)];
+            let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[page_offset..(page_offset + src.len())];
             dst.copy_from_slice(src);
-            start += PAGE_SIZE;
+
+            start += PAGE_SIZE - page_offset;
+
+            page_offset = 0;
             if start >= len {
                 break;
             }
             current_vpn.step();
         }
     }
+}
+
+lazy_static! {
+    pub static ref LIBC_SO: Vec<u8> = {
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
+        if let Some(app_inode) = open(inner.current_path.as_str(), "libc.so", OpenFlags::O_RDONLY) {
+            app_inode.read_all()
+        } else {
+            panic!("can't find libc.so");
+        }
+    };
 }

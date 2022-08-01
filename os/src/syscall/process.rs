@@ -185,6 +185,9 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     } else if path == "entry-static.exe" {
         task.exec(ENTRY_STATIC_EXE.as_slice(), args_vec, envs_vec);
         return argc as isize;
+    } else if path == "entry-dynamic.exe"{
+        task.exec(ENTRY_DYNAMIC_EXE.as_slice(), args_vec, envs_vec);
+        return argc as isize;
     }
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
@@ -200,6 +203,18 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
 }
 
 lazy_static! {
+    pub static ref RUNTEST_EXE: Vec<u8> = {
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
+        if let Some(app_inode) = open(inner.current_path.as_str(), "./runtest.exe", OpenFlags::O_RDONLY) {
+            app_inode.read_all()
+        } else {
+            panic!("can't find ./runtest.exe");
+        }
+    };
+}
+
+lazy_static! {
     pub static ref ENTRY_STATIC_EXE: Vec<u8> = {
         let task = current_task().unwrap();
         let inner = task.inner_exclusive_access();
@@ -212,16 +227,18 @@ lazy_static! {
 }
 
 lazy_static! {
-    pub static ref RUNTEST_EXE: Vec<u8> = {
+    pub static ref ENTRY_DYNAMIC_EXE: Vec<u8> = {
         let task = current_task().unwrap();
         let inner = task.inner_exclusive_access();
-        if let Some(app_inode) = open(inner.current_path.as_str(), "./runtest.exe", OpenFlags::O_RDONLY) {
+        if let Some(app_inode) = open(inner.current_path.as_str(), "entry-dynamic.exe", OpenFlags::O_RDONLY) {
             app_inode.read_all()
         } else {
-            panic!("can't find ./runtest.exe");
+            panic!("can't find entry-dynamic.exe");
         }
     };
 }
+
+
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
 /// - 参数：
 ///     - pid 表示要等待的子进程的进程 ID，如果为 -1 的话表示等待任意一个子进程；
