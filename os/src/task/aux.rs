@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use crate::config::PAGE_SIZE;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy,Debug)]
 pub struct AuxEntry(pub usize, pub usize);
 
 pub const AT_NULL: usize = 0;
@@ -9,7 +9,7 @@ pub const AT_PHDR: usize = 3;
 pub const AT_PHENT: usize = 4;
 pub const AT_PHNUM: usize = 5;
 pub const AT_PAGESZ: usize = 6;
-pub const AT_BASE: usize = 6;
+pub const AT_BASE: usize = 7;
 pub const AT_ENTRY: usize = 9;
 pub const AT_UID: usize = 11;
 pub const AT_EUID: usize = 12;

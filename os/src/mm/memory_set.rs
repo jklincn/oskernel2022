@@ -220,9 +220,6 @@ impl MemorySet {
         // 使用外部 crate xmas_elf 来解析传入的应用 ELF 数据并可以轻松取出各个部分
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
-        // 取出 ELF 的魔数来判断它是不是一个合法的 ELF
-        let magic = elf_header.pt1.magic;
-        assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
         // 获取 program header 的数目
         let ph_count = elf_header.pt2.ph_count();
         // 记录目前涉及到的最大的虚拟页号
@@ -230,7 +227,7 @@ impl MemorySet {
         // 是否为动态加载
         let mut elf_interpreter = false;
         // 动态链接器加载地址
-        let base_address = 0x2000000000;
+        let mut interp_entry_point =0;
 
         // 遍历程序段进行加载
         for i in 0..ph_count {
@@ -280,7 +277,9 @@ impl MemorySet {
             let interp_data = interp.read_all();
             let interp_elf = xmas_elf::ElfFile::new(interp_data.as_slice()).unwrap();
             let interp_elf_header = interp_elf.header;
+            let base_address = 0x2000000000;
             auxs.push(AuxEntry(AT_BASE, base_address));
+            interp_entry_point = base_address + interp_elf_header.pt2.entry_point() as usize;
             // 获取 program header 的数目
             let ph_count = interp_elf_header.pt2.ph_count();
             for i in 0..ph_count{
@@ -357,8 +356,10 @@ impl MemorySet {
             ),
             None,
         );
+        println!("user_stack_top:0x{:x}",user_stack_top);
+        println!("auxs:{:?}",auxs);
         if elf_interpreter {
-            (memory_set, user_stack_top, user_heap_bottom, base_address)
+            (memory_set, user_stack_top, user_heap_bottom, interp_entry_point)
         } else {
             (memory_set, user_stack_top, user_heap_bottom, elf_header.pt2.entry_point() as usize)
         }

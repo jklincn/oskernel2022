@@ -47,9 +47,9 @@ run: run-inner
 
 copy-to-fs: 
 	@cd ../simple-fat32 \
-	&& rm -rf fs \
 	&& rm -f ./fat32.img \
 	&& sh ./create_img.sh \
+	&& rm -rf fs \
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
 	&& sudo cp ../test_program/final/sdcard_content/* fs/ \

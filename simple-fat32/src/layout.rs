@@ -96,7 +96,7 @@ impl FatExtBS {
 
 #[repr(packed)]
 #[allow(unused)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct FSInfo {
     fsi_lead_sig: u32,        // Value 0x41615252
     fsi_reserved1: [u8; 480], // 保留
@@ -669,7 +669,7 @@ impl LongDirEntry {
 }
 
 // 常驻内存，不作一一映射
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct FAT {
     fat1_sector: u32, // FAT1的起始扇区
     fat2_sector: u32, // FAT2的起始扇区

@@ -98,7 +98,7 @@ pub fn trap_handler() -> ! {
             } else {
                 is_load = false;
             }
-            println!("stval:{:?}",stval::read());
+            println!("stval:0x{:?}",stval::read());
             let va: VirtAddr = (stval as usize).into();
             if va > TRAMPOLINE.into() {
                 println!("[kernel] VirtAddr out of range!");
@@ -109,7 +109,6 @@ pub fn trap_handler() -> ! {
             if lazy != 0 { 
                 current_add_signal(SignalFlags::SIGSEGV); 
             }
-
 
             // current_trap_cx().debug_show();
             // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
@@ -128,7 +127,7 @@ pub fn trap_handler() -> ! {
             );
             drop(task);
 
-            // current_trap_cx().debug_show();
+            current_trap_cx().debug_show();
             // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
             
             //current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());

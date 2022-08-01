@@ -5,6 +5,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::RwLock;
 
+#[derive(Debug)]
 pub struct FAT32Manager {
     block_device: Arc<dyn BlockDevice>,       // 块设备的引用
     fsinfo: Arc<RwLock<FSInfo>>,              // 文件系统信息扇区的引用
@@ -113,6 +114,8 @@ impl FAT32Manager {
             root_sec,
             vroot_dirent: Arc::new(RwLock::new(root_dirent)),
         };
+
+        // println!("[DEBUG]fat32_manager:{:?}",fat32_manager);
 
         Arc::new(RwLock::new(fat32_manager))
     }

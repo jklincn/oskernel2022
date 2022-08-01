@@ -93,7 +93,7 @@ int main()
 
     // return 0;
 
-    // run tests
+    // run all tests
     for (int row = 0; row < PROG_NUM; row++)
     {
         read_test_name();
