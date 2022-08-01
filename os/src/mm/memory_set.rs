@@ -357,8 +357,6 @@ impl MemorySet {
             ),
             None,
         );
-        println!("user_stack_top:0x{:x}",user_stack_top);
-        println!("auxs:{:?}",auxs);
         if elf_interpreter {
             (memory_set, user_stack_top, user_heap_bottom, interp_entry_point)
         } else {
