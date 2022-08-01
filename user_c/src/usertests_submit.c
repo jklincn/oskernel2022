@@ -6,7 +6,7 @@
 #define TEST_ALL
 
 #ifndef TEST_ALL
-char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "fflush_exit", 0};
+char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "lseek_large", 0};
 #else
 int offset = 0;
 #define PROG_NAME_MAX_LENGTH 40
@@ -22,7 +22,7 @@ char *static_argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
 char *dynamic_argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 
 // 静态跳过程序
-#define STATIC_PROG_PASS_LENGTH 18
+#define STATIC_PROG_PASS_LENGTH 14
 char *static_prog_pass[] = {
                      "pthread_cancel_points",
                      "pthread_cancel",
@@ -38,15 +38,11 @@ char *static_prog_pass[] = {
                      //
                      "fscanf",
                      "fwscanf",
-                     "sscanf_long",
-                     "stat",
                      "ungetc",
-                     "utime",
-                     "lseek_large",
                      };
 
 // 动态跳过程序
-#define DYNAMIC_PROG_PASS_LENGTH 21
+#define DYNAMIC_PROG_PASS_LENGTH 17
 char *dynamic_prog_pass[] = {
                      "pthread_cancel_points",
                      "pthread_cancel",
@@ -62,13 +58,9 @@ char *dynamic_prog_pass[] = {
                      "fscanf",
                      "fwscanf",
                      "sem_init",
-                     "sscanf_long",
-                     "stat",
                      "tls_init",
                      "tls_local_exec",
                      "ungetc",
-                     "utime",
-                     "lseek_large",
                      "tls_get_new_dtv",
                      };
 

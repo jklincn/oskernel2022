@@ -300,24 +300,25 @@ pub fn sys_umount(p_special: *const u8, flags: usize) -> isize {
 }
 
 pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
-    let task = current_task().unwrap();
-    let token = current_user_token();
-    let inner = task.inner_exclusive_access();
+    0
+    // let task = current_task().unwrap();
+    // let token = current_user_token();
+    // let inner = task.inner_exclusive_access();
 
-    // todo
-    _ = flags;
+    // // todo
+    // _ = flags;
 
-    let path = translated_str(token, path);
-    if fd == AT_FDCWD {
-        if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::from_bits(0).unwrap()) {
-            file.delete();
-            0
-        } else {
-            -1
-        }
-    } else {
-        unimplemented!();
-    }
+    // let path = translated_str(token, path);
+    // if fd == AT_FDCWD {
+    //     if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::from_bits(0).unwrap()) {
+    //         file.delete();
+    //         0
+    //     } else {
+    //         -1
+    //     }
+    // } else {
+    //     unimplemented!();
+    // }
 }
 
 pub fn sys_chdir(path: *const u8) -> isize {

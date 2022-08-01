@@ -417,13 +417,12 @@ impl ShortDirEntry {
         let mut rest = buf.len();
 
         while current_cluster != END_CLUSTER && rest > 0 {
-
             if offset >= bytes_per_cluster {
                 offset -= bytes_per_cluster;
                 current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
                 continue;
             }
-            // println!("current_cluster:{}",current_cluster);
+            // println!("current_cluster:{},rest:{}", current_cluster,rest);
             let nth_sect = offset / bytes_per_sector;
             let sect = manager_reader.first_sector_of_cluster(current_cluster);
             offset %= bytes_per_sector;
@@ -432,6 +431,7 @@ impl ShortDirEntry {
                     break;
                 }
                 let len = rest.min(bytes_per_sector - offset);
+                // println!("1:rest:{}, len:{}",rest,len);
                 get_block_cache((sect + i) as usize, Arc::clone(block_device))
                     .read()
                     .read(0, |data_block: &DataBlock| {
@@ -832,7 +832,6 @@ impl FAT {
         curr_cluster & 0x0FFFFFFF
     }
 
-    // true
     /// 查询当前簇的下一个簇
     pub fn get_next_cluster(&self, cluster: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
         // 需要对损坏簇作出判断
@@ -874,7 +873,6 @@ impl FAT {
             });
     }
 
-    /// true
     /// 获取某个簇链的第i个簇(i为参数)
     pub fn get_cluster_at(&self, start_cluster: u32, index: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
         let mut cluster = start_cluster;
