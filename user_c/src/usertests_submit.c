@@ -2,30 +2,63 @@
 #include "unistd.h"
 #include "stdlib.h"
 
-#define PROG_NUM 110
-#define PROG_NAME_MAX_LENGTH 40
-
-char prog_name[PROG_NAME_MAX_LENGTH];
-char buf[6000];
-
 // 测试动态链接程序
-#define DYNAMIC
+// #define DYNAMIC
 
 // 测试单一程序
-#define TEST_ONE
+// #define TEST_ONE
+
+#define PROG_NAME_MAX_LENGTH 40
+#define BUFFER_SIZE 6500
+
+#ifndef DYNAMIC
+#define PROG_NUM 109
+#else
+#define PROG_NUM 111
+#endif
+
+char prog_name[PROG_NAME_MAX_LENGTH];
+char buf[BUFFER_SIZE];
 
 // 设置调试程序，prog_name 只有在测试全部程序下使用
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "strtod_simple", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
 #else
-    char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "argv", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
-
-
 
 #ifndef TEST_ONE
 int offset = 0;
-#define PROG_PASS_LENGTH 13
+#ifndef DYNAMIC
+// 静态跳过程序
+#define PROG_PASS_LENGTH 21
+char *prog_pass[] = {
+                     "pthread_cancel_points",
+                     "pthread_cancel",
+                     "pthread_cond",
+                     "pthread_tsd",
+                     "fflush_exit",
+                     "daemon_failure",
+                     "pthread_robust_detach",
+                     "pthread_cancel_sem_wait",
+                     "pthread_cond_smasher",
+                     "pthread_condattr_setclock",
+                     "pthread_exit_cancel",
+                     "pthread_once_deadlock",
+                     "pthread_rwlock_ebusy",
+                     //
+                     "fscanf",
+                     "fwscanf",
+                     "sscanf_long",
+                     "stat",
+                     "ungetc",
+                     "utime",
+                     "lseek_large",
+                     "setvbuf_unget",
+                     };
+#else
+// 动态跳过程序
+#define PROG_PASS_LENGTH 17
 char *prog_pass[] = {
                      "pthread_cancel_points",
                      "pthread_cancel",
@@ -34,18 +67,24 @@ char *prog_pass[] = {
                      "daemon_failure",
                      "fflush_exit",
                      "pthread_robust_detach",
-                     "pthread_cancel_sem_wait",
                      "pthread_cond_smasher",
                      "pthread_condattr_setclock",
                      "pthread_exit_cancel",
                      "pthread_once_deadlock",
                      "pthread_rwlock_ebusy",
-                     };
+                     //
+                     "fscanf",
+                     "fwscanf",
+                     "sem_init",
+                     "socket",
+                     "sscanf_long",
 
+                     };
+#endif
 
 void read_test_name()
 {
-    for (int i = 0; i < 40; i++)
+    for (int i = 0; i < PROG_NAME_MAX_LENGTH; i++)
         *(prog_name + i) = '\0';
     // skip space
     for (int k = 0; k < 3; k++)
@@ -82,9 +121,13 @@ int ifpass()
 int main()
 {
 #ifndef TEST_ONE
+    #ifndef DYNAMIC
     // run all tests
     int fd = open("./run-static.sh", 0);
-    read(fd, buf, 6000);
+    #else
+    int fd = open("./run-dynamic.sh", 0);
+    #endif
+    read(fd, buf, BUFFER_SIZE);
 
     for (int row = 0; row < PROG_NUM; row++)
     {

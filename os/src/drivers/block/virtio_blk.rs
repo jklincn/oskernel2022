@@ -38,6 +38,7 @@ pub struct VirtIOBlock(UPSafeCell<VirtIOBlk<'static>>);
 
 impl BlockDevice for VirtIOBlock {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
+        // println!("block_id:{}",block_id);
         self.0
             .exclusive_access()
             .read_block(block_id, buf)

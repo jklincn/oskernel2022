@@ -27,6 +27,5 @@ pub fn new() -> Vec<AuxEntry> {
     temp.push(AuxEntry(AT_GID, 0));
     temp.push(AuxEntry(AT_EGID, 0));
     temp.push(AuxEntry(AT_SECURE, 0));
-    temp.push(AuxEntry(AT_RANDOM, 0x1234));
     temp
 }

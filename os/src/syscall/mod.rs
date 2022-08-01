@@ -59,6 +59,7 @@ const SYSCALL_MUNMAP:   usize = 215;
 const SYSCALL_FORK:     usize = 220;
 const SYSCALL_EXEC:     usize = 221;
 const SYSCALL_MMAP:     usize = 222;
+const SYSCALL_MPROTECT: usize = 226;
 const SYSCALL_WAITPID:  usize = 260;
 const SYSCALL_PRLIMIT64:usize = 261;
 
@@ -135,6 +136,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_BRK =>      sys_brk(args[0]),
         SYSCALL_MMAP=>      sys_mmap(args[0], args[1], args[2], args[3], args[4] as isize, args[5]),
         SYSCALL_MUNMAP =>   sys_munmap(args[0], args[1]),
+        SYSCALL_MPROTECT=>  0,
         SYSCALL_WAITPID =>  sys_waitpid(args[0] as isize, args[1] as *mut i32),
         SYSCALL_PRLIMIT64=> sys_prlimit64(args[0], args[1], args[2] as *const u8, args[3] as *const u8),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),

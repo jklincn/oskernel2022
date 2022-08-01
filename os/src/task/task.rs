@@ -7,11 +7,11 @@ use super::signal::SigSet;
 /// pub enum TaskStatus
 /// ```
 //
-use super::{aux, TaskContext, RLimit, RESOURCE_KIND_NUMBER};
+use super::{aux, TaskContext, RLimit, RESOURCE_KIND_NUMBER, AT_RANDOM};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, translated_byte_buffer, frame_usage};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::{String, ToString};
@@ -246,6 +246,8 @@ impl TaskControlBlock {
                 user_sp
             })
             .collect();
+
+        auxs.push(aux::AuxEntry(AT_RANDOM, argv[0]));
 
         // 分配 auxs 空间，并写入数据
         for i in 0..auxs.len() {
