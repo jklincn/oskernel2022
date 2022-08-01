@@ -144,6 +144,7 @@ pub fn trap_handler() -> ! {
             println!("stval:{}",stval);
             let sepc =riscv::register::sepc::read();
             println!("sepc:0x{:x}",sepc);
+            // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(sepc.into());
             current_add_signal(SignalFlags::SIGILL);
         }
 
