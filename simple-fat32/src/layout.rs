@@ -7,7 +7,7 @@ use spin::RwLock;
 const LEAD_SIGNATURE: u32 = 0x41615252;
 const STRUC_SIGNATURE: u32 = 0x61417272;
 pub const FREE_CLUSTER: u32 = 0x00000000; // 空闲簇
-pub const END_CLUSTER: u32 = 0x0FFFFFF8; // 最后一个簇
+pub const END_CLUSTER: u32 = 0x0FFFFFFF; // 最后一个簇
 pub const BAD_CLUSTER: u32 = 0x0FFFFFF7;
 const FATENTRY_PER_SEC: u32 = BLOCK_SIZE as u32 / 4;
 
@@ -317,6 +317,82 @@ impl ShortDirEntry {
     }
 
     /// 以偏移量读取文件，这里会对fat和manager加读锁
+    // pub fn read_at(
+    //     &self,
+    //     offset: usize,
+    //     buf: &mut [u8],
+    //     manager: &Arc<RwLock<FAT32Manager>>,
+    //     fat: &Arc<RwLock<FAT>>,
+    //     block_device: &Arc<dyn BlockDevice>,
+    // ) -> usize {
+    //     // 获取共享锁
+    //     let manager_reader = manager.read();
+    //     let fat_reader = fat.read();
+    //     let bytes_per_sector = manager_reader.bytes_per_sector() as usize;
+    //     let bytes_per_cluster = manager_reader.bytes_per_cluster() as usize;
+
+    //     // 1、检查边界条件
+    //     // 计算上界
+    //     let end: usize;
+    //     if self.is_dir() {
+    //         let dir_file_size =
+    //             bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
+    //         end = offset + buf.len().min(dir_file_size);
+    //     } else {
+    //         // 此次文件读取的最大范围，偏移量位置加上缓冲区大小 和 文件总大小 取较小者
+    //         end = (offset + buf.len()).min(self.dir_file_size as usize);
+    //     }
+    //     // 检查偏移量位置是否合法
+    //     if offset >= end {
+    //         return 0;
+    //     }
+
+    //     // 2、计算开始读取的位置
+    //     let (mut current_cluster, mut current_sector, _) = self.get_pos(offset, manager, &manager_reader.get_fat(), block_device);
+
+    //     // 3、开始读取内容
+    //     let mut read_size = 0usize;
+    //     let mut current_off = offset;
+    //     loop {
+    //         // println!("current_off:{},current_cluster:{},current_sector:{}",current_off,current_cluster,current_sector);
+    //         // 将偏移量向上对齐扇区大小
+    //         let mut end_current_block = (current_off + bytes_per_sector - 1) / bytes_per_sector * bytes_per_sector;
+    //         // println!("end:{},end_current_block:{}",end,end_current_block);
+    //         // 计算当前块的结束位置
+    //         end_current_block = end_current_block.min(end);
+    //         // 设定读入区域
+    //         let block_read_size = end_current_block - current_off;
+    //         let dst = &mut buf[read_size..read_size + block_read_size];
+    //         // println!("read_size:{},read_size+block_read_size:{}",read_size,read_size+block_read_size);
+    //         // 进行读取
+    //         get_block_cache(current_sector, Arc::clone(block_device))
+    //             .read()
+    //             .read(0, |data_block: &DataBlock| {
+    //                 let src = &data_block[current_off % BLOCK_SIZE..current_off % BLOCK_SIZE + block_read_size];
+    //                 dst.copy_from_slice(src);
+    //             });
+
+    //         // 更新读取长度
+    //         read_size += block_read_size;
+    //         if end_current_block == end {
+    //             break;
+    //         }
+    //         // 更新索引参数
+    //         current_off = end_current_block;
+    //         if current_off % bytes_per_cluster == 0 {
+    //             // 该簇读完，寻找下一个簇
+    //             current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
+    //             if current_cluster >= END_CLUSTER {
+    //                 break;
+    //             }
+    //             current_sector = manager_reader.first_sector_of_cluster(current_cluster);
+    //         } else {
+    //             current_sector += 1; //没读完一个簇，直接进入下一扇区
+    //         }
+    //     }
+    //     read_size
+    // }
+
     pub fn read_at(
         &self,
         offset: usize,
@@ -325,67 +401,51 @@ impl ShortDirEntry {
         fat: &Arc<RwLock<FAT>>,
         block_device: &Arc<dyn BlockDevice>,
     ) -> usize {
-        // 获取共享锁
         let manager_reader = manager.read();
         let fat_reader = fat.read();
         let bytes_per_sector = manager_reader.bytes_per_sector() as usize;
         let bytes_per_cluster = manager_reader.bytes_per_cluster() as usize;
+        let sectors_per_cluster = manager_reader.sectors_per_cluster() as usize;
 
-        // 1、检查边界条件
-        // 计算上界
-        let end: usize;
-        if self.is_dir() {
-            let dir_file_size =
-                bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
-            end = offset + buf.len().min(dir_file_size);
-        } else {
-            // 此次文件读取的最大范围，偏移量位置加上缓冲区大小 和 文件总大小 取较小者
-            end = (offset + buf.len()).min(self.dir_file_size as usize);
-        }
-        // 检查偏移量位置是否合法
-        if offset >= end {
+        let mut offset = offset;
+        let mut current_cluster = self.first_cluster();
+        if current_cluster == 0 || buf.len() == 0 {
             return 0;
         }
 
-        // 2、计算开始读取的位置
-        let (mut current_cluster, mut current_sector, _) = self.get_pos(offset, manager, &manager_reader.get_fat(), block_device);
-
-        // 3、开始读取内容
         let mut read_size = 0usize;
-        let mut current_off = offset;
-        loop {
-            // 将偏移量向上对齐扇区大小
-            let mut end_current_block = (current_off / bytes_per_sector + 1) * bytes_per_sector;
-            // 计算当前块的结束位置
-            end_current_block = end_current_block.min(end);
-            // 设定读入区域
-            let block_read_size = end_current_block - current_off;
-            let dst = &mut buf[read_size..read_size + block_read_size];
-            // 进行读取
-            get_block_cache(current_sector, Arc::clone(block_device))
-                .read()
-                .read(0, |data_block: &DataBlock| {
-                    let src = &data_block[current_off % BLOCK_SIZE..current_off % BLOCK_SIZE + block_read_size];
-                    dst.copy_from_slice(src);
-                });
+        let mut rest = buf.len();
 
-            // 更新读取长度
-            read_size += block_read_size;
-            if end_current_block == end {
-                break;
-            }
-            // 更新索引参数
-            current_off = end_current_block;
-            if current_off % bytes_per_cluster == 0 {
-                // 该簇读完，寻找下一个簇
+        while current_cluster != END_CLUSTER && rest > 0 {
+            if offset >= bytes_per_cluster {
+                offset -= bytes_per_cluster;
                 current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
-                if current_cluster >= END_CLUSTER {
+                continue;
+            }
+            let nth_sect = offset / bytes_per_sector;
+            let sect = manager_reader.first_sector_of_cluster(current_cluster);
+            offset %= bytes_per_sector;
+            for i in nth_sect..sectors_per_cluster {
+                if rest <= 0 {
                     break;
                 }
-                current_sector = manager_reader.first_sector_of_cluster(current_cluster);
-            } else {
-                current_sector += 1; //没读完一个簇，直接进入下一扇区
+                let len = rest.min(bytes_per_sector - offset);
+                get_block_cache((sect + i) as usize, Arc::clone(block_device))
+                    .read()
+                    .read(0, |data_block: &DataBlock| {
+                        // println!("offset:{},len:{}",offset,len);
+                        let src = &data_block[offset..offset + len];
+                        let dst = &mut buf[read_size..read_size + len];
+                        dst.copy_from_slice(src);
+                    });
+                rest -= len;
+                read_size += len;
+                offset = 0
             }
+            if rest == 0 {
+                break;
+            }
+            current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
         }
         read_size
     }
@@ -680,13 +740,14 @@ impl FAT {
         Self { fat1_sector, fat2_sector }
     }
 
-    /// 计算簇号对应表项所在的扇区和偏移
+    // true
+    /// 计算簇号对应表项所在的扇区和扇区内偏移
     fn calculate_pos(&self, cluster: u32) -> (u32, u32, u32) {
         // 返回 sector号和 offset
         // 前为FAT1的扇区号，后为FAT2的扇区号，最后为offset
-        let fat1_sec = self.fat1_sector + cluster / FATENTRY_PER_SEC;
-        let fat2_sec = self.fat2_sector + cluster / FATENTRY_PER_SEC;
-        let offset = 4 * (cluster % FATENTRY_PER_SEC);
+        let fat1_sec = self.fat1_sector + (cluster * 4) / 512;
+        let fat2_sec = self.fat2_sector + (cluster * 4) / 512;
+        let offset = (4 * cluster) % 512;
         (fat1_sec, fat2_sec, offset)
     }
 
@@ -712,18 +773,21 @@ impl FAT {
         curr_cluster & 0x0FFFFFFF
     }
 
+    // true
     /// 查询当前簇的下一个簇
     pub fn get_next_cluster(&self, cluster: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
         // 需要对损坏簇作出判断
         // 及时使用备用表
         // 无效或未使用返回0
         let (fat1_sec, fat2_sec, offset) = self.calculate_pos(cluster);
+
         let fat1_rs = get_block_cache(fat1_sec as usize, block_device.clone())
             .read()
             .read(offset as usize, |&next_cluster: &u32| next_cluster);
         let fat2_rs = get_block_cache(fat2_sec as usize, block_device.clone())
             .read()
             .read(offset as usize, |&next_cluster: &u32| next_cluster);
+
         if fat1_rs == BAD_CLUSTER {
             if fat2_rs == BAD_CLUSTER {
                 0
@@ -751,6 +815,7 @@ impl FAT {
             });
     }
 
+    /// true
     /// 获取某个簇链的第i个簇(i为参数)
     pub fn get_cluster_at(&self, start_cluster: u32, index: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
         let mut cluster = start_cluster;

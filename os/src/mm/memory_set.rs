@@ -12,10 +12,9 @@ use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
-use crate::console::print;
 use crate::mm::frame_usage;
 use crate::sync::UPSafeCell;
-use crate::task::{AuxEntry, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM, AT_BASE};
+use crate::task::{AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -24,7 +23,7 @@ use lazy_static::*;
 use riscv::register::satp;
 
 // 动态链接部分
-use crate::fs::{OpenFlags,open};
+use crate::fs::{open, OpenFlags};
 
 extern "C" {
     fn stext();
@@ -228,7 +227,7 @@ impl MemorySet {
         // 是否为动态加载
         let mut elf_interpreter = false;
         // 动态链接器加载地址
-        let mut interp_entry_point =0;
+        let mut interp_entry_point = 0;
 
         // 遍历程序段进行加载
         for i in 0..ph_count {
@@ -245,29 +244,24 @@ impl MemorySet {
                 xmas_elf::program::Type::Load => {
                     let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
                     let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
-                    let mut map_perm = MapPermission::U;
-                    let ph_flags = ph.flags();
-                    if ph_flags.is_read() {
-                        map_perm |= MapPermission::R;
-                    }
-                    if ph_flags.is_write() {
-                        map_perm |= MapPermission::W;
-                    }
-                    if ph_flags.is_execute() {
-                        map_perm |= MapPermission::X;
-                    }
+                    let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
+                    // let mut map_perm = MapPermission::U;
+                    // let ph_flags = ph.flags();
+                    // if ph_flags.is_read() {
+                    //     map_perm |= MapPermission::R;
+                    // }
+                    // if ph_flags.is_write() {
+                    //     map_perm |= MapPermission::W;
+                    // }
+                    // if ph_flags.is_execute() {
+                    //     map_perm |= MapPermission::X;
+                    // }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
                     max_end_vpn = map_area.vpn_range.get_end();
-                    // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
-                    // println!("vpnrange:{:?}",map_area.vpn_range);
-                    // println!("offset:0x{:x},file_size:0x{:x}",ph.offset(),ph.file_size());
                     memory_set.push(
-                        // 将生成的逻辑段加入到程序地址空间
                         map_area,
                         Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
                     );
-                    // let t_current = FRAME_ALLOCATOR.exclusive_access().current;
-                    // println!("current:0x{:x}",t_current);
                 }
                 _ => continue,
             }
@@ -283,38 +277,19 @@ impl MemorySet {
             interp_entry_point = base_address + interp_elf_header.pt2.entry_point() as usize;
             // 获取 program header 的数目
             let ph_count = interp_elf_header.pt2.ph_count();
-            for i in 0..ph_count{
+            for i in 0..ph_count {
                 let ph = interp_elf.program_header(i).unwrap();
-                match ph.get_type().unwrap() {
-                    xmas_elf::program::Type::Load => {
-                        let start_va: VirtAddr = (ph.virtual_addr() as usize+ base_address).into() ;
-                        let end_va: VirtAddr = (ph.virtual_addr() as usize+ ph.mem_size() as usize+ base_address).into();
-                        let mut map_perm = MapPermission::U;
-                        let ph_flags = ph.flags();
-                        if ph_flags.is_read() {
-                            map_perm |= MapPermission::R;
-                        }
-                        if ph_flags.is_write() {
-                            map_perm |= MapPermission::W;
-                        }
-                        if ph_flags.is_execute() {
-                            map_perm |= MapPermission::X;
-                        }
-                        let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
-                        // println!("start_va:0x{:x},end_va:0x{:x}",start_va.0,end_va.0);
-                        // println!("vpnrange:{:?}",map_area.vpn_range);
-                        // println!("offset:0x{:x},file_size:0x{:x}",ph.offset(),ph.file_size());
-                        memory_set.push(
-                            // 将生成的逻辑段加入到程序地址空间
-                            map_area,
-                            Some(&interp_elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
-                        );
-                    }
-                    _ => continue,
+                if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
+                    let start_va: VirtAddr = (ph.virtual_addr() as usize + base_address).into();
+                    let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
+                    let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
+                    memory_set.push(
+                        MapArea::new(start_va, end_va, MapType::Framed, map_perm),
+                        Some(&interp_elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
+                    );
                 }
-
             }
-        }else{
+        } else {
             auxs.push(AuxEntry(AT_BASE, 0));
         }
         // 分配用户栈
@@ -341,7 +316,7 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-        ); 
+        );
         // 分配用户堆
         let mut user_heap_bottom: usize = user_stack_top;
         //放置一个保护页
@@ -357,6 +332,8 @@ impl MemorySet {
             ),
             None,
         );
+        memory_set.debug_show_layout();
+        memory_set.debug_show_data(VirtAddr::from(0x20000a4000));
         if elf_interpreter {
             (memory_set, user_stack_top, user_heap_bottom, interp_entry_point)
         } else {
@@ -446,7 +423,7 @@ impl MemorySet {
         let findpte = self.translate(va.floor());
         if let Some(pte) = findpte {
             println!("VirtAddr 0x{:x} ", va.0);
-            println!("ppn:     0x{:x}XXX", pte.ppn().0);
+            println!("ppn:     0x{:x}---", pte.ppn().0);
             println!("pte_raw: 0b{:b}", pte.bits);
             println!("executable: {}", pte.executable());
             println!("readable:   {}", pte.readable());
@@ -476,21 +453,63 @@ impl MemorySet {
     }
 
     #[allow(unused)]
-    pub fn debug_show_layout(&self){
+    pub fn debug_show_layout(&self) {
         println!("-----------------------MM Layout-----------------------");
         for area in &self.areas {
-            print!("MapArea  : {:010x}--{:010x} len:{:08x} ", area.start_va.0, area.end_va.0, area.end_va.0 - area.start_va.0);
-            if area.map_perm.is_user() {print!("U");}else{print!("-");};
-            if area.map_perm.is_read() {print!("R");}else{print!("-");};
-            if area.map_perm.is_write() {print!("W");}else{print!("-");};
-            if area.map_perm.is_execute() {println!("X");}else{println!("-");};
+            print!(
+                "MapArea  : {:010x}--{:010x} len:{:08x} ",
+                area.start_va.0,
+                area.end_va.0,
+                area.end_va.0 - area.start_va.0
+            );
+            if area.map_perm.is_user() {
+                print!("U");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_read() {
+                print!("R");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_write() {
+                print!("W");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_execute() {
+                println!("X");
+            } else {
+                println!("-");
+            };
         }
         for chunk in &self.mmap_chunks {
-            print!("ChunkArea: {:010x}--{:010x} len:{:08x} ", chunk.mmap_start.0, chunk.mmap_end.0, chunk.mmap_end.0 - chunk.mmap_start.0);
-            if chunk.map_perm.is_user() {print!("U");}else{print!("-");};
-            if chunk.map_perm.is_read() {print!("R");}else{print!("-");};
-            if chunk.map_perm.is_write() {print!("W");}else{print!("-");};
-            if chunk.map_perm.is_execute() {println!("X");}else{println!("-");};
+            print!(
+                "ChunkArea: {:010x}--{:010x} len:{:08x} ",
+                chunk.mmap_start.0,
+                chunk.mmap_end.0,
+                chunk.mmap_end.0 - chunk.mmap_start.0
+            );
+            if chunk.map_perm.is_user() {
+                print!("U");
+            } else {
+                print!("-");
+            };
+            if chunk.map_perm.is_read() {
+                print!("R");
+            } else {
+                print!("-");
+            };
+            if chunk.map_perm.is_write() {
+                print!("W");
+            } else {
+                print!("-");
+            };
+            if chunk.map_perm.is_execute() {
+                println!("X");
+            } else {
+                println!("-");
+            };
         }
         println!("-------------------------------------------------------");
     }
@@ -685,7 +704,7 @@ impl MapArea {
             }
             MapType::Framed => {
                 // 获取一个物理页帧
-                let frame = frame_alloc().unwrap();      
+                let frame = frame_alloc().unwrap();
                 ppn = frame.ppn;
                 // println!("current vpn:0x{:x},get ppn:0x{:x}",vpn.0,ppn.0);
                 // 将vpn和分配到的物理页帧配对

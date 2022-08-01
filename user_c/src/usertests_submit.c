@@ -9,15 +9,16 @@ char prog_name[PROG_NAME_MAX_LENGTH];
 char buf[6000];
 
 // 测试动态链接程序
-// #define DYNAMIC
+#define DYNAMIC
 
 // 测试单一程序
 #define TEST_ONE
 
+// 设置调试程序，prog_name 只有在测试全部程序下使用
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "daemon_failure", 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "strtod_simple", 0};
 #else
-    char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
+    char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "argv", 0};
 #endif
 
 

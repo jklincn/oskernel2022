@@ -214,7 +214,6 @@ impl File for OSInode {
     }
 
     fn read(&self, mut buf: UserBuffer) -> usize {
-
         // 对 /dev/zero 的处理，暂时先加在这里
         if self.name() == "zero" {
             let zero: Vec<u8> = (0..buf.buffers.len()).map(|_| 0).collect();
