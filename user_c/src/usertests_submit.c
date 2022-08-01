@@ -3,10 +3,10 @@
 #include "stdlib.h"
 
 // 测试所有程序
-// #define TEST_ALL
+#define TEST_ALL
 
 #ifndef TEST_ALL
-char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "setvbuf_unget", 0};
+char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "socket", 0};
 #else
 int offset = 0;
 #define PROG_NAME_MAX_LENGTH 40
