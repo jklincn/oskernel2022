@@ -15,7 +15,7 @@ char buf[6000];
 #define TEST_ONE
 
 #ifndef DYNAMIC
-    char *argv[] = {"./runtest.exe", "-w", "entry-static.exe", "daemon_failure", 0};
+char* argv[] = { "./runtest.exe", "-w", "entry-static.exe", "socket", 0 };
 #else
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
