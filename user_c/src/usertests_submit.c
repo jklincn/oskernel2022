@@ -6,7 +6,7 @@
 #define TEST_ALL
 
 #ifndef TEST_ALL
-char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "socket", 0};
+char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "sscanf_long", 0};
 #else
 int offset = 0;
 #define PROG_NAME_MAX_LENGTH 40
@@ -22,13 +22,12 @@ char *static_argv[] = {"./runtest.exe", "-w", "entry-static.exe", prog_name, 0};
 char *dynamic_argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 
 // 静态跳过程序
-#define STATIC_PROG_PASS_LENGTH 19
+#define STATIC_PROG_PASS_LENGTH 18
 char *static_prog_pass[] = {
                      "pthread_cancel_points",
                      "pthread_cancel",
                      "pthread_cond",
                      "pthread_tsd",
-                     "fflush_exit",
                      "pthread_robust_detach",
                      "pthread_cancel_sem_wait",
                      "pthread_cond_smasher",
@@ -47,13 +46,12 @@ char *static_prog_pass[] = {
                      };
 
 // 动态跳过程序
-#define DYNAMIC_PROG_PASS_LENGTH 23
+#define DYNAMIC_PROG_PASS_LENGTH 21
 char *dynamic_prog_pass[] = {
                      "pthread_cancel_points",
                      "pthread_cancel",
                      "pthread_cond",
                      "pthread_tsd",
-                     "fflush_exit",
                      "pthread_robust_detach",
                      "pthread_cond_smasher",
                      "pthread_condattr_setclock",
@@ -64,7 +62,6 @@ char *dynamic_prog_pass[] = {
                      "fscanf",
                      "fwscanf",
                      "sem_init",
-                     "socket",
                      "sscanf_long",
                      "stat",
                      "tls_init",
