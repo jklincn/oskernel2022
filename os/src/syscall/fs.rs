@@ -71,6 +71,9 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
+// 暂时写在这里
+const EMFILE: isize = 24;
+
 pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
@@ -86,6 +89,9 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
         // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags) {
             let fd = inner.alloc_fd();
+            if fd == 999 {
+                return -EMFILE;
+            }
             inner.fd_table[fd] = Some(inode);
             fd as isize
         } else {
@@ -100,6 +106,9 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
         if let Some(file) = &inner.fd_table[dirfd] {
             if let Some(tar_f) = open(file.get_name().as_str(), path.as_str(), oflags) {
                 let fd = inner.alloc_fd();
+                if fd == 999 {
+                    return -EMFILE;
+                }
                 inner.fd_table[fd] = Some(tar_f);
                 fd as isize
             } else {
@@ -161,9 +170,6 @@ pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
 ///     - 如果出现了错误则返回 -1，可能的错误原因是：传入的 fd 并不对应一个合法的已打开文件。
 /// - syscall ID：23
 
-// 暂时写在这里
-const EMFILE: isize = 24;
-
 pub fn sys_dup(fd: usize) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
@@ -183,6 +189,9 @@ pub fn sys_dup(fd: usize) -> isize {
         return -1;
     }
     let new_fd = inner.alloc_fd();
+    if new_fd > FD_LIMIT {
+        return -1;
+    }
     inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd].as_ref().unwrap()));
     new_fd as isize
 }
