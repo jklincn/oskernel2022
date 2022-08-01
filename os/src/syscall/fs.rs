@@ -633,6 +633,16 @@ pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
             _ => {}
         }
     }
+    let cmd = FcntlFlags::from_bits(cmd).unwrap();
+        match cmd {
+            FcntlFlags::F_GETFD => {
+                return 1;
+            }
+            FcntlFlags::F_GETFL => {
+                return 04000;
+            }
+            _ => {}
+        }
     0
 }
 
