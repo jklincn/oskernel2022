@@ -124,6 +124,9 @@ impl TaskControlBlockInner {
         if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
             fd
         } else {
+            if self.fd_table.len() == 128 {
+                return 999;
+            }
             self.fd_table.push(None);
             self.fd_table.len() - 1
         }
