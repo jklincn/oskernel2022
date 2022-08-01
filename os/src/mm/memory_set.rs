@@ -12,6 +12,7 @@ use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
+use crate::console::print;
 use crate::mm::frame_usage;
 use crate::sync::UPSafeCell;
 use crate::task::{AuxEntry, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM, AT_BASE};
@@ -475,6 +476,26 @@ impl MemorySet {
             }
         }
     }
+
+    #[allow(unused)]
+    pub fn debug_show_layout(&self){
+        println!("-----------------------MM Layout-----------------------");
+        for area in &self.areas {
+            print!("MapArea  : {:010x}--{:010x} len:{:08x} ", area.start_va.0, area.end_va.0, area.end_va.0 - area.start_va.0);
+            if area.map_perm.is_user() {print!("U");}else{print!("-");};
+            if area.map_perm.is_read() {print!("R");}else{print!("-");};
+            if area.map_perm.is_write() {print!("W");}else{print!("-");};
+            if area.map_perm.is_execute() {println!("X");}else{println!("-");};
+        }
+        for chunk in &self.mmap_chunks {
+            print!("ChunkArea: {:010x}--{:010x} len:{:08x} ", chunk.mmap_start.0, chunk.mmap_end.0, chunk.mmap_end.0 - chunk.mmap_start.0);
+            if chunk.map_perm.is_user() {print!("U");}else{print!("-");};
+            if chunk.map_perm.is_read() {print!("R");}else{print!("-");};
+            if chunk.map_perm.is_write() {print!("W");}else{print!("-");};
+            if chunk.map_perm.is_execute() {println!("X");}else{println!("-");};
+        }
+        println!("-------------------------------------------------------");
+    }
 }
 
 /// ### 离散逻辑段
@@ -579,6 +600,21 @@ bitflags! {
         const W = 1 << 2;
         const X = 1 << 3;
         const U = 1 << 4;
+    }
+}
+
+impl MapPermission {
+    pub fn is_read(self) -> bool {
+        self.bits & 1 << 1 == 1 << 1
+    }
+    pub fn is_write(self) -> bool {
+        self.bits & 1 << 2 == 1 << 2
+    }
+    pub fn is_execute(self) -> bool {
+        self.bits & 1 << 3 == 1 << 3
+    }
+    pub fn is_user(self) -> bool {
+        self.bits & 1 << 4 == 1 << 4
     }
 }
 
