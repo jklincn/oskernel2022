@@ -624,25 +624,22 @@ pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
     // println!("enter sys_fcntl:fd:{},cmd:{},arg:{:?}", fd, cmd, arg);
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
-    if let Some(file) = &inner.fd_table[fd as usize] {
-        let cmd = FcntlFlags::from_bits(cmd).unwrap();
-        match cmd {
-            FcntlFlags::F_SETFL => {
+
+    let cmd = FcntlFlags::from_bits(cmd).unwrap();
+    match cmd {
+        FcntlFlags::F_SETFL => {
+            if let Some(file) = &inner.fd_table[fd as usize] {
                 file.set_flags(OpenFlags::from_bits(arg.unwrap() as u32).unwrap());
             }
-            _ => {}
         }
+        FcntlFlags::F_GETFD => {
+            return 1;
+        }
+        FcntlFlags::F_GETFL => {
+            return 04000;
+        }
+        _ => {}
     }
-    let cmd = FcntlFlags::from_bits(cmd).unwrap();
-        match cmd {
-            FcntlFlags::F_GETFD => {
-                return 1;
-            }
-            FcntlFlags::F_GETFL => {
-                return 04000;
-            }
-            _ => {}
-        }
     0
 }
 
@@ -654,4 +651,22 @@ pub fn sys_statfs(path: *const u8, buf: *const u8) -> isize {
     let mut userbuf = UserBuffer::new(translated_byte_buffer(token, buf, size_of::<Statfs>()));
     userbuf.write(Statfs::new().as_bytes());
     0
+}
+
+pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    if let Some(file) = &inner.fd_table[fd] {
+        let file = file.clone();
+        // 释放 taskinner 以避免多次借用
+        drop(inner);
+        let old_offset = file.get_offset();
+        file.set_offset(offset);
+        let readsize = file.read(UserBuffer::new(translated_byte_buffer(token, buf, count))) as isize;
+        file.set_offset(old_offset);
+        readsize
+    } else {
+        -1
+    }
 }

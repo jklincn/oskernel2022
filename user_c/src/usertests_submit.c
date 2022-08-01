@@ -6,7 +6,7 @@
 #define TEST_ALL
 
 #ifndef TEST_ALL
-char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "sscanf_long", 0};
+char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "fflush_exit", 0};
 #else
 int offset = 0;
 #define PROG_NAME_MAX_LENGTH 40
