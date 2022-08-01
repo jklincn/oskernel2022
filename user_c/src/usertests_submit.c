@@ -8,7 +8,10 @@
 char prog_name[PROG_NAME_MAX_LENGTH];
 char buf[6000];
 
+// 测试动态链接程序
 // #define DYNAMIC
+
+// 测试单一程序
 #define TEST_ONE
 
 #ifndef DYNAMIC
@@ -17,8 +20,10 @@ char buf[6000];
     char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", prog_name, 0};
 #endif
 
-int offset = 0;
 
+
+#ifndef TEST_ONE
+int offset = 0;
 #define PROG_PASS_LENGTH 13
 char *prog_pass[] = {
                      "pthread_cancel_points",
@@ -35,6 +40,7 @@ char *prog_pass[] = {
                      "pthread_once_deadlock",
                      "pthread_rwlock_ebusy",
                      };
+
 
 void read_test_name()
 {
@@ -70,15 +76,15 @@ int ifpass()
             return 1;
     return 0;
 }
+#endif
 
 int main()
 {
+#ifndef TEST_ONE
+    // run all tests
     int fd = open("./run-static.sh", 0);
     read(fd, buf, 6000);
 
-
-#ifndef TEST_ONE
-    // run all tests
     for (int row = 0; row < PROG_NUM; row++)
     {
         read_test_name();
