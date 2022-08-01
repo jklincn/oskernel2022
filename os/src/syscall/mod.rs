@@ -22,6 +22,7 @@ const SYSCALL_READ:     usize = 63;
 const SYSCALL_WRITE:    usize = 64;
 const SYSCALL_READV:    usize = 65;
 const SYSCALL_WRITEV:   usize = 66;
+const SYSCALL_PREAD64:  usize = 67;
 const SYSCALL_FSTATAT:  usize = 79;
 const SYSCALL_FSTAT:    usize = 80;
 const SYSCALL_UTIMENSAT:usize = 88;
@@ -100,6 +101,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_READV =>     sys_readv(args[0], args[1] as *const usize, args[2]),
         SYSCALL_WRITEV =>   sys_writev(args[0], args[1] as *const usize, args[2]),
         SYSCALL_FSTATAT=>     sys_fstatat(args[0] as isize, args[1] as *const u8,args[2] as *const usize,args[3]),
+
         SYSCALL_FSTAT=>     sys_fstat(args[0] as isize, args[1] as *mut u8),
         SYSCALL_UTIMENSAT=> sys_utimensat(args[0] as isize, args[1] as *const u8,args[2] as *const usize,args[3]),
         SYSCALL_EXIT =>     sys_exit(args[0] as i32),
@@ -131,7 +133,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_CONNECT=>   sys_connect(),
         SYSCALL_GETSOCKNAME=> sys_getsockname(),
         SYSCALL_SENDTO =>   sys_sendto(),
-        SYSCALL_RECVFROM=>  sys_recvfrom(),
+        SYSCALL_RECVFROM=>  sys_recvfrom(args[0] as isize,args[1],args[2],args[3],args[4],args[5]),
         SYSCALL_SETSOCKOPT => sys_setsockopt(),
         SYSCALL_BRK =>      sys_brk(args[0]),
         SYSCALL_MMAP=>      sys_mmap(args[0], args[1], args[2], args[3], args[4] as isize, args[5]),
