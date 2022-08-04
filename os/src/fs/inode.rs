@@ -80,11 +80,11 @@ lazy_static! {
 }
 
 pub fn list_apps() {
-    // 决赛内容:
-    open("/", "tmp", OpenFlags::O_DIRECTROY);
-    open("/", "dev", OpenFlags::O_DIRECTROY);
-    open("/dev", "null", OpenFlags::O_CREATE);
-    open("/dev", "zero", OpenFlags::O_CREATE);
+    // 决赛第一阶段内容:
+    // open("/", "tmp", OpenFlags::O_DIRECTROY);
+    // open("/", "dev", OpenFlags::O_DIRECTROY);
+    // open("/dev", "null", OpenFlags::O_CREATE);
+    // open("/dev", "zero", OpenFlags::O_CREATE);
     println!("/**** All Files  ****");
     for app in ROOT_INODE.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {

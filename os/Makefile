@@ -49,10 +49,10 @@ copy-to-fs:
 	@cd ../simple-fat32 \
 	&& rm -f ./fat32.img \
 	&& sh ./create_img.sh \
-	&& rm -rf fs \
+	&& sudo rm -rf fs \
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
-	&& sudo cp ../test_program/final/sdcard_content/* fs/ \
+	&& sudo cp -r ../test_program/final/stage2/sdcard_content/* fs/ \
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
@@ -66,7 +66,7 @@ build-custom-test:
 	&& sudo rm -rf fs \
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
-	&& sudo cp ../test_program/final/custom-test/disk/* fs/ \
+	&& sudo cp -r ../test_program/final/custom-test/disk/* fs/ \
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
