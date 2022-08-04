@@ -1,8 +1,8 @@
-use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statfs, Timespec, MNT_TABLE, Stdin};
-use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer, heap_usage};
+use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statfs, Stdin, Timespec, MNT_TABLE};
+use crate::mm::{heap_usage, translated_byte_buffer, translated_refmut, translated_str, UserBuffer, translated_ref};
 use crate::task::{current_task, current_user_token, RLIMIT_NOFILE};
 use alloc::sync::Arc;
-use alloc::vec::Vec;
+use alloc::vec::{Vec, self};
 /// # 文件读写模块
 /// `os/src/syscall/fs.rs`
 /// ## 实现功能
@@ -51,6 +51,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 /// - `len` 表示读取字符个数。
 /// - 返回值：读出的字符。
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
+    // println!("enter sys_read: fd:{}, buf:{}, len:{}", fd, buf as usize, len);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -85,6 +86,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
 
     // todo
     _ = mode;
+    // println!("enter sys_openat: dirfd:{}, path:{}, flags:0x{:x}, mode:{}", dirfd, path, flags, mode);
 
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录
@@ -94,8 +96,10 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 return -EMFILE;
             }
             inner.fd_table[fd] = Some(inode);
+            // println!("sys_openat return new fd:{}",fd);
             fd as isize
         } else {
+            // println!("[WARNING] sys_openat return -1");
             -1
         }
     } else {
@@ -111,8 +115,10 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                     return -EMFILE;
                 }
                 inner.fd_table[fd] = Some(tar_f);
+                // println!("sys_openat return new fd:{}", fd);
                 fd as isize
             } else {
+                // println!("[WARNING] sys_openat return -1");
                 -1
             }
         } else {
@@ -442,8 +448,8 @@ pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
 }
 
 // 暂时放在这里
-const TCGETS:    usize = 0x5401;
-const TCSETS:    usize = 0x5402;
+const TCGETS: usize = 0x5401;
+const TCSETS: usize = 0x5402;
 const TIOCGPGRP: usize = 0x540f;
 const TIOCSPGRP: usize = 0x5410;
 const TIOCGWINSZ: usize = 0x5413;
@@ -458,10 +464,10 @@ pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
         return -1;
     }
     match request {
-        TCGETS=> {},
-        TCSETS=> {},
-        TIOCGPGRP=> *translated_refmut(token, argp) = 0 as u8,
-        TIOCSPGRP=> {}
+        TCGETS => {}
+        TCSETS => {}
+        TIOCGPGRP => *translated_refmut(token, argp) = 0 as u8,
+        TIOCSPGRP => {}
         TIOCGWINSZ => *translated_refmut(token, argp) = 0 as u8,
         _ => panic!("sys_ioctl: unsupported request!"),
     }
@@ -639,7 +645,7 @@ pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
     // println!("enter sys_fcntl:fd:{},cmd:{},arg:{:?}", fd, cmd, arg);
 
     let task = current_task().unwrap();
-    
+
     let cmd = FcntlFlags::from_bits(cmd).unwrap();
     match cmd {
         FcntlFlags::F_SETFL => {
@@ -654,7 +660,7 @@ pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
         FcntlFlags::F_GETFL => {
             return 04000;
         }
-        FcntlFlags::F_DUPFD_CLOEXEC =>{
+        FcntlFlags::F_DUPFD_CLOEXEC => {
             let mut inner = task.inner_exclusive_access();
             let start_num = arg.unwrap();
             let mut new_fd = 0;
@@ -662,17 +668,18 @@ pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
             loop {
                 new_fd = inner.alloc_fd();
                 inner.fd_table[new_fd] = Some(Arc::new(Stdin));
-                if new_fd >= start_num{
+                if new_fd >= start_num {
                     break;
-                }
-                else{
+                } else {
                     tmp_fd.push(new_fd);
                 }
             }
             for i in tmp_fd {
                 inner.fd_table[i].take();
             }
-            return new_fd as isize
+            inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd as usize].as_ref().unwrap()));
+            inner.fd_table[new_fd].as_ref().unwrap().set_cloexec();
+            return new_fd as isize;
         }
         _ => {}
     }
@@ -704,5 +711,33 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> is
         readsize
     } else {
         -1
+    }
+}
+
+pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, count: usize) -> isize {
+    println!(
+        "enter sys_sendfile: out_fd:{}, in_fd:{}, offset:{}, count:{}",
+        out_fd, in_fd, offset, count
+    );
+    let task = current_task().unwrap();
+    let token = current_user_token();
+    let inner = task.inner_exclusive_access();
+
+    // panic 处理其实不太合适（一个错误就导致内核崩溃了）
+    let in_file = &inner.fd_table[in_fd].as_ref().expect("in_fd error!");
+    let in_inode = open(inner.get_work_path().as_str(),in_file.get_name().as_str(),OpenFlags::O_RDONLY).unwrap();
+    let out_file = &inner.fd_table[out_fd].as_ref().expect("out_fd error!");
+    let out_inode = open(inner.get_work_path().as_str(),out_file.get_name().as_str(),OpenFlags::O_RDONLY).unwrap();
+
+    if offset as usize != 0 {
+        let offset = translated_refmut(token, offset as *mut usize);
+        let data = in_inode.read_vec(*offset as isize, count);
+        let write_size = out_inode.write_all(&data);
+        *offset += write_size;
+        write_size as isize
+    } else {
+        let data = in_inode.read_vec(-1, count);
+        let wlen =  out_inode.write_all(&data);
+        wlen as isize
     }
 }

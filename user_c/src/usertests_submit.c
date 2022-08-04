@@ -67,6 +67,7 @@ int main()
         waitpid(npid, &child_return, 0);
     }
 
+    printf("[FINISH] initproc return!\n");
     return 0;
 
     // // 运行静态测试程序

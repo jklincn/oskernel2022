@@ -12,6 +12,7 @@ use alloc::string::String;
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
     fn writable(&self) -> bool;
+    fn available(&self) ->bool;
     /// read 指的是从文件中读取数据放到缓冲区中，最多将缓冲区填满，并返回实际读取的字节数
     fn read(&self, buf: UserBuffer) -> usize;
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
@@ -30,6 +31,8 @@ pub trait File: Send + Sync {
     fn set_offset(&self, offset: usize);
 
     fn set_flags(&self,flag: OpenFlags);
+
+    fn set_cloexec(&self);
 }
 
 pub use dirent::Dirent;

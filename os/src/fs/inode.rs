@@ -21,10 +21,12 @@ pub struct OSInodeInner {
     offset: usize, // 偏移量
     inode: Arc<VFile>,
     flags: OpenFlags,
+    available : bool,
 }
 
 impl OSInode {
     pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
+        let available = true;
         Self {
             readable,
             writable,
@@ -32,6 +34,7 @@ impl OSInode {
                 offset: 0,
                 inode,
                 flags: OpenFlags::empty(),
+                available,
             }),
         }
     }
@@ -39,7 +42,7 @@ impl OSInode {
         let mut inner = self.inner.lock();
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
-        v.reserve(1200000);  // 1.144M
+        v.reserve(1200000);// 手动扩大到 1.144M 以充分利用堆空间
         loop {
             let len = inner.inode.read_at(inner.offset, &mut buffer);
             if len == 0 {
@@ -49,6 +52,51 @@ impl OSInode {
             v.extend_from_slice(&buffer[..len]);
         }
         v
+    }
+
+    pub fn read_vec(&self, offset:isize, len:usize)->Vec<u8>{
+        let mut inner = self.inner.lock();
+        let mut len = len;
+        let old_offset = inner.offset;
+        if offset >= 0 {
+            inner.offset = offset as usize;
+        }
+        let mut buffer = [0u8; 512];
+        let mut v: Vec<u8> = Vec::new();
+        loop {
+            let read_size = inner.inode.read_at(inner.offset, &mut buffer);
+            if read_size == 0 {
+                break;
+            }
+            inner.offset += read_size;
+            v.extend_from_slice(&buffer[..read_size.min(len)]);
+            if len > read_size {
+                len -= read_size;
+            } else {
+                break;
+            }
+        }
+        if offset >= 0 {
+            inner.offset = old_offset; 
+        }
+        v
+    }
+
+    pub fn write_all(&self, str_vec:&Vec<u8>)->usize{
+        let mut inner = self.inner.lock();
+        let mut remain = str_vec.len();
+        let mut base = 0;
+        loop {
+            let len = remain.min(512);
+            inner.inode.write_at(inner.offset, &str_vec.as_slice()[base .. base + len]);
+            inner.offset += len;
+            base += len;
+            remain -= len;
+            if remain == 0{
+                break;
+            }
+        }
+        return base
     }
 
     pub fn is_dir(&self) -> bool {
@@ -70,6 +118,8 @@ impl OSInode {
         let inner = self.inner.lock();
         inner.inode.file_size() as usize
     }
+
+
 }
 
 // 这里在实例化的时候进行文件系统的打开
@@ -214,6 +264,11 @@ impl File for OSInode {
         self.writable
     }
 
+    fn available(&self) ->bool{
+        let inner = self.inner.lock();
+        inner.available
+    }
+    
     fn read(&self, mut buf: UserBuffer) -> usize {
         // 对 /dev/zero 的处理，暂时先加在这里
         if self.name() == "zero" {
@@ -321,5 +376,10 @@ impl File for OSInode {
     fn set_flags(&self, flag: OpenFlags) {
         let mut inner = self.inner.lock();
         inner.flags.set(flag, true);
+    }
+
+    fn set_cloexec(&self){
+        let mut inner = self.inner.lock();
+        inner.available = false;
     }
 }

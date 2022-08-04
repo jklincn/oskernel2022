@@ -1,3 +1,5 @@
+use core::panic;
+
 /// # 管道模块
 /// `os/src/fs/pipe.rs`
 /// ```
@@ -157,6 +159,9 @@ impl File for Pipe {
     fn writable(&self) -> bool {
         self.writable
     }
+    fn available(&self) ->bool{
+        true
+    }
     fn read(&self, buf: UserBuffer) -> usize {
         assert!(self.readable());
         let mut buf_iter = buf.into_iter();
@@ -242,5 +247,9 @@ impl File for Pipe {
 
     fn set_flags(&self, flag: OpenFlags) {
         panic!("pipe not implement set_flags");
+    }
+
+    fn set_cloexec(&self){
+        panic!("pipe not implement set_cloexec");
     }
 }

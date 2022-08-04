@@ -12,7 +12,7 @@
 /// ```
 //
 use crate::fs::{open, OpenFlags};
-use crate::mm::{frame_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, heap_usage};
+use crate::mm::{frame_usage, heap_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, new, pid2task, suspend_current_and_run_next, RLimit, SignalFlags,
 };
@@ -92,15 +92,6 @@ pub fn sys_times(buf: *const u8) -> isize {
         .as_bytes(),
     );
     0
-}
-
-/// 获取当前正在运行程序的 PID
-pub fn sys_getpid() -> isize {
-    current_task().unwrap().pid.0 as isize
-}
-
-pub fn sys_getppid() -> isize {
-    current_task().unwrap().tgid as isize
 }
 
 //  long clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsigned long newtls);
@@ -183,14 +174,11 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     println!("exec name:{},argvs:{:?}", path, args_vec);
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-        heap_usage();
         let all_data = app_inode.read_all();
         drop(inner);
         task.exec(all_data.as_slice(), args_vec, envs_vec);
-        // return argc because cx.x[10] will be covered with it later
-        // println!("sys_exec return!");
         drop(all_data);
-        heap_usage();
+        // return argc because cx.x[10] will be covered with it later
         argc as isize
     } else {
         -1
@@ -339,10 +327,6 @@ pub fn sys_brk(brk_addr: usize) -> isize {
     addr_new as isize
 }
 
-pub fn sys_gettid() -> isize {
-    0
-}
-
 pub fn sys_prlimit64(pid: usize, resource: usize, new_limit: *const u8, old_limit: *const u8) -> isize {
     let token = current_user_token();
     // println!("enter sys_prlimit64: pid:{},resource:{},new_limit:{},old_limit:{}",pid,resource,new_limit as usize,old_limit as usize);
@@ -381,6 +365,15 @@ pub fn sys_clock_gettime(clk_id: usize, ts: *mut usize) -> isize {
     0
 }
 
+/// 获取当前正在运行程序的 PID
+pub fn sys_getpid() -> isize {
+    current_task().unwrap().pid.0 as isize
+}
+
+pub fn sys_getppid() -> isize {
+    current_task().unwrap().tgid as isize
+}
+
 pub fn sys_geteuid() -> isize {
     0
 }
@@ -389,16 +382,23 @@ pub fn sys_getegid() -> isize {
     0
 }
 
-pub fn sys_getuid()->isize{
+pub fn sys_gettid() -> isize {
     0
 }
 
-pub fn sys_getpgid()->isize{
+pub fn sys_getuid() -> isize {
     0
 }
 
-pub fn sys_setpgid() ->isize{0}
+pub fn sys_getpgid() -> isize {
+    0
+}
 
-pub fn sys_ppoll()->isize{
+pub fn sys_setpgid() -> isize {
+    0
+}
+
+pub fn sys_ppoll() -> isize {
     1
 }
+

@@ -7,7 +7,7 @@ use super::signal::SigSet;
 /// pub enum TaskStatus
 /// ```
 //
-use super::{aux, TaskContext, RLimit, RESOURCE_KIND_NUMBER, AT_RANDOM};
+use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
@@ -100,8 +100,8 @@ pub struct TaskControlBlockInner {
     pub current_path: String,
 
     // 决赛添加：信号集
-    pub sigset : SigSet,
-    pub resource: [RLimit;RESOURCE_KIND_NUMBER],
+    pub sigset: SigSet,
+    pub resource: [RLimit; RESOURCE_KIND_NUMBER],
 }
 
 impl TaskControlBlockInner {
@@ -146,7 +146,7 @@ impl TaskControlBlock {
     pub fn new(elf_data: &[u8]) -> Self {
         let mut auxs = aux::new();
         // 解析传入的 ELF 格式数据构造应用的地址空间 memory_set 并获得其他信息
-        let (memory_set, user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data,&mut auxs);
+        let (memory_set, user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data, &mut auxs);
         // 从地址空间 memory_set 中查多级页表找到应用地址空间中的 Trap 上下文实际被放在哪个物理页帧
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 为进程分配 PID 以及内核栈，并记录下内核栈在内核地址空间的位置
@@ -182,7 +182,7 @@ impl TaskControlBlock {
                     signals: SignalFlags::empty(),
                     current_path: String::from("/"),
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
-                    sigset:SigSet::new(),
+                    sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
                 })
             },
@@ -204,9 +204,9 @@ impl TaskControlBlock {
     pub fn exec(&self, elf_data: &[u8], args: Vec<String>, envs: Vec<String>) {
         let mut auxs = aux::new();
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data,&mut auxs);
+        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data, &mut auxs);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
-        let mut envs :Vec<String>= Vec::new();
+        let mut envs: Vec<String> = Vec::new();
         envs.push("LD_LIBRARY_PATH=/".to_string());
         // 计算对齐位置
         let mut total_len = 0;
@@ -290,6 +290,13 @@ impl TaskControlBlock {
         inner.heap_pt = user_heap;
         inner.trap_cx_ppn = trap_cx_ppn;
         let trap_cx = inner.get_trap_cx();
+
+        inner
+            .fd_table
+            .iter_mut()
+            .find(|fd| fd.is_some() && fd.as_ref().unwrap().available())
+            .take();
+
         // 修改新的地址空间中的 Trap 上下文，将解析得到的应用入口点、用户栈位置以及一些内核的信息进行初始化
         *trap_cx = TrapContext::app_init_context(
             entry_point,
@@ -351,7 +358,7 @@ impl TaskControlBlock {
                     signals: SignalFlags::empty(),
                     current_path: parent_inner.current_path.clone(),
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
-                    sigset:SigSet::new(),
+                    sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
                 })
             },

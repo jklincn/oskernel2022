@@ -24,6 +24,9 @@ impl File for Stdin {
     fn writable(&self) -> bool {
         false
     }
+    fn available(&self) ->bool{
+        true
+    }
     fn read(&self, mut user_buf: UserBuffer) -> usize {
         assert_eq!(user_buf.len(), 1);
         // busy loop
@@ -43,6 +46,7 @@ impl File for Stdin {
         }
         1
     }
+
     fn write(&self, _user_buf: UserBuffer) -> usize {
         panic!("Cannot write to stdin!");
     }
@@ -78,6 +82,10 @@ impl File for Stdin {
     fn set_flags(&self, flag: OpenFlags) {
         panic!("Stdin not implement set_flags");
     }
+
+    fn set_cloexec(&self){
+        panic!("Stdin not implement set_cloexec");
+    }
 }
 
 impl File for Stdout {
@@ -85,6 +93,9 @@ impl File for Stdout {
         false
     }
     fn writable(&self) -> bool {
+        true
+    }
+    fn available(&self) ->bool{
         true
     }
     fn read(&self, _user_buf: UserBuffer) -> usize {
@@ -126,5 +137,10 @@ impl File for Stdout {
 
     fn set_flags(&self, flag: OpenFlags) {
         panic!("Stdput not implement set_flags");
+    }
+
+    fn set_cloexec(&self){
+        // 涉及刚开始的 open /dev/tty，然后 sys_fcntl:fd:2,cmd:1030,arg:Some(10)
+        // panic!("Stdput not implement set_cloexec");
     }
 }
