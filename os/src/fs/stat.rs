@@ -1,10 +1,10 @@
 pub const S_IFDIR: u32 = 0o0040000;
 pub const S_IFCHR: u32 = 0o0020000;
-pub const S_IFBLK: u32 = 0o0060000;
+// pub const S_IFBLK: u32 = 0o0060000;
 pub const S_IFREG: u32 = 0o0100000;
-pub const S_IFIFO: u32 = 0o0010000;
-pub const S_IFLNK: u32 = 0o0120000;
-pub const S_IFSOCK: u32 = 0o0140000;
+// pub const S_IFIFO: u32 = 0o0010000;
+// pub const S_IFLNK: u32 = 0o0120000;
+// pub const S_IFSOCK: u32 = 0o0140000;
 
 #[derive(Debug)]
 #[repr(C)]

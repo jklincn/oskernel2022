@@ -2,9 +2,7 @@
 #include "unistd.h"
 #include "stdlib.h"
 
-
-
-// char *argv[] = {"./runtest.exe", "-w", "entry-dynamic.exe", "lseek_large", 0};
+char *argv[] = {"busybox", "sh", 0};
 
 // int offset = 0;
 // #define PROG_NAME_MAX_LENGTH 40
@@ -51,17 +49,16 @@
 //     return 0;
 // }
 
-
 int main()
 {
 
-    //test only one program
+    // test only one program
     int npid = fork();
     assert(npid >= 0);
     int child_return;
     if (npid == 0)
     {
-        execve("busybox", NULL, NULL);
+        execve("busybox", argv, NULL);
     }
     else
     {
@@ -99,5 +96,4 @@ int main()
     //         waitpid(npid, &child_return, 0);
     //     }
     // }
-
 }

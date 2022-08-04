@@ -1,7 +1,8 @@
-use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statfs, Timespec, MNT_TABLE};
-use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
+use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statfs, Timespec, MNT_TABLE, Stdin};
+use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer, heap_usage};
 use crate::task::{current_task, current_user_token, RLIMIT_NOFILE};
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 /// # 文件读写模块
 /// `os/src/syscall/fs.rs`
 /// ## 实现功能
@@ -441,8 +442,14 @@ pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
 }
 
 // 暂时放在这里
+const TCGETS:    usize = 0x5401;
+const TCSETS:    usize = 0x5402;
+const TIOCGPGRP: usize = 0x540f;
+const TIOCSPGRP: usize = 0x5410;
 const TIOCGWINSZ: usize = 0x5413;
+
 pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
+    // println!("enter sys_ioctl: fd:{}, request:0x{:x}, argp:{}",fd,request,argp as usize);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -451,6 +458,10 @@ pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
         return -1;
     }
     match request {
+        TCGETS=> {},
+        TCSETS=> {},
+        TIOCGPGRP=> *translated_refmut(token, argp) = 0 as u8,
+        TIOCSPGRP=> {}
         TIOCGWINSZ => *translated_refmut(token, argp) = 0 as u8,
         _ => panic!("sys_ioctl: unsupported request!"),
     }
@@ -618,17 +629,21 @@ bitflags! {
         const F_SETOWN_EX = 15;
         const F_GETOWN_EX = 16;
         const F_GETOWNER_UIDS = 17;
+
+        // 发现 F_UNLCK = 2 , 这个标记分类待研究
+        const F_DUPFD_CLOEXEC = 1030;
     }
 }
 
 pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
     // println!("enter sys_fcntl:fd:{},cmd:{},arg:{:?}", fd, cmd, arg);
-    let task = current_task().unwrap();
-    let inner = task.inner_exclusive_access();
 
+    let task = current_task().unwrap();
+    
     let cmd = FcntlFlags::from_bits(cmd).unwrap();
     match cmd {
         FcntlFlags::F_SETFL => {
+            let inner = task.inner_exclusive_access();
             if let Some(file) = &inner.fd_table[fd as usize] {
                 file.set_flags(OpenFlags::from_bits(arg.unwrap() as u32).unwrap());
             }
@@ -638,6 +653,26 @@ pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
         }
         FcntlFlags::F_GETFL => {
             return 04000;
+        }
+        FcntlFlags::F_DUPFD_CLOEXEC =>{
+            let mut inner = task.inner_exclusive_access();
+            let start_num = arg.unwrap();
+            let mut new_fd = 0;
+            let mut tmp_fd = Vec::new();
+            loop {
+                new_fd = inner.alloc_fd();
+                inner.fd_table[new_fd] = Some(Arc::new(Stdin));
+                if new_fd >= start_num{
+                    break;
+                }
+                else{
+                    tmp_fd.push(new_fd);
+                }
+            }
+            for i in tmp_fd {
+                inner.fd_table[i].take();
+            }
+            return new_fd as isize
         }
         _ => {}
     }

@@ -12,7 +12,7 @@
 /// ```
 //
 use crate::fs::{open, OpenFlags};
-use crate::mm::{frame_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{frame_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, heap_usage};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, new, pid2task, suspend_current_and_run_next, RLimit, SignalFlags,
 };
@@ -183,11 +183,14 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     println!("exec name:{},argvs:{:?}", path, args_vec);
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+        heap_usage();
         let all_data = app_inode.read_all();
         drop(inner);
         task.exec(all_data.as_slice(), args_vec, envs_vec);
         // return argc because cx.x[10] will be covered with it later
         // println!("sys_exec return!");
+        drop(all_data);
+        heap_usage();
         argc as isize
     } else {
         -1
@@ -384,4 +387,18 @@ pub fn sys_geteuid() -> isize {
 
 pub fn sys_getegid() -> isize {
     0
+}
+
+pub fn sys_getuid()->isize{
+    0
+}
+
+pub fn sys_getpgid()->isize{
+    0
+}
+
+pub fn sys_setpgid() ->isize{0}
+
+pub fn sys_ppoll()->isize{
+    1
 }

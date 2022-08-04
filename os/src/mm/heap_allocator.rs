@@ -1,8 +1,9 @@
 // 堆空间大小为 1310720，即 1.25M
 
 use simple_chunk_allocator::{heap, heap_bitmap, GlobalChunkAllocator, PageAligned};
+use crate::config::KERNEL_HEAP_SIZE;
 
-static mut HEAP: PageAligned<[u8; 1310720]> = heap!(chunks=5120, chunksize=256);
+static mut HEAP: PageAligned<[u8; KERNEL_HEAP_SIZE]> = heap!(chunks=5120, chunksize=256);
 static mut HEAP_BITMAP: PageAligned<[u8; 640]> = heap_bitmap!(chunks=5120);
 
 #[global_allocator]
@@ -15,5 +16,7 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
 }
 
 pub fn heap_usage(){
-    println!("heap usage: {}%",ALLOCATOR.usage());
+    let usage = ALLOCATOR.usage();
+    let used = usage / 100.0 * KERNEL_HEAP_SIZE as f32;
+    println!("heap usage: {}% ({}/{} bytes)",usage as usize,used as usize,KERNEL_HEAP_SIZE);
 }

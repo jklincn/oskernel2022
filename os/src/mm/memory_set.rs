@@ -229,7 +229,6 @@ impl MemorySet {
     ///     - Self
     ///     - 用户栈顶地址
     ///     - 程序入口地址
-    /// 待优化：目前是将elf全部读入后再做解析，对内核堆空间要求较高，可改为先读入elf头部
     pub fn from_elf(elf_data: &[u8], auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
         let mut memory_set = Self::new_bare();
         // 将跳板插入到应用地址空间
