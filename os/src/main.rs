@@ -5,6 +5,10 @@
 #![feature(panic_info_message)] // 让panic函数能通过 PanicInfo::message 获取报错信息
 #![feature(alloc_error_handler)] // 用于处理动态内存分配失败的情形
 
+// Simple Chunk Allocator needs
+#![feature(const_mut_refs)]
+#![feature(allocator_api)]
+
 extern crate alloc;
 
 #[macro_use]
@@ -32,8 +36,10 @@ mod trap; // 提供 Trap 管理
 
 use core::arch::asm;
 use core::arch::global_asm;
-use riscv;
-use riscv::register::sstatus::FS;
+use riscv::register::sstatus::{set_fs, FS};
+
+use crate::mm::frame_usage;
+use crate::mm::heap_usage;
 global_asm!(include_str!("entry.asm")); // 代码的第一条语句，执行指定的汇编文件，汇编程序再调用Rust实现的内核
 global_asm!(include_str!("buildin_app.S")); // 将 c_usertests 程序放入内核区内存空间
 
@@ -52,14 +58,18 @@ pub fn rust_main() -> ! {
     clear_bss();
     if id() == 0 {
         println!("[kernel] Hello, world!");
-        unsafe{riscv::register::sstatus::set_fs(FS::Dirty);}
+        unsafe {
+            set_fs(FS::Dirty);
+        }
         mm::init();
         trap::init();
         trap::enable_timer_interrupt();
         timer::set_next_trigger();
         fs::list_apps();
         task::add_initproc();
+        heap_usage();
         println!("[kernel] add initproc!");
+        frame_usage();
         task::run_tasks();
         panic!("Unreachable in rust_main!");
     } else {

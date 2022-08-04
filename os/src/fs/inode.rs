@@ -2,12 +2,12 @@ use super::{
     stat::{S_IFCHR, S_IFDIR, S_IFREG},
     Dirent, File, Kstat, Timespec,
 };
-use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
+use crate::{drivers::BLOCK_DEVICE, mm::{UserBuffer, heap_usage}};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
 use lazy_static::*;
-use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY, END_CLUSTER};
+use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
 
 /// 表示进程中一个被打开的常规文件或目录
@@ -39,6 +39,7 @@ impl OSInode {
         let mut inner = self.inner.lock();
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
+        v.reserve(1200000);  // 1.144M
         loop {
             let len = inner.inode.read_at(inner.offset, &mut buffer);
             if len == 0 {

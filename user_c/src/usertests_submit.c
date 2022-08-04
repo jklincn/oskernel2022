@@ -61,7 +61,7 @@ int main()
     int child_return;
     if (npid == 0)
     {
-        // execve("./runtest.exe", argv, NULL);
+        execve("busybox", NULL, NULL);
     }
     else
     {

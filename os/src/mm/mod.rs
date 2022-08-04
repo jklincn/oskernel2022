@@ -23,10 +23,11 @@ pub use page_table::{
     PageTableEntry, UserBuffer, UserBufferIterator,
 };
 pub use vma::*;
+pub use heap_allocator::heap_usage;
 
 /// 内存管理子系统的初始化
 pub fn init() {
-    heap_allocator::init_heap();
+    // heap_allocator::init_heap();
     frame_allocator::init_frame_allocator();
     // 从这一刻开始 SV39 分页模式就被启用了
     KERNEL_SPACE.exclusive_access().activate();
