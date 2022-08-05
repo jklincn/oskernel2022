@@ -405,3 +405,8 @@ pub fn sys_ppoll() -> isize {
     1
 }
 
+
+pub fn sys_sysinfo()->isize{
+    0
+}
+

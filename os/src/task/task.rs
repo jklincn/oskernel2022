@@ -208,6 +208,7 @@ impl TaskControlBlock {
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         let mut envs: Vec<String> = Vec::new();
         envs.push("LD_LIBRARY_PATH=/".to_string());
+        envs.push("PATH=/".to_string());
         // 计算对齐位置
         let mut total_len = 0;
         for i in 0..envs.len() {

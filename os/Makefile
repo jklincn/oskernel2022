@@ -56,20 +56,6 @@ copy-to-fs:
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
-build-custom-test: 
-	@cd ../test_program/final/custom-test \
-	&& make disk \
-	&& make clean \
-	&& cd ../../../simple-fat32 \
-	&& rm -f ./fat32.img \
-	&& sh ./create_img.sh \
-	&& sudo rm -rf fs \
-	&& sudo mkdir fs \
-	&& sudo mount fat32.img fs \
-	&& sudo cp -r ../test_program/final/custom-test/disk/* fs/ \
-	&& sudo umount fs \
-	&& sudo rmdir fs
-
 run-inner: build
 	@qemu-system-riscv64 \
 		-machine virt \

@@ -118,18 +118,6 @@ impl MemorySet {
         self.areas.push(map_area); // 将生成的数据段压入 areas 使其生命周期由areas控制
     }
 
-    // fn push_with_offset(&mut self, mut map_area: MapArea, offset: usize, data: Option<&[u8]>){
-    //     // println!("Inside push_with_offset!");
-    //     map_area.map(&mut self.page_table);
-    //     // println!("After map_area.map");
-    //     // println!("data: {:?}, offset: {:?}", data, offset);
-    //     if let Some(data) = data {
-    //         map_area.copy_data(&mut self.page_table, data, offset);
-    //     }
-    //     self.areas.push(map_area);
-    //     // println!("After self.areas.push");
-    // }
-
     /// 映射跳板的虚拟页号和物理物理页号
     fn map_trampoline(&mut self) {
         self.page_table.map(
