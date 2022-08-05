@@ -9,7 +9,6 @@ const STRUC_SIGNATURE: u32 = 0x61417272;
 pub const FREE_CLUSTER: u32 = 0x00000000; // 空闲簇
 pub const END_CLUSTER: u32 = 0x0FFFFFFF; // 最后一个簇
 pub const BAD_CLUSTER: u32 = 0x0FFFFFF7;
-const FATENTRY_PER_SEC: u32 = BLOCK_SIZE as u32 / 4;
 
 pub const ATTR_READ_ONLY: u8 = 0x01;
 pub const ATTR_HIDDEN: u8 = 0x02;
@@ -283,6 +282,8 @@ impl ShortDirEntry {
 
     // 决赛要求64位的时间戳，但 fat32 貌似不是这样，这边先跳过，有空再来完善
     pub fn set_time(&mut self, tv_sec: u64, tv_nsec: u64) {
+        _ = tv_sec;
+        _ = tv_nsec;
         self.dir_wrt_time = 12345 as u16;
     }
 

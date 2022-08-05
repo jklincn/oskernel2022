@@ -12,14 +12,14 @@ LINKER_PATH := ./lib/arch/riscv/user.ld
 CC := riscv64-unknown-elf-gcc -ffreestanding -nostdlib -g -mcmodel=medany -I ./include -I ./lib/arch/riscv
 endif
 
-bin:
-	@rm -rf bin
-	@mkdir bin
-
-build: bin
+build:
+	rm -rf bin
+	mkdir bin
 	@$(foreach i_src, $(APPS), $(CC) $(i_src) $(LIB_DIR) $(s_DIR) -T $(LINKER_PATH) -o $(patsubst $(APP_DIR)/%.c,$(TARGET_DIR)/%,$(i_src));)
 
-build_initproc_submit: bin
+build_initproc_submit: 
+	rm -rf bin
+	mkdir bin
 	$(CC) ./src/usertests_submit.c $(LIB_DIR) $(s_DIR) -T $(LINKER_PATH) -o ./bin/usertests
 
 .PHONY: build build_initproc_submit

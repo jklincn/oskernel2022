@@ -760,41 +760,6 @@ impl MapArea {
         }
     }
 
-    /// ### 将切片 `data` 中的数据拷贝到当前逻辑段实际被内核放置在的各物理页帧上
-    /// - 切片 `data` 中的数据大小不超过当前逻辑段的总大小，且切片中的数据会被对齐到逻辑段的开头，然后逐页拷贝到实际的物理页帧
-    /// - 只有 `Framed` 可以被拷贝
-    // 决赛修正：需要对齐
-    // pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8]) {
-    //     assert_eq!(self.map_type, MapType::Framed);
-    //     let mut start: usize = 0;
-    //     let mut current_vpn = self.vpn_range.get_start();
-    //     let mut len = data.len();
-
-    //     // 使对齐
-    //     let first_page_offset = self.start_va.0 % PAGE_SIZE; // 起始页中偏移
-    //     if first_page_offset != 0 {
-    //         let first_page_write_len = (PAGE_SIZE - first_page_offset).min(data.len()); // 起始页中需要写入的长度
-    //         let src = &data[start..first_page_write_len];
-    //         let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()
-    //             [first_page_offset..first_page_offset + first_page_write_len];
-    //         dst.copy_from_slice(src);
-    //         start += first_page_write_len;
-    //         current_vpn.step();
-    //         len -= first_page_write_len;
-    //     }
-    //     // 后续拷贝
-    //     loop {
-    //         // 每次取出 4KiB 大小的数据
-    //         let src = &data[start..len.min(start + PAGE_SIZE)];
-    //         let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[..src.len()];
-    //         dst.copy_from_slice(src);
-    //         start += PAGE_SIZE;
-    //         if start >= len {
-    //             break;
-    //         }
-    //         current_vpn.step();
-    //     }
-    // }
     pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8], offset: usize) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
@@ -817,6 +782,7 @@ impl MapArea {
     }
 }
 
+// 决赛第一阶段：动态链接器文件缓存
 lazy_static! {
     pub static ref LIBC_SO: Vec<u8> = {
         let task = current_task().unwrap();

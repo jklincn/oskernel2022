@@ -7,7 +7,7 @@ mod dirent;
 
 
 use crate::mm::UserBuffer;
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
@@ -33,6 +33,10 @@ pub trait File: Send + Sync {
     fn set_flags(&self,flag: OpenFlags);
 
     fn set_cloexec(&self);
+
+    fn read_kernel_space(&self) -> Vec<u8>;
+
+    fn write_kernel_space(&self,data:Vec<u8>)->usize;
 }
 
 pub use dirent::Dirent;

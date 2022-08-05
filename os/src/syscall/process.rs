@@ -24,7 +24,6 @@ use core::arch::asm;
 use core::mem::size_of;
 // use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 pub use crate::task::{CloneFlags, Utsname, UTSNAME};
-use lazy_static::*;
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -108,6 +107,7 @@ pub fn sys_times(buf: *const u8) -> isize {
 pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _newtls: usize) -> isize {
     let current_task = current_task().unwrap();
     let new_task = current_task.fork(false);
+
     // let tid = new_task.getpid();
     let flags = CloneFlags::from_bits(flags).unwrap();
     // if flags.contains(CloneFlags::CLONE_CHILD_SETTID) && ctid != 0{
@@ -171,7 +171,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     let mut envs_vec: Vec<String> = Vec::new();
     let argc = args_vec.len();
     let task = current_task().unwrap();
-    println!("exec name:{},argvs:{:?}", path, args_vec);
+    println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
@@ -294,11 +294,14 @@ pub fn sys_uname(buf: *const u8) -> isize {
 /// - syscall_id:222
 pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
     let task = current_task().unwrap();
-    // println!("enter mmap:start:{},len:{},prot:{},flags:{},fd:{},off:{}", start, len, prot, flags, fd, off);
+    println!("[DEBUG] enter mmap:start:{},len:{},prot:{},flags:0x{:x},fd:{},off:{}", start, len, prot, flags, fd, off);
     if len == 0 {
         panic!("mmap:len == 0");
     }
     let result_addr = task.mmap(start, len, prot, flags, fd, off);
+    // let inner = task.inner_exclusive_access();
+    // inner.memory_set.debug_show_layout();
+
     return result_addr as isize;
 }
 
@@ -329,7 +332,7 @@ pub fn sys_brk(brk_addr: usize) -> isize {
 
 pub fn sys_prlimit64(pid: usize, resource: usize, new_limit: *const u8, old_limit: *const u8) -> isize {
     let token = current_user_token();
-    // println!("enter sys_prlimit64: pid:{},resource:{},new_limit:{},old_limit:{}",pid,resource,new_limit as usize,old_limit as usize);
+    // println!("[DEBUG] enter sys_prlimit64: pid:{},resource:{},new_limit:{},old_limit:{}",pid,resource,new_limit as usize,old_limit as usize);
     if old_limit as usize != 0 {
         let mut buf = UserBuffer::new(translated_byte_buffer(token, old_limit as *const u8, size_of::<RLimit>()));
         let task = current_task().unwrap();

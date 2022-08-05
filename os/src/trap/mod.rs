@@ -19,7 +19,7 @@ use crate::task::{
     exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,current_task
 };
 use crate::timer::set_next_trigger;
-use crate::mm::{VirtAddr, MemorySet};
+use crate::mm::VirtAddr;
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -78,9 +78,9 @@ pub fn trap_handler() -> ! {
         Trap::Exception(Exception::UserEnvCall) => {
             // 由于应用的 Trap 上下文不在内核地址空间，因此我们调用 current_trap_cx 来获取当前应用的 Trap 上下文的可变引用
             let mut cx = current_trap_cx();
+            println!("syscall_id: {}",cx.x[17]);
             cx.sepc += 4;   // 我们希望trap返回后应用程序从下一条指令开始执行
             // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值放到 a0
-            println!("syscall_id: {}",cx.x[17]);
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
@@ -100,19 +100,16 @@ pub fn trap_handler() -> ! {
             }
             let va: VirtAddr = (stval as usize).into();
             if va > TRAMPOLINE.into() {
-                // println!("va:0x{},TRAMPOLINE:0x{}",va.0,VirtAddr::from(TRAMPOLINE).0);
                 // println!("[kernel] VirtAddr out of range!");
-
                 current_add_signal(SignalFlags::SIGSEGV);
             }
             let task = current_task().unwrap();
             let lazy = task.check_lazy(va, is_load);
 
-            // let inner = task.inner_exclusive_access();
-            // let memmory = &inner.memory_set;
-            // memmory.debug_show_layout();
             if lazy != 0 { 
-                current_add_signal(SignalFlags::SIGSEGV); 
+                current_add_signal(SignalFlags::SIGSEGV);
+                current_task().unwrap().inner_exclusive_access().memory_set.debug_show_layout();
+                panic!("lazy != 0: va:0x{:x}",va.0);
             }
 
             

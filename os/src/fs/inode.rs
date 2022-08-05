@@ -292,6 +292,16 @@ impl File for OSInode {
         total_read_size
     }
 
+    fn read_kernel_space(&self) -> Vec<u8> {
+        let mut inner = self.inner.lock();
+        let mut buffer = [0u8; 512];
+        let mut v: Vec<u8> = Vec::new();
+        let readsize = inner.inode.read_at(inner.offset, &mut buffer);
+        inner.offset += readsize;
+        v.extend_from_slice(&buffer[..readsize]);
+        v
+    }
+
     fn write(&self, buf: UserBuffer) -> usize {
         let mut total_write_size = 0usize;
         let filesize = self.file_size();
@@ -311,6 +321,10 @@ impl File for OSInode {
             }
         }
         total_write_size
+    }
+
+    fn write_kernel_space(&self,data:Vec<u8>)->usize{
+        panic!("OSInode not implement write_kernel_space");
     }
 
     fn get_fstat(&self, kstat: &mut Kstat) {

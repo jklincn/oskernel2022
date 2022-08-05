@@ -1,18 +1,8 @@
 use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statfs, Stdin, Timespec, MNT_TABLE};
-use crate::mm::{heap_usage, translated_byte_buffer, translated_refmut, translated_str, UserBuffer, translated_ref};
+use crate::mm::{heap_usage, translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token, RLIMIT_NOFILE};
-use alloc::sync::Arc;
-use alloc::vec::{Vec, self};
-/// # 文件读写模块
-/// `os/src/syscall/fs.rs`
-/// ## 实现功能
-/// ```
-/// pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize
-/// pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize
-/// pub fn sys_open(path: *const u8, flags: u32) -> isize
-/// pub fn sys_close(fd: usize) -> isize
-/// ```
-//
+use alloc::{sync::Arc, vec::Vec};
+
 use core::mem::size_of;
 
 const AT_FDCWD: isize = -100;
@@ -51,7 +41,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 /// - `len` 表示读取字符个数。
 /// - 返回值：读出的字符。
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
-    // println!("enter sys_read: fd:{}, buf:{}, len:{}", fd, buf as usize, len);
+    // println!("[DEBUG] enter sys_read: fd:{}, buf:{}, len:{}", fd, buf as usize, len);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -86,7 +76,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
 
     // todo
     _ = mode;
-    // println!("enter sys_openat: dirfd:{}, path:{}, flags:0x{:x}, mode:{}", dirfd, path, flags, mode);
+    println!("[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:0x{:x}, mode:{}", dirfd, path, flags, mode);
 
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录
@@ -183,7 +173,6 @@ pub fn sys_dup(fd: usize) -> isize {
 
     // 做资源检查，目前只检查 RLIMIT_NOFILE 这一种
     let rlim_max = inner.resource[RLIMIT_NOFILE].rlim_max;
-    // println!("cur:{},max:{}", rlim_cur, rlim_max);
     if inner.fd_table.len() - 1 == rlim_max - 1 {
         return -EMFILE;
     }
@@ -409,7 +398,7 @@ bitflags! {
 }
 
 pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
-    // println!("enter sys_lseek: fd:{},off_t:{},whence:{}",fd,off_t,whence);
+    // println!("[DEBUG] enter sys_lseek: fd:{},off_t:{},whence:{}",fd,off_t,whence);
 
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -455,7 +444,7 @@ const TIOCSPGRP: usize = 0x5410;
 const TIOCGWINSZ: usize = 0x5413;
 
 pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
-    // println!("enter sys_ioctl: fd:{}, request:0x{:x}, argp:{}",fd,request,argp as usize);
+    println!("enter sys_ioctl: fd:{}, request:0x{:x}, argp:{}",fd,request,argp as usize);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -481,7 +470,7 @@ pub struct Iovec {
 }
 
 pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
-    // println!("enter sys_writev");
+    println!("[DEBUG] enter sys_writev: fd:{}, iovp:0x{:x}, iovcnt:{}",fd,iovp as usize,iovcnt);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -497,6 +486,7 @@ pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
         let iovp_buf = translated_byte_buffer(token, iovp as *const u8, iovcnt * size_of::<Iovec>())
             .pop()
             .unwrap();
+        println!("iovp_buf:{:?}",iovp_buf);
         let file = file.clone();
         let mut addr = iovp_buf.as_ptr() as *const _ as usize;
         let mut total_write_len = 0;
@@ -642,7 +632,7 @@ bitflags! {
 }
 
 pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
-    // println!("enter sys_fcntl:fd:{},cmd:{},arg:{:?}", fd, cmd, arg);
+    // println!("[DEBUG] enter sys_fcntl:fd:{},cmd:{},arg:{:?}", fd, cmd, arg);
 
     let task = current_task().unwrap();
 
@@ -702,7 +692,6 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> is
     let inner = task.inner_exclusive_access();
     if let Some(file) = &inner.fd_table[fd] {
         let file = file.clone();
-        // 释放 taskinner 以避免多次借用
         drop(inner);
         let old_offset = file.get_offset();
         file.set_offset(offset);
@@ -715,29 +704,30 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> is
 }
 
 pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, count: usize) -> isize {
-    println!(
-        "enter sys_sendfile: out_fd:{}, in_fd:{}, offset:{}, count:{}",
-        out_fd, in_fd, offset, count
-    );
+    // println!(
+    //     "[DEBUG] enter sys_sendfile: out_fd:{}, in_fd:{}, offset:{}, count:{}",
+    //     out_fd, in_fd, offset, count
+    // );
+
     let task = current_task().unwrap();
-    let token = current_user_token();
     let inner = task.inner_exclusive_access();
-
-    // panic 处理其实不太合适（一个错误就导致内核崩溃了）
-    let in_file = &inner.fd_table[in_fd].as_ref().expect("in_fd error!");
-    let in_inode = open(inner.get_work_path().as_str(),in_file.get_name().as_str(),OpenFlags::O_RDONLY).unwrap();
-    let out_file = &inner.fd_table[out_fd].as_ref().expect("out_fd error!");
-    let out_inode = open(inner.get_work_path().as_str(),out_file.get_name().as_str(),OpenFlags::O_RDONLY).unwrap();
-
+    let mut total_write_size = 0usize;
     if offset as usize != 0 {
-        let offset = translated_refmut(token, offset as *mut usize);
-        let data = in_inode.read_vec(*offset as isize, count);
-        let write_size = out_inode.write_all(&data);
-        *offset += write_size;
-        write_size as isize
+        unimplemented!();
     } else {
-        let data = in_inode.read_vec(-1, count);
-        let wlen =  out_inode.write_all(&data);
-        wlen as isize
+        let in_file = &inner.fd_table[in_fd].as_ref().unwrap();
+        let out_file = &inner.fd_table[out_fd].as_ref().unwrap();
+        let mut data_buffer;
+        loop {
+            data_buffer = in_file.read_kernel_space();
+            let len = data_buffer.len();
+            if len == 0 {
+                break;
+            } else {
+                out_file.write_kernel_space(data_buffer);
+                total_write_size += len;
+            }
+        }
+        total_write_size as isize
     }
 }

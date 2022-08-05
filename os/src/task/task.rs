@@ -357,7 +357,7 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     signals: SignalFlags::empty(),
                     current_path: parent_inner.current_path.clone(),
-                    mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
+                    mmap_area: parent_inner.mmap_area.clone(),
                     sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
                 })
@@ -393,9 +393,11 @@ impl TaskControlBlock {
             //println!("lazy mmap");
             self.lazy_mmap(va, is_load)
         } else {
-            println!("va: 0x{:x}", va.0);
-            println!("mmap_start: 0x{:x}", mmap_start.0);
-            println!("mmap_end: 0x{:x}", mmap_end.0);
+            println!("[DEBUG] va: 0x{:x}", va.0);
+            println!("[DEBUG] mmap_start: 0x{:x}", mmap_start.0);
+            println!("[DEBUG] mmap_end: 0x{:x}", mmap_end.0);
+            println!("[DEBUG] current vma:");
+            self.inner_exclusive_access().memory_set.debug_show_layout();
             -2
         }
 
@@ -495,6 +497,8 @@ impl TaskControlBlock {
             // 创建mmap后直接加载一页，不使用lazy mmap
             // inner.memory_set.lazy_mmap(va_top);
             inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
+            // println!("[DEBUG] mmap: va:{}, len:{}",va_top.0,len);
+            inner.memory_set.debug_show_layout();
             // println!("ppn: 0x{:x}", inner.memory_set.translate(va_top.into()).unwrap().ppn().0);
             // inner.memory_set.debug_show_data(va_top);
             //-------------------------------------

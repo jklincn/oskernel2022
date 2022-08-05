@@ -36,6 +36,7 @@ bitflags! {
 /// - `mmap_start` : 地址空间中mmap区块起始虚地址
 /// - `mmap_top` : 地址空间中mmap区块当结束虚地址
 /// - `mmap_set` : mmap块 向量
+#[derive(Clone,Debug)]
 pub struct MmapArea {
     pub mmap_start: VirtAddr,
     pub mmap_top: VirtAddr,
@@ -93,6 +94,8 @@ impl MmapArea {
             panic!{"No matched Mmap Space!"}
         }
     }
+
+    // pub fn copy_from_exist(src:&Self)->Self{}
 }
 
 /// ### mmap 块
@@ -113,6 +116,7 @@ impl MmapArea {
 ///     pub fn new()
 ///     pub fn lazy_map_page()
 ///     ```
+#[derive(Clone, Copy,Debug)]
 pub struct MmapSpace {
     // pub addr: VirtAddr,
     pub oaddr: VirtAddr,

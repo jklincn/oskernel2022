@@ -1,5 +1,3 @@
-use core::panic;
-
 /// # 管道模块
 /// `os/src/fs/pipe.rs`
 /// ```
@@ -16,6 +14,7 @@ use crate::sync::UPSafeCell;
 use alloc::{
     string::String,
     sync::{Arc, Weak},
+    vec::Vec,
 };
 
 pub use super::{list_apps, open, OSInode, OpenFlags};
@@ -159,7 +158,7 @@ impl File for Pipe {
     fn writable(&self) -> bool {
         self.writable
     }
-    fn available(&self) ->bool{
+    fn available(&self) -> bool {
         true
     }
     fn read(&self, buf: UserBuffer) -> usize {
@@ -249,7 +248,13 @@ impl File for Pipe {
         panic!("pipe not implement set_flags");
     }
 
-    fn set_cloexec(&self){
+    fn set_cloexec(&self) {
         panic!("pipe not implement set_cloexec");
+    }
+    fn read_kernel_space(&self) -> Vec<u8> {
+        panic!("pipe not implement read_kernel_space");
+    }
+    fn write_kernel_space(&self, data: Vec<u8>) -> usize {
+        panic!("pipe not implement write_kernel_space");
     }
 }

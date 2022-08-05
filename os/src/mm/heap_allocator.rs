@@ -18,5 +18,5 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
 pub fn heap_usage(){
     let usage = ALLOCATOR.usage();
     let used = usage / 100.0 * KERNEL_HEAP_SIZE as f32;
-    println!("heap usage: {}% ({}/{} bytes)",usage as usize,used as usize,KERNEL_HEAP_SIZE);
+    println!("[kernel] heap usage: {}% ({}/{} bytes)",usage as usize,used as usize,KERNEL_HEAP_SIZE);
 }

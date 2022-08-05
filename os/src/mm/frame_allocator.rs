@@ -175,5 +175,5 @@ pub fn frame_dealloc(ppn: PhysPageNum) {
 pub fn frame_usage(){
     let (current,recycled,end,base_num) = FRAME_ALLOCATOR.exclusive_access().usage();
     let usage = (current - base_num - recycled) * 100 / (end - base_num) ; 
-    println!("page usage: {}% ({}/{} pages)",usage,current-base_num-recycled,end - base_num);
+    println!("[kernel] page usage: {}% ({}/{} pages)",usage,current-base_num-recycled,end - base_num);
 }

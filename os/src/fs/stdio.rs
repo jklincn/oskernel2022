@@ -9,7 +9,7 @@ use super::{Dirent, File, Kstat, Timespec};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 
 pub use super::{list_apps, open, OSInode, OpenFlags};
 
@@ -86,6 +86,13 @@ impl File for Stdin {
     fn set_cloexec(&self){
         panic!("Stdin not implement set_cloexec");
     }
+
+    fn read_kernel_space(&self) -> Vec<u8> {
+        panic!("Stdin not implement read_kernel_space");
+    }
+    fn write_kernel_space(&self, data: Vec<u8>) -> usize {
+        panic!("Stdin not implement write_kernel_space");
+    }
 }
 
 impl File for Stdout {
@@ -102,6 +109,7 @@ impl File for Stdout {
         panic!("Cannot read from stdout!");
     }
     fn write(&self, user_buf: UserBuffer) -> usize {
+        println!("userbuffer:{:?}",user_buf);
         for buffer in user_buf.buffers.iter() {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
@@ -128,19 +136,27 @@ impl File for Stdout {
     }
 
     fn get_offset(&self) -> usize {
-        panic!("Stdput not implement get_offset");
+        panic!("Stdout not implement get_offset");
     }
 
     fn set_offset(&self, offset: usize) {
-        panic!("Stdput not implement set_offset");
+        panic!("Stdout not implement set_offset");
     }
 
     fn set_flags(&self, flag: OpenFlags) {
-        panic!("Stdput not implement set_flags");
+        panic!("Stdout not implement set_flags");
     }
 
     fn set_cloexec(&self){
         // 涉及刚开始的 open /dev/tty，然后 sys_fcntl:fd:2,cmd:1030,arg:Some(10)
         // panic!("Stdput not implement set_cloexec");
+    }
+    fn read_kernel_space(&self) -> Vec<u8> {
+        panic!("Stdout not implement read_kernel_space");
+    }
+    fn write_kernel_space(&self, data: Vec<u8>) -> usize {
+        let buffer = data.as_slice();
+        print!("{}", core::str::from_utf8(buffer).unwrap());
+        data.len()
     }
 }
