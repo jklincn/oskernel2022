@@ -72,12 +72,11 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     let mut inner = task.inner_exclusive_access();
 
     let path = translated_str(token, path);
-    let oflags = OpenFlags::from_bits(flags).unwrap();
-
+    
     // todo
     _ = mode;
-    println!("[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:0x{:x}, mode:{}", dirfd, path, flags, mode);
-
+    let oflags = OpenFlags::from_bits(flags).expect("unsupported open flag!");
+    println!("[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:{:?}, mode:{:o}", dirfd, path, oflags, mode);
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags) {
@@ -86,10 +85,10 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 return -EMFILE;
             }
             inner.fd_table[fd] = Some(inode);
-            // println!("sys_openat return new fd:{}",fd);
+            println!("sys_openat return new fd:{}",fd);
             fd as isize
         } else {
-            // println!("[WARNING] sys_openat return -1");
+            println!("[WARNING] sys_openat return -1");
             -1
         }
     } else {
@@ -108,11 +107,12 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 // println!("sys_openat return new fd:{}", fd);
                 fd as isize
             } else {
-                // println!("[WARNING] sys_openat return -1");
+                println!("[WARNING] sys_openat return -1");
                 -1
             }
         } else {
             // dirfd 对应条目为 None
+            println!("[WARNING] sys_openat return -1");
             -1
         }
     }
@@ -238,7 +238,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
     _ = mode;
 
     if dirfd == AT_FDCWD {
-        if let Some(_) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
+        if let Some(_) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE) {
             0
         } else {
             -1
@@ -249,7 +249,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-            if let Some(_) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
+            if let Some(_) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE) {
                 0
             } else {
                 -1
@@ -510,13 +510,15 @@ pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, fla
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
+    let path = translated_str(token, pathname);
 
+    println!("[DEBUG] enter sys_fstatat: dirfd:{}, pathname:{}, satabuf:0x{:x}, flags:0x{:x}",dirfd,path,satabuf as usize,flags);
     // todo
     _ = flags;
     let buf_vec = translated_byte_buffer(token, satabuf as *const u8, size_of::<Kstat>());
     let mut userbuf = UserBuffer::new(buf_vec);
     let mut kstat = Kstat::new();
-    let path = translated_str(token, pathname);
+    
 
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录

@@ -132,7 +132,7 @@ lazy_static! {
 
 pub fn list_apps() {
     // 决赛第一阶段内容:
-    // open("/", "tmp", OpenFlags::O_DIRECTROY);
+    open("/", "proc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     // open("/", "dev", OpenFlags::O_DIRECTROY);
     // open("/dev", "null", OpenFlags::O_CREATE);
     // open("/dev", "zero", OpenFlags::O_CREATE);
@@ -159,18 +159,18 @@ pub fn list_apps() {
 // 定义一份打开文件的标志
 bitflags! {
     pub struct OpenFlags: u32 {
-        const O_RDONLY = 0;
-        const O_WRONLY = 1 << 0;
-        const O_RDWR = 1 << 1;
-        const O_CREATE = 1 << 6;
-        const O_TRUNC = 1 << 9;
-        const O_DIRECTROY = 1 << 16;
-        // 决赛添加
-        const O_EXCL = 1 << 7;
+        const O_RDONLY    = 0;
+        const O_WRONLY    = 1 << 0;
+        const O_RDWR      = 1 << 1;
+        const O_CREATE    = 1 << 6;
+        const O_EXCL      = 1 << 7;
+        const O_TRUNC     = 1 << 9;
+        const O_APPEND    = 1 << 10;
+        const O_NONBLOCK  = 1 << 11;
         const O_LARGEFILE = 1 << 15;
-        const O_APPEND = 1 << 10;
-        const O_NOFOLLOW = 1 << 17;
-        const O_CLOEXEC = 1 << 19;
+        const O_DIRECTROY = 1 << 16;
+        const O_NOFOLLOW  = 1 << 17;
+        const O_CLOEXEC   = 1 << 19;
     }
 }
 
@@ -187,6 +187,7 @@ impl OpenFlags {
 }
 
 pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+    println!("[DEBUG] enter open: work_path:{}, path:{}, flags:{:?}",work_path,path,flags);
     let cur_inode = {
         if work_path == "/" {
             ROOT_INODE.clone()
@@ -198,21 +199,21 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
     let mut pathv: Vec<&str> = path.split('/').collect();
     let (readable, writable) = flags.read_write();
 
-    if flags.contains(OpenFlags::O_CREATE) || flags.contains(OpenFlags::O_DIRECTROY) {
+    if flags.contains(OpenFlags::O_CREATE){
+        println!("[DEBUG] flags contain O_CREATE");
         if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
             // 如果文件已存在则清空
             inode.clear();
             Some(Arc::new(OSInode::new(readable, writable, inode)))
         } else {
             // 设置创建类型
-            let mut create_type = 0;
-            if flags.contains(OpenFlags::O_CREATE) {
-                create_type = ATTR_ARCHIVE;
-            } else if flags.contains(OpenFlags::O_DIRECTROY) {
+            let mut create_type = ATTR_ARCHIVE;
+            if flags.contains(OpenFlags::O_DIRECTROY) {
                 create_type = ATTR_DIRECTORY;
             }
             let name = pathv.pop().unwrap();
             if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+                println!("[DEBUG] create file: {}, type:0x{:x}",name,create_type);
                 temp_inode
                     .create(name, create_type)
                     .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))

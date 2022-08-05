@@ -86,7 +86,7 @@ impl File for Stdin {
     fn set_cloexec(&self){
         panic!("Stdin not implement set_cloexec");
     }
-
+    
     fn read_kernel_space(&self) -> Vec<u8> {
         panic!("Stdin not implement read_kernel_space");
     }
