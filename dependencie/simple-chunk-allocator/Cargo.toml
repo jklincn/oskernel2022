@@ -1,0 +1,43 @@
+[package]
+name = "simple-chunk-allocator"
+description = """
+A simple `no_std` allocator written in Rust that manages memory in fixed-size chunks/blocks. Useful for basic `no_std`
+binaries where you want to manage a heap of a few megabytes without complex features such as paging/page table
+management. Instead, this allocator gets a fixed/static memory region and allocates memory from there. This memory
+region can be contained inside the executable file that uses this allocator.
+"""
+version = "0.1.5"
+edition = "2021"
+authors = [
+    "Philipp Schuster <phip1611@gmail.com>"
+]
+keywords = ["allocator", "memory"]
+categories = ["memory-management", "no-std"]
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/phip1611/simple-chunk-allocator"
+repository = "https://github.com/phip1611/simple-chunk-allocator"
+documentation = "https://docs.rs/simple-chunk-allocator"
+exclude = [
+    ".github"
+]
+
+# This affects at least the example build with this crate. I don't know if this affects the build of this
+# crate when other crates use it as dependency. I don't think so.
+[profile.release]
+# https://doc.rust-lang.org/cargo/reference/profiles.html
+# Changes for maximum performance: only differences to default settings
+codegen-units = 1
+lto = true
+
+[dependencies]
+libm = "0.2"
+log = "0.4"
+spin = "0.9"
+
+[dev-dependencies]
+simple_logger = "2.1"
+rand = "0.8"
+x86 = "0.51"
+# for benchmarking
+linked_list_allocator = { "version" = "0.9", "features" = ["use_spin_nightly", "const_mut_refs", "alloc_ref"] }
