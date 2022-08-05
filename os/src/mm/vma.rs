@@ -3,6 +3,7 @@ use crate::config::PAGE_SIZE;
 use crate::fs::File;
 use alloc::vec::Vec;
 use alloc::sync::Arc;
+// use core::fmt::{self, Debug, Formatter};
 
 bitflags! {
     pub struct MmapProts: usize {
@@ -95,6 +96,25 @@ impl MmapArea {
         }
     }
 
+    pub fn mmap_type_of(&self, addr: usize) -> core::option::Option<MmapFlags> {
+        for space in self.mmap_set.iter(){
+            if space.oaddr.0 <= addr && addr <= space.oaddr.0 + space.length {
+                return MmapFlags::from_bits(space.flags);
+            }
+        }
+        return None;
+    }
+
+    #[allow(unused)]
+    pub fn debug_show(&self) {
+        println!("------------------MmapArea Layout-------------------");
+        println!("MmapArea: mmap_start: 0x{:x}  mmap_top: 0x{:x}", self.mmap_start.0, self.mmap_top.0);
+        for mmapspace in &self.mmap_set {
+            mmapspace.debug_show();
+        }
+        println!("----------------------------------------------------");
+    }
+
     // pub fn copy_from_exist(src:&Self)->Self{}
 }
 
@@ -143,19 +163,22 @@ impl MmapSpace{
 
     pub fn lazy_map_page(&mut self, page_start: VirtAddr, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) {
         let offset: usize = self.offset - self.oaddr.0 + page_start.0;
-        // println!("[Kernel mmap] map file 0x{:X} = 0x{:X} - 0x{:X} + 0x{:X}", offset, self.offset, self.oaddr.0, page_start.0);
+        println!("[Kernel mmap] map_file 0x{:X} = 0x{:X} - 0x{:X} + 0x{:X}", offset, self.offset, self.oaddr.0, page_start.0);
         self.map_file(page_start, PAGE_SIZE, offset, fd_table, token);
     }
 
     pub fn map_file(&mut self, va_start: VirtAddr, len: usize, offset: usize, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) -> isize {
         let flags = MmapFlags::from_bits(self.flags).unwrap();
-        // println!("[Kernel mmap] map_file: va_strat:0x{:X} flags:{:?}",va_start.0, flags);
+        println!("[Kernel mmap] map_file: va_strat:0x{:X} flags:{:?}",va_start.0, flags);
         if flags.contains(MmapFlags::MAP_ANONYMOUS)
             && self.fd == -1 
             && offset == 0{
             println!("[map_anonymous_file]");
             return 1;
         }
+
+        println!("[Kernel mmap] fd_table.length() {}", fd_table.len());
+        println!("[Kernel mmap] fd {}", self.fd);
         
         if self.fd as usize >= fd_table.len() { return -1; }
 
@@ -165,9 +188,13 @@ impl MmapSpace{
             if !f.readable() { return -1; }
             // println!{"The va_start is 0x{:X}, offset of file is {}", va_start.0, offset};
             let _read_len = f.read(UserBuffer::new(translated_byte_buffer(token, va_start.0 as *const u8, len)));
-            // println!{"[kernel mmap] read {} bytes", _read_len};
+            println!{"[kernel map_file] read {} bytes", _read_len};
             // println!("[kernel] {:?}",va_start);
         } else { return -1 };
         return 1;
+    }
+
+    pub fn debug_show(&self) {
+        println!("MmapSpace: {:x} ", self.oaddr.0);
     }
 }

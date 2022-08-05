@@ -7,12 +7,12 @@
 /// pub struct MapArea
 /// ```
 //
-use super::{frame_alloc, FrameTracker};
+use super::{frame_alloc, FrameTracker, MmapArea};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
-use crate::mm::frame_usage;
+use crate::mm::{frame_usage, MmapFlags, heap_usage};
 use crate::sync::UPSafeCell;
 use crate::task::{current_task, AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
 use alloc::collections::BTreeMap;
@@ -362,7 +362,7 @@ impl MemorySet {
     }
 
     /// 复制一个完全相同的地址空间
-    pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
+    pub fn from_existed_user(user_space: &MemorySet, mmap_area: &MmapArea) -> MemorySet {
         let mut memory_set = Self::new_bare();
         // 映射跳板
         memory_set.map_trampoline();
@@ -376,6 +376,21 @@ impl MemorySet {
                 let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
                 dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
             }
+        }
+        for chunk in user_space.mmap_chunks.iter() {
+            // memory_set.insert_mmap_area(chunk.mmap_start, chunk.mmap_end, chunk.map_perm);
+            let mut new_chunk = ChunkArea::from_another(chunk);
+            println!("[kernel fork] push mmap_chunk start_va:{:x} end_va:{:x}",chunk.mmap_start.0, chunk.mmap_end.0);
+            if mmap_area.mmap_type_of(chunk.mmap_start.0).unwrap().contains(MmapFlags::MAP_ANONYMOUS) {
+                println!("[Kernel mmap] copy MAP_ANONYMOUS data.");
+                for vpn in chunk.vpn_table.iter() {
+                    new_chunk.map_one(&mut memory_set.page_table, (*vpn).clone());
+                    let src_ppn = user_space.translate(*vpn).unwrap().ppn();
+                    let dst_ppn = memory_set.translate(*vpn).unwrap().ppn();
+                    dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
+                }
+            }
+            memory_set.mmap_chunks.push(new_chunk);
         }
         memory_set
     }

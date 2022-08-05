@@ -3,8 +3,8 @@
 use simple_chunk_allocator::{heap, heap_bitmap, GlobalChunkAllocator, PageAligned};
 use crate::config::KERNEL_HEAP_SIZE;
 
-static mut HEAP: PageAligned<[u8; KERNEL_HEAP_SIZE]> = heap!(chunks=5120, chunksize=256);
-static mut HEAP_BITMAP: PageAligned<[u8; 640]> = heap_bitmap!(chunks=5120);
+static mut HEAP: PageAligned<[u8; KERNEL_HEAP_SIZE]> = heap!(chunks=5632, chunksize=256);
+static mut HEAP_BITMAP: PageAligned<[u8; 704]> = heap_bitmap!(chunks=5632);
 
 #[global_allocator]
 pub static ALLOCATOR: GlobalChunkAllocator =

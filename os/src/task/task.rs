@@ -10,8 +10,9 @@ use super::signal::SigSet;
 use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
+use crate::console::print;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, MmapFlags, heap_usage};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::{String, ToString};
@@ -313,8 +314,11 @@ impl TaskControlBlock {
     /// 用来实现 fork 系统调用，即当前进程 fork 出来一个与之几乎相同的子进程
     pub fn fork(self: &Arc<TaskControlBlock>, is_create_thread: bool) -> Arc<TaskControlBlock> {
         let mut parent_inner = self.inner_exclusive_access();
+        // copy mmap_area
+        let mmap_area = parent_inner.mmap_area.clone();
+        // mmap_area.debug_show();
         // 拷贝用户地址空间
-        let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
+        let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set, &parent_inner.mmap_area);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 分配一个 PID
         let pid_handle = pid_alloc();
@@ -338,6 +342,7 @@ impl TaskControlBlock {
             }
         }
 
+
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             tgid,
@@ -357,7 +362,7 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     signals: SignalFlags::empty(),
                     current_path: parent_inner.current_path.clone(),
-                    mmap_area: parent_inner.mmap_area.clone(),
+                    mmap_area,
                     sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
                 })
@@ -381,18 +386,16 @@ impl TaskControlBlock {
     ///     - `-1`：加载缺页失败
     pub fn check_lazy(&self, va: VirtAddr, is_load: bool) -> isize {
         let inner = self.inner_exclusive_access();
-        //let heap_base = inner.heap_start;
-        //let heap_pt = inner.heap_pt;
-        //let stack_top = inner.base_size;
-        //let stack_bottom = stack_top - USER_STACK_SIZE;
         let mmap_start = inner.mmap_area.mmap_start;
         let mmap_end = inner.mmap_area.mmap_top;
         drop(inner);
 
+        // print!("[kernel mmap] Check_lazy...");
         if va >= mmap_start && va < mmap_end {
-            //println!("lazy mmap");
+            // println!("va:0x{:x} ok", va.0);
             self.lazy_mmap(va, is_load)
         } else {
+            // println!("va:0x{:x} err", va.0);
             println!("[DEBUG] va: 0x{:x}", va.0);
             println!("[DEBUG] mmap_start: 0x{:x}", mmap_start.0);
             println!("[DEBUG] mmap_end: 0x{:x}", mmap_end.0);
@@ -400,26 +403,6 @@ impl TaskControlBlock {
             self.inner_exclusive_access().memory_set.debug_show_layout();
             -2
         }
-
-        // else if va.0 >= heap_base && va.0 <= heap_pt {
-        //     inner.lazy_alloc_heap(vpn);
-        //     return 0;
-        // } else if va.0 >= stack_bottom && va.0 <= stack_top {
-        //     //println!{"lazy_stack_page: {:?}", va}
-        //     inner.lazy_alloc_stack(vpn);
-        //     0
-        // } else {
-        //     // get the PageTableEntry that faults
-        //     let pte = inner.enquire_vpn(vpn);
-        //     // if the virtPage is a CoW
-        //     if pte.is_some() && pte.unwrap().is_cow() {
-        //         let former_ppn = pte.unwrap().ppn();
-        //         inner.cow_alloc(vpn, former_ppn);
-        //         0
-        //     } else {
-        //         -1
-        //     }
-        // }
     }
 
     /// ### 用时加载mmap缺页
@@ -496,9 +479,10 @@ impl TaskControlBlock {
 
             // 创建mmap后直接加载一页，不使用lazy mmap
             // inner.memory_set.lazy_mmap(va_top);
+
             inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
             // println!("[DEBUG] mmap: va:{}, len:{}",va_top.0,len);
-            inner.memory_set.debug_show_layout();
+            // inner.memory_set.debug_show_layout();
             // println!("ppn: 0x{:x}", inner.memory_set.translate(va_top.into()).unwrap().ppn().0);
             // inner.memory_set.debug_show_data(va_top);
             //-------------------------------------

@@ -444,7 +444,7 @@ const TIOCSPGRP: usize = 0x5410;
 const TIOCGWINSZ: usize = 0x5413;
 
 pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
-    println!("enter sys_ioctl: fd:{}, request:0x{:x}, argp:{}",fd,request,argp as usize);
+    // println!("enter sys_ioctl: fd:{}, request:0x{:x}, argp:{}",fd,request,argp as usize);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -470,7 +470,7 @@ pub struct Iovec {
 }
 
 pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
-    println!("[DEBUG] enter sys_writev: fd:{}, iovp:0x{:x}, iovcnt:{}",fd,iovp as usize,iovcnt);
+    // println!("[DEBUG] enter sys_writev: fd:{}, iovp:0x{:x}, iovcnt:{}",fd,iovp as usize,iovcnt);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -486,7 +486,7 @@ pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
         let iovp_buf = translated_byte_buffer(token, iovp as *const u8, iovcnt * size_of::<Iovec>())
             .pop()
             .unwrap();
-        println!("iovp_buf:{:?}",iovp_buf);
+        // println!("iovp_buf:{:?}",iovp_buf);
         let file = file.clone();
         let mut addr = iovp_buf.as_ptr() as *const _ as usize;
         let mut total_write_len = 0;

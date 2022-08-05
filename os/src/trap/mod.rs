@@ -19,7 +19,7 @@ use crate::task::{
     exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,current_task
 };
 use crate::timer::set_next_trigger;
-use crate::mm::VirtAddr;
+use crate::mm::{VirtAddr, heap_usage};
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -78,7 +78,7 @@ pub fn trap_handler() -> ! {
         Trap::Exception(Exception::UserEnvCall) => {
             // 由于应用的 Trap 上下文不在内核地址空间，因此我们调用 current_trap_cx 来获取当前应用的 Trap 上下文的可变引用
             let mut cx = current_trap_cx();
-            println!("syscall_id: {}",cx.x[17]);
+            // println!("syscall_id: {}",cx.x[17]);
             cx.sepc += 4;   // 我们希望trap返回后应用程序从下一条指令开始执行
             // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值放到 a0
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);
@@ -92,6 +92,7 @@ pub fn trap_handler() -> ! {
         | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
+            println!("[Kernel trap] Mem Fault");
             let is_load: bool;
             if scause.cause() == Trap::Exception(Exception::LoadFault) || scause.cause() == Trap::Exception(Exception::LoadPageFault) {
                 is_load = true;
@@ -109,6 +110,7 @@ pub fn trap_handler() -> ! {
             if lazy != 0 { 
                 current_add_signal(SignalFlags::SIGSEGV);
                 current_task().unwrap().inner_exclusive_access().memory_set.debug_show_layout();
+                // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(0x0060000000usize.into());
                 panic!("lazy != 0: va:0x{:x}",va.0);
             }
 
