@@ -187,7 +187,7 @@ impl OpenFlags {
 }
 
 pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-    println!("[DEBUG] enter open: work_path:{}, path:{}, flags:{:?}",work_path,path,flags);
+    // println!("[DEBUG] enter open: work_path:{}, path:{}, flags:{:?}",work_path,path,flags);
     let cur_inode = {
         if work_path == "/" {
             ROOT_INODE.clone()
@@ -200,7 +200,7 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
     let (readable, writable) = flags.read_write();
 
     if flags.contains(OpenFlags::O_CREATE){
-        println!("[DEBUG] flags contain O_CREATE");
+        // println!("[DEBUG] flags contain O_CREATE");
         if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
             // 如果文件已存在则清空
             inode.clear();
@@ -213,7 +213,7 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
             }
             let name = pathv.pop().unwrap();
             if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-                println!("[DEBUG] create file: {}, type:0x{:x}",name,create_type);
+                // println!("[DEBUG] create file: {}, type:0x{:x}",name,create_type);
                 temp_inode
                     .create(name, create_type)
                     .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))

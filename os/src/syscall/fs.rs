@@ -76,7 +76,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     // todo
     _ = mode;
     let oflags = OpenFlags::from_bits(flags).expect("unsupported open flag!");
-    println!("[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:{:?}, mode:{:o}", dirfd, path, oflags, mode);
+    // println!("[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:{:?}, mode:{:o}", dirfd, path, oflags, mode);
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags) {
@@ -85,10 +85,10 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 return -EMFILE;
             }
             inner.fd_table[fd] = Some(inode);
-            println!("sys_openat return new fd:{}",fd);
+            // println!("sys_openat return new fd:{}",fd);
             fd as isize
         } else {
-            println!("[WARNING] sys_openat return -1");
+            // println!("[WARNING] sys_openat return -1, path:{}",path);
             -1
         }
     } else {
@@ -107,12 +107,12 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 // println!("sys_openat return new fd:{}", fd);
                 fd as isize
             } else {
-                println!("[WARNING] sys_openat return -1");
+                // println!("[WARNING] sys_openat return -1, path:{}",path);
                 -1
             }
         } else {
             // dirfd 对应条目为 None
-            println!("[WARNING] sys_openat return -1");
+            // println!("[WARNING] sys_openat return -1, path:{}",path);
             -1
         }
     }
@@ -274,6 +274,7 @@ pub fn sys_getcwd(buf: *mut u8, len: usize) -> isize {
         let mut userbuf = UserBuffer::new(buf_vec);
         let cwd = inner.current_path.as_bytes();
         userbuf.write(cwd);
+        userbuf.write_at(cwd.len(),&[0]); // 添加字符串末尾的\0
         return buf as isize;
     }
 }
@@ -486,18 +487,17 @@ pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
         let iovp_buf = translated_byte_buffer(token, iovp as *const u8, iovcnt * size_of::<Iovec>())
             .pop()
             .unwrap();
-        // println!("iovp_buf:{:?}",iovp_buf);
         let file = file.clone();
         let mut addr = iovp_buf.as_ptr() as *const _ as usize;
         let mut total_write_len = 0;
         drop(inner);
         for _ in 0..iovcnt {
             let iovp = unsafe { &*(addr as *const Iovec) };
-            total_write_len += file.write(UserBuffer::new(translated_byte_buffer(
-                token,
-                iovp.iov_base as *const u8,
-                iovp.iov_len,
-            )));
+                total_write_len += file.write(UserBuffer::new(translated_byte_buffer(
+                    token,
+                    iovp.iov_base as *const u8,
+                    iovp.iov_len,
+                )));
             addr += size_of::<Iovec>();
         }
         total_write_len as isize
@@ -512,7 +512,7 @@ pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, fla
     let inner = task.inner_exclusive_access();
     let path = translated_str(token, pathname);
 
-    println!("[DEBUG] enter sys_fstatat: dirfd:{}, pathname:{}, satabuf:0x{:x}, flags:0x{:x}",dirfd,path,satabuf as usize,flags);
+    // println!("[DEBUG] enter sys_fstatat: dirfd:{}, pathname:{}, satabuf:0x{:x}, flags:0x{:x}",dirfd,path,satabuf as usize,flags);
     // todo
     _ = flags;
     let buf_vec = translated_byte_buffer(token, satabuf as *const u8, size_of::<Kstat>());

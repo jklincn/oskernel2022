@@ -109,7 +109,7 @@ impl File for Stdout {
         panic!("Cannot read from stdout!");
     }
     fn write(&self, user_buf: UserBuffer) -> usize {
-        // println!("userbuffer:{:?}",user_buf);
+        // println!("buffer:{:?}",user_buf);
         for buffer in user_buf.buffers.iter() {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }

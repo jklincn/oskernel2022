@@ -78,6 +78,7 @@ pub fn trap_handler() -> ! {
         Trap::Exception(Exception::UserEnvCall) => {
             // 由于应用的 Trap 上下文不在内核地址空间，因此我们调用 current_trap_cx 来获取当前应用的 Trap 上下文的可变引用
             let mut cx = current_trap_cx();
+            // heap_usage();
             // println!("syscall_id: {}",cx.x[17]);
             cx.sepc += 4;   // 我们希望trap返回后应用程序从下一条指令开始执行
             // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值放到 a0
@@ -92,7 +93,7 @@ pub fn trap_handler() -> ! {
         | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[Kernel trap] Mem Fault");
+            // println!("[Kernel trap] Mem Fault");
             let is_load: bool;
             if scause.cause() == Trap::Exception(Exception::LoadFault) || scause.cause() == Trap::Exception(Exception::LoadPageFault) {
                 is_load = true;

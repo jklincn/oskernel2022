@@ -105,7 +105,6 @@ pub fn sys_times(buf: *const u8) -> isize {
 /// - 返回值：对于子进程返回 0，对于当前进程则返回子进程的 PID 。
 /// - syscall ID：220
 pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _newtls: usize) -> isize {
-    heap_usage();
     let current_task = current_task().unwrap();
     let new_task = current_task.fork(false);
 
@@ -173,15 +172,15 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     let argc = args_vec.len();
     let task = current_task().unwrap();
     println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
+    heap_usage();
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
         drop(inner);
-        println!("[kernel] sys_exec exec");
         task.exec(all_data.as_slice(), args_vec, envs_vec);
-        drop(all_data);
-        println!("[kernel] sys_exec ret");
+        drop(all_data); // 这里内存释放不干净，残留 40KB 左右堆空间
         // return argc because cx.x[10] will be covered with it later
+        heap_usage();
         argc as isize
     } else {
         -1
@@ -297,7 +296,7 @@ pub fn sys_uname(buf: *const u8) -> isize {
 /// - syscall_id:222
 pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
     let task = current_task().unwrap();
-    println!("[DEBUG] enter mmap:start:{},len:{},prot:{},flags:0b{:b},fd:{},off:{}", start, len, prot, flags, fd, off);
+    // println!("[DEBUG] enter mmap:start:{},len:{},prot:{},flags:0b{:b},fd:{},off:{}", start, len, prot, flags, fd, off);
     if len == 0 {
         panic!("mmap:len == 0");
     }

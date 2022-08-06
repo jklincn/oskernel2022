@@ -163,22 +163,22 @@ impl MmapSpace{
 
     pub fn lazy_map_page(&mut self, page_start: VirtAddr, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) {
         let offset: usize = self.offset - self.oaddr.0 + page_start.0;
-        println!("[Kernel mmap] map_file 0x{:X} = 0x{:X} - 0x{:X} + 0x{:X}", offset, self.offset, self.oaddr.0, page_start.0);
+        // println!("[Kernel mmap] map_file 0x{:X} = 0x{:X} - 0x{:X} + 0x{:X}", offset, self.offset, self.oaddr.0, page_start.0);
         self.map_file(page_start, PAGE_SIZE, offset, fd_table, token);
     }
 
     pub fn map_file(&mut self, va_start: VirtAddr, len: usize, offset: usize, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) -> isize {
         let flags = MmapFlags::from_bits(self.flags).unwrap();
-        println!("[Kernel mmap] map_file: va_strat:0x{:X} flags:{:?}",va_start.0, flags);
+        // println!("[Kernel mmap] map_file: va_strat:0x{:X} flags:{:?}",va_start.0, flags);
         if flags.contains(MmapFlags::MAP_ANONYMOUS)
             && self.fd == -1 
             && offset == 0{
-            println!("[map_anonymous_file]");
+            // println!("[map_anonymous_file]");
             return 1;
         }
 
-        println!("[Kernel mmap] fd_table.length() {}", fd_table.len());
-        println!("[Kernel mmap] fd {}", self.fd);
+        // println!("[Kernel mmap] fd_table.length() {}", fd_table.len());
+        // println!("[Kernel mmap] fd {}", self.fd);
         
         if self.fd as usize >= fd_table.len() { return -1; }
 
