@@ -24,6 +24,7 @@ use core::arch::asm;
 use core::mem::size_of;
 // use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 pub use crate::task::{CloneFlags, Utsname, UTSNAME};
+use lazy_static::*;
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -171,8 +172,12 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
     let mut envs_vec: Vec<String> = Vec::new();
     let argc = args_vec.len();
     let task = current_task().unwrap();
-    println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
-    heap_usage();
+    // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
+    if path == "./busybox" || path =="//busybox" {
+        task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
+        return argc as isize;
+    }
+
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
@@ -186,6 +191,19 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
         -1
     }
 }
+
+lazy_static! {
+    pub static ref BUSYBOX: Vec<u8> = {
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
+        if let Some(app_inode) = open(inner.current_path.as_str(), "busybox", OpenFlags::O_RDONLY) {
+            app_inode.read_all()
+        } else {
+            panic!("can't find busybox");
+        }
+    };
+}
+
 
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
 /// - 参数：
@@ -412,3 +430,6 @@ pub fn sys_sysinfo()->isize{
     0
 }
 
+pub fn sys_faccessat()->isize{
+    0
+}

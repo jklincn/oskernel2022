@@ -571,14 +571,65 @@ impl VFile {
     }
 
     // 目前返回：(d_name, d_off, d_type)
-    pub fn dirent_info(&self, offset: usize) -> Option<(String, u32, u8)> {
+    pub fn dirent_info(&self, offset: usize) -> Option<(String, u32, u32, u8)> {
         if !self.is_dir() {
             return None;
         }
         let mut file_entry = LongDirEntry::new();
         let mut offset = offset;
+        // loop {
+        //     let read_size = self.read_short_dirent(|current_dirent: &ShortDirEntry| {
+        //         current_dirent.read_at(
+        //             offset,
+        //             file_entry.as_bytes_mut(),
+        //             &self.fs,
+        //             &self.fs.read().get_fat(),
+        //             &self.block_device,
+        //         )
+        //     });
+        //     // 读取完了
+        //     if read_size != DIRENT_SZ || file_entry.is_empty() {
+        //         return None;
+        //     }
+        //     // 文件被标记删除则跳过
+        //     if file_entry.is_deleted() {
+        //         offset += DIRENT_SZ;
+        //         continue;
+        //     }
+        //     if file_entry.attr() != ATTR_LONG_NAME {
+        //         // 短文件名
+        //         let (_, se_array, _) = unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
+        //         let short_entry = se_array[0];
+        //         return Some((short_entry.get_name_lowercase(), (offset + DIRENT_SZ) as u32, short_entry.attr()));
+        //     } else {
+        //         // 长文件名
+        //         // 如果是长文件名目录项，则必是长文件名最后的那一段
+        //         let mut name = String::new();
+        //         let order = file_entry.order() ^ 0x40;
+        //         for _ in 0..order {
+        //             name.insert_str(0, file_entry.get_name_format().as_str());
+        //             offset += DIRENT_SZ;
+        //             let read_size = self.read_short_dirent(|current_dirent: &ShortDirEntry| {
+        //                 current_dirent.read_at(
+        //                     offset,
+        //                     file_entry.as_bytes_mut(),
+        //                     &self.fs,
+        //                     &self.fs.read().get_fat(),
+        //                     &self.block_device,
+        //                 )
+        //             });
+        //             if read_size != DIRENT_SZ || file_entry.is_empty() {
+        //                 panic!("dirent_info read long name entry error!");
+        //             }
+        //         }
+        //         return Some((name.clone(), offset as u32, file_entry.attr()));
+        //     }
+        // }
+        let mut name = String::new();
+        let mut is_long = false;
+        //let mut order:u8 = 0;
         loop {
-            let read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
+            let read_sz = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
                 curr_ent.read_at(
                     offset,
                     file_entry.as_bytes_mut(),
@@ -587,43 +638,35 @@ impl VFile {
                     &self.block_device,
                 )
             });
-            // 读取完了
-            if read_size != DIRENT_SZ || file_entry.is_empty() {
+            if read_sz != DIRENT_SZ || file_entry.is_empty() {
                 return None;
             }
-            // 文件被标记删除则跳过
             if file_entry.is_deleted() {
+                //if meet delete ent, search should be restart
                 offset += DIRENT_SZ;
+                name.clear();
+                is_long = false;
                 continue;
             }
+            // 名称拼接
             if file_entry.attr() != ATTR_LONG_NAME {
-                // 短文件名
                 let (_, se_array, _) = unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
-                let short_entry = se_array[0];
-                return Some((short_entry.get_name_lowercase(), offset as u32, short_entry.attr()));
-            } else {
-                // 长文件名
-                // 如果是长文件名目录项，则必是长文件名最后的那一段
-                let mut name = String::new();
-                let order = file_entry.order() ^ 0x40;
-                for _ in 0..order {
-                    name.insert_str(0, file_entry.get_name_format().as_str());
-                    offset += DIRENT_SZ;
-                    let read_size = self.read_short_dirent(|curr_ent: &ShortDirEntry| {
-                        curr_ent.read_at(
-                            offset,
-                            file_entry.as_bytes_mut(),
-                            &self.fs,
-                            &self.fs.read().get_fat(),
-                            &self.block_device,
-                        )
-                    });
-                    if read_size != DIRENT_SZ || file_entry.is_empty() {
-                        panic!("dirent_info read long name entry error!");
-                    }
+                let short_ent = se_array[0];
+                if !is_long {
+                    name = short_ent.get_name_lowercase();
                 }
-                return Some((name.clone(), offset as u32, file_entry.attr()));
+                //println!("---{}", short_ent.get_name_lowercase());
+                let attribute = short_ent.attr();
+                let first_cluster = short_ent.first_cluster();
+                offset += DIRENT_SZ;
+                return Some((name, offset as u32,first_cluster, attribute));
+            } else {
+                is_long = true;
+                //order += 1;
+                name.insert_str(0, file_entry.get_name_format().as_str());
+                //println!("--{}", long_ent.get_name_format().as_str());
             }
+            offset += DIRENT_SZ;
         }
     }
 }

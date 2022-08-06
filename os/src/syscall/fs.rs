@@ -72,7 +72,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     let mut inner = task.inner_exclusive_access();
 
     let path = translated_str(token, path);
-    
+
     // todo
     _ = mode;
     let oflags = OpenFlags::from_bits(flags).expect("unsupported open flag!");
@@ -238,7 +238,11 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
     _ = mode;
 
     if dirfd == AT_FDCWD {
-        if let Some(_) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE) {
+        if let Some(_) = open(
+            inner.get_work_path().as_str(),
+            path.as_str(),
+            OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE,
+        ) {
             0
         } else {
             -1
@@ -249,7 +253,11 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-            if let Some(_) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE) {
+            if let Some(_) = open(
+                file.get_name().as_str(),
+                path.as_str(),
+                OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE,
+            ) {
                 0
             } else {
                 -1
@@ -274,7 +282,7 @@ pub fn sys_getcwd(buf: *mut u8, len: usize) -> isize {
         let mut userbuf = UserBuffer::new(buf_vec);
         let cwd = inner.current_path.as_bytes();
         userbuf.write(cwd);
-        userbuf.write_at(cwd.len(),&[0]); // 添加字符串末尾的\0
+        userbuf.write_at(cwd.len(), &[0]); // 添加字符串末尾的\0
         return buf as isize;
     }
 }
@@ -355,37 +363,52 @@ pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
 }
 
 pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
+    // println!("[DEBUG] enter sys_getdents64: fd:{}, buf:{}, len:{}", fd, buf as usize, len);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
-
-    let dirfd = fd as usize;
-    if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
-        return -1;
-    }
-
+    let work_path = inner.current_path.clone();
     let buf_vec = translated_byte_buffer(token, buf, len);
     let mut userbuf = UserBuffer::new(buf_vec);
     let mut dirent = Dirent::new();
     let dent_len = size_of::<Dirent>();
     let mut total_len: usize = 0;
-    if let Some(file) = &inner.fd_table[dirfd] {
-        loop {
-            if total_len + dent_len > len {
-                break;
+
+    if fd == AT_FDCWD {
+        if let Some(file) = open("/", work_path.as_str(), OpenFlags::O_RDONLY) {
+            loop {
+                if total_len + dent_len > len {
+                    break;
+                }
+                if file.get_dirent(&mut dirent) > 0 {
+                    userbuf.write_at(total_len, dirent.as_bytes());
+                    total_len += dent_len;
+                } else {
+                    break;
+                }
             }
-            if file.get_dirent(&mut dirent) > 0 {
-                // 写入 userbuf
-                userbuf.write_at(total_len, dirent.as_bytes());
-                // 更新长度
-                total_len += dent_len;
-            } else {
-                break;
-            }
+            return total_len as isize;
+        } else {
+            return -1;
         }
-        total_len as isize
     } else {
-        -1
+        
+        if let Some(file) = &inner.fd_table[fd as usize] {
+            loop {
+                if total_len + dent_len > len {
+                    break;
+                }
+                if file.get_dirent(&mut dirent) > 0 {
+                    userbuf.write_at(total_len, dirent.as_bytes());
+                    total_len += dent_len;
+                } else {
+                    break;
+                }
+            }
+            return total_len as isize;
+        } else {
+            return -1;
+        }
     }
 }
 
@@ -493,11 +516,11 @@ pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
         drop(inner);
         for _ in 0..iovcnt {
             let iovp = unsafe { &*(addr as *const Iovec) };
-                total_write_len += file.write(UserBuffer::new(translated_byte_buffer(
-                    token,
-                    iovp.iov_base as *const u8,
-                    iovp.iov_len,
-                )));
+            total_write_len += file.write(UserBuffer::new(translated_byte_buffer(
+                token,
+                iovp.iov_base as *const u8,
+                iovp.iov_len,
+            )));
             addr += size_of::<Iovec>();
         }
         total_write_len as isize
@@ -512,20 +535,22 @@ pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, fla
     let inner = task.inner_exclusive_access();
     let path = translated_str(token, pathname);
 
-    // println!("[DEBUG] enter sys_fstatat: dirfd:{}, pathname:{}, satabuf:0x{:x}, flags:0x{:x}",dirfd,path,satabuf as usize,flags);
+    // println!(
+    //     "[DEBUG] enter sys_fstatat: dirfd:{}, pathname:{}, satabuf:0x{:x}, flags:0x{:x}",
+    //     dirfd, path, satabuf as usize, flags
+    // );
     // todo
     _ = flags;
     let buf_vec = translated_byte_buffer(token, satabuf as *const u8, size_of::<Kstat>());
     let mut userbuf = UserBuffer::new(buf_vec);
     let mut kstat = Kstat::new();
-    
 
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-            let file: Arc<dyn File + Send + Sync> = inode;
-            file.get_fstat(&mut kstat);
+            inode.get_fstat(&mut kstat);
             userbuf.write(kstat.as_bytes());
+            // panic!();
             0
         } else {
             -1
@@ -537,9 +562,8 @@ pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, fla
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-            if let Some(tar_f) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-                let file: Arc<dyn File + Send + Sync> = tar_f;
-                file.get_fstat(&mut kstat);
+            if let Some(inode) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+                inode.get_fstat(&mut kstat);
                 userbuf.write(kstat.as_bytes());
                 0
             } else {
@@ -552,9 +576,14 @@ pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, fla
 }
 
 pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flags: usize) -> isize {
+    println!("[DEBUG] dirfd:{}, pathname:{}, time:{}, flags:{}",dirfd,pathname as usize,time as usize,flags);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
+    if time as usize == 0 {
+        // both timestamps are set to the current time
+        return 0;
+    }
     let timespec_buf = translated_byte_buffer(token, time as *const u8, size_of::<Kstat>()).pop().unwrap();
     let addr = timespec_buf.as_ptr() as *const _ as usize;
     let timespec = unsafe { &*(addr as *const Timespec) };

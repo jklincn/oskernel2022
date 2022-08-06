@@ -119,7 +119,6 @@ impl OSInode {
         inner.inode.file_size() as usize
     }
 
-
 }
 
 // 这里在实例化的时候进行文件系统的打开
@@ -328,23 +327,6 @@ impl File for OSInode {
         panic!("OSInode not implement write_kernel_space");
     }
 
-    fn get_fstat(&self, kstat: &mut Kstat) {
-        let inner = self.inner.lock();
-        let vfile = inner.inode.clone();
-        let mut st_mode = 0;
-        // todo
-        let (st_size, st_blksize, st_blocks, is_dir, time) = vfile.stat();
-        if is_dir {
-            st_mode = S_IFDIR;
-        } else {
-            st_mode = S_IFREG;
-        }
-        if vfile.name() == "null" {
-            st_mode = S_IFCHR;
-        }
-        kstat.init(st_size, st_blksize as i32, st_blocks, st_mode, time);
-    }
-
     fn set_time(&self, timespec: &Timespec) {
         let tv_sec = timespec.tv_sec;
         let tv_nsec = timespec.tv_nsec;
@@ -355,22 +337,6 @@ impl File for OSInode {
         // 属于是针对测试用例了，待完善
         if tv_sec == 1 << 32 {
             vfile.set_time(tv_sec, tv_nsec);
-        }
-    }
-
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
-        if !self.is_dir() {
-            return -1;
-        }
-        let mut inner = self.inner.lock();
-        let offset = inner.offset as u32;
-        if let Some((name, off, _)) = inner.inode.dirent_info(offset as usize) {
-            dirent.init(name.as_str());
-            inner.offset = off as usize;
-            let len = (name.len() + 8 * 4) as isize;
-            len
-        } else {
-            -1
         }
     }
 
@@ -396,5 +362,38 @@ impl File for OSInode {
     fn set_cloexec(&self){
         let mut inner = self.inner.lock();
         inner.available = false;
+    }
+
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
+        if !self.is_dir() {
+            return -1;
+        }
+        let mut inner = self.inner.lock();
+        let offset = inner.offset as u32;
+        if let Some((name, off,first_clu, attr)) = inner.inode.dirent_info(offset as usize) {
+            dirent.init(name.as_str(),off as isize,first_clu as usize);
+            inner.offset = off as usize;
+            let len = (name.len() + 8 * 4) as isize;
+            len
+        } else {
+            -1
+        }
+    }
+
+    fn get_fstat(&self, kstat: &mut Kstat) {
+        let inner = self.inner.lock();
+        let vfile = inner.inode.clone();
+        let mut st_mode = 0;
+        // todo
+        let (st_size, st_blksize, st_blocks, is_dir, time) = vfile.stat();
+        if is_dir {
+            st_mode = S_IFDIR;
+        } else {
+            st_mode = S_IFREG;
+        }
+        if vfile.name() == "null" {
+            st_mode = S_IFCHR;
+        }
+        kstat.init(st_size, st_blksize as i32, st_blocks, st_mode, time);
     }
 }
