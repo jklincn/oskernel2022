@@ -1,12 +1,4 @@
 use super::signal::SigSet;
-/// # 进程控制块
-/// `os/src/task/task.rs`
-/// ```
-/// pub struct TaskControlBlock
-/// pub struct TaskControlBlockInner
-/// pub enum TaskStatus
-/// ```
-//
 use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
@@ -20,19 +12,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
 
-/// ### 进程控制块
-/// |成员变量|描述|
-/// |--|--|
-/// |`pid`|进程标识符|
-/// |`kernel_stack`|应用内核栈|
-/// |`inner`|全局可变部分|
-/// ```
-/// TaskControlBlock::inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner>
-/// TaskControlBlock::getpid(&self) -> usize
-/// TaskControlBlock::new(elf_data: &[u8]) -> Self
-/// TaskControlBlock::exec(&self, elf_data: &[u8])
-/// TaskControlBlock::fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock>
-/// ```
 pub struct TaskControlBlock {
     /// 进程标识符
     pub pid: PidHandle,
@@ -43,28 +22,6 @@ pub struct TaskControlBlock {
     inner: UPSafeCell<TaskControlBlockInner>,
 }
 
-/// ### 进程控制块中可能发生变化的数据
-/// |成员变量|描述|
-/// |--|--|
-/// |`trap_cx_ppn`|应用地址空间中的 Trap 上下文所在的物理页帧的物理页号|
-/// |`base_size`|应用数据仅有可能出现在应用地址空间低于 base_size 字节的区域中。<br>借助它我们可以清楚的知道应用有多少数据驻留在内存中|
-/// |`task_cx`|任务上下文|
-/// |`task_status`|维护当前进程的执行状态|
-/// |`memory_set`|应用地址空间|
-/// |`parent`|指向当前进程的父进程（如果存在的话）|
-/// |`children`|当前进程的所有子进程的任务控制块向量|
-/// |`exit_code`|退出码|
-/// |`fd_table`|文件描述符表|
-///
-/// 注意我们在维护父子进程关系的时候大量用到了引用计数 `Arc/Weak` 。进程控制块的本体是被放到内核堆上面的，
-/// 对于它的一切访问都是通过智能指针 `Arc/Weak` 来进行的，这样是便于建立父子进程的双向链接关系（避免仅基于 `Arc` 形成环状链接关系）。
-/// 当且仅当智能指针 `Arc` 的引用计数变为 0 的时候，进程控制块以及被绑定到它上面的各类资源才会被回收。
-/// 子进程的进程控制块并不会被直接放到父进程控制块中，因为子进程完全有可能在父进程退出后仍然存在。
-/// ```
-/// TaskControlBlockInner::get_trap_cx(&self) -> &'static mut TrapContext
-/// TaskControlBlockInner::get_user_token(&self) -> usize
-/// TaskControlBlockInner::is_zombie(&self) -> bool
-/// ```
 pub struct TaskControlBlockInner {
     // 进程
     /// 应用地址空间中的 Trap 上下文所在的物理页帧的物理页号
@@ -206,7 +163,7 @@ impl TaskControlBlock {
         // 从 ELF 文件生成一个全新的地址空间并直接替换
         let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data, &mut auxs);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
-        
+
         // 计算对齐位置
         let mut total_len = 0;
         for i in 0..envs.len() {
@@ -321,6 +278,7 @@ impl TaskControlBlock {
         // 分配一个 PID
         let pid_handle = pid_alloc();
         let mut tgid = 0;
+        _ = tgid;
         if is_create_thread {
             tgid = self.pid.0;
         } else {
@@ -339,7 +297,6 @@ impl TaskControlBlock {
                 new_fd_table.push(None);
             }
         }
-
 
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,

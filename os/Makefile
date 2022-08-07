@@ -66,6 +66,6 @@ run-inner: build
         -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 dump:
-	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) >> os_dump
+	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) > os_dump
 
 .PHONY: dump run submit build-custom-test

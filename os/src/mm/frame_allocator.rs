@@ -1,26 +1,7 @@
-/// # 物理页帧管理器
-/// `os/src/mm/frame_allocator.rs`
-/// ## 实现功能
-/// ```
-/// pub struct FrameTracker
-/// FrameTracker::new(ppn: PhysPageNum) -> Self
-/// 
-/// pub struct StackFrameAllocator
-/// type FrameAllocatorImpl = StackFrameAllocator
-/// // 全局物理页帧管理器
-/// pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl>
-/// 
-/// pub fn init_frame_allocator()
-/// pub fn frame_alloc() -> Option<FrameTracker>
-/// // 回收工作在FrameTracker生命周期结束时由编译器发起，故为私有
-/// fn frame_dealloc(ppn: PhysPageNum)
-/// ```
-//
-
 use super::{PhysAddr, PhysPageNum};
 use crate::config::MEMORY_END;
-use crate::sync::UPSafeCell;
 use alloc::vec::Vec;
+use spin::Mutex;
 use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
 
@@ -70,13 +51,6 @@ trait FrameAllocator {
 
 
 /// ### 栈式物理页帧管理器
-/// - `current`:空闲内存的起始物理页号
-/// - `end`:空闲内存的结束物理页号
-/// - `recycled`:以后入先出的方式保存被回收的物理页号
-/// 
-/// ```
-/// StackFrameAllocator::init(&mut self, l: PhysPageNum, r: PhysPageNum)
-/// ```
 pub struct StackFrameAllocator {
     /// 空闲内存的起始物理页号
     current: usize,
@@ -108,16 +82,17 @@ impl FrameAllocator for StackFrameAllocator {
     }
     fn alloc(&mut self) -> Option<PhysPageNum> {
         // 首先检查栈 recycled 内有没有之前回收的物理页号，如果有的话直接弹出栈顶并返回
-        // println!("current ppn:0x{:x}(0x{:x}000),end ppn:0x{:x}",self.current,self.current,self.end);
+        // println!("current ppn:0x{:x}(0x{:x}000),end ppn:0x{:x}, recycled len:{}",self.current,self.current,self.end,self.recycled.len());
         if let Some(ppn) = self.recycled.pop() {
+            // println!("recycled alloc ppn:{}",ppn);
             Some(ppn.into())
         }   // 空间满返回 None
         else if self.current == self.end {
-            frame_usage();
             None
         }   // 否则就返回最低的物理页号
         else {
             self.current += 1;
+            // println!("alloc ppn:{}",self.current - 1);
             Some((self.current - 1).into())
         }
     }
@@ -141,8 +116,8 @@ type FrameAllocatorImpl = StackFrameAllocator;
 lazy_static! {
     /// ### 物理页帧管理器实例
     /// - 全局变量，管理除内核空间外的内存空间
-    pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> =
-        unsafe { UPSafeCell::new(FrameAllocatorImpl::new()) };
+    pub static ref FRAME_ALLOCATOR: Mutex<FrameAllocatorImpl> =
+        unsafe { Mutex::new(FrameAllocatorImpl::new()) };
 }
 
 /// ### 初始化物理页帧管理器
@@ -153,7 +128,7 @@ pub fn init_frame_allocator() {
     extern "C" {
         fn ekernel();
     }
-    FRAME_ALLOCATOR.exclusive_access().init(
+    FRAME_ALLOCATOR.lock().init(
         PhysAddr::from(ekernel as usize).ceil(),
         PhysAddr::from(MEMORY_END).floor(),
     );
@@ -161,19 +136,22 @@ pub fn init_frame_allocator() {
 
 /// 分配物理页帧
 pub fn frame_alloc() -> Option<FrameTracker> {
+    // frame_usage();
     FRAME_ALLOCATOR
-        .exclusive_access()
+        .lock()
         .alloc()
         .map(FrameTracker::new)
 }
 
 /// 回收物理页帧
 pub fn frame_dealloc(ppn: PhysPageNum) {
-    FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
+    // println!("dealloc ppn:{}",ppn.0);
+    frame_usage();
+    FRAME_ALLOCATOR.lock().dealloc(ppn);
 }
 
 pub fn frame_usage(){
-    let (current,recycled,end,base_num) = FRAME_ALLOCATOR.exclusive_access().usage();
+    let (current,recycled,end,base_num) = FRAME_ALLOCATOR.lock().usage();
     let usage = (current - base_num - recycled) * 100 / (end - base_num) ; 
     println!("[kernel] page usage: {}% ({}/{} pages)",usage,current-base_num-recycled,end - base_num);
 }

@@ -28,7 +28,7 @@ try: all
 		-kernel kernel-qemu \
 		-m 128M \
 		-nographic \
-		-smp 2 \
+		-smp 1 \
 		-bios sbi-qemu \
 		-drive file=./simple-fat32/fat32.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0

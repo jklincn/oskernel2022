@@ -10,12 +10,12 @@
 //
 use super::{Dirent, File, Kstat, Timespec};
 use crate::mm::UserBuffer;
-use crate::sync::UPSafeCell;
 use alloc::{
     string::String,
     sync::{Arc, Weak},
     vec::Vec,
 };
+use spin::Mutex;
 
 pub use super::{list_apps, open, OSInode, OpenFlags};
 use crate::task::suspend_current_and_run_next;
@@ -29,12 +29,12 @@ use crate::task::suspend_current_and_run_next;
 pub struct Pipe {
     readable: bool,
     writable: bool,
-    buffer: Arc<UPSafeCell<PipeRingBuffer>>,
+    buffer: Arc<Mutex<PipeRingBuffer>>,
 }
 
 impl Pipe {
     /// 创建管道的读端
-    pub fn read_end_with_buffer(buffer: Arc<UPSafeCell<PipeRingBuffer>>) -> Self {
+    pub fn read_end_with_buffer(buffer: Arc<Mutex<PipeRingBuffer>>) -> Self {
         Self {
             readable: true,
             writable: false,
@@ -42,7 +42,7 @@ impl Pipe {
         }
     }
     /// 创建管道的写端
-    pub fn write_end_with_buffer(buffer: Arc<UPSafeCell<PipeRingBuffer>>) -> Self {
+    pub fn write_end_with_buffer(buffer: Arc<Mutex<PipeRingBuffer>>) -> Self {
         Self {
             readable: false,
             writable: true,
@@ -144,10 +144,10 @@ impl PipeRingBuffer {
 
 /// 创建一个管道并返回管道的读端和写端 (read_end, write_end)
 pub fn make_pipe() -> (Arc<Pipe>, Arc<Pipe>) {
-    let buffer = Arc::new(unsafe { UPSafeCell::new(PipeRingBuffer::new()) });
+    let buffer = Arc::new(Mutex::new(PipeRingBuffer::new()));
     let read_end = Arc::new(Pipe::read_end_with_buffer(buffer.clone()));
     let write_end = Arc::new(Pipe::write_end_with_buffer(buffer.clone()));
-    buffer.exclusive_access().set_write_end(&write_end);
+    buffer.lock().set_write_end(&write_end);
     (read_end, write_end)
 }
 
@@ -162,15 +162,13 @@ impl File for Pipe {
         true
     }
     fn read(&self, buf: UserBuffer) -> usize {
-        assert!(self.readable());
+        assert_eq!(self.readable(), true);
         let mut buf_iter = buf.into_iter();
         let mut read_size = 0usize;
         loop {
-            let mut ring_buffer = self.buffer.exclusive_access();
+            let mut ring_buffer = self.buffer.lock();
             let loop_read = ring_buffer.available_read();
-
             if loop_read == 0 {
-                return read_size; // This line is wrong, just for pass
                 if ring_buffer.all_write_ends_closed() {
                     return read_size;
                 }
@@ -189,21 +187,22 @@ impl File for Pipe {
                     return read_size;
                 }
             }
+            return read_size;
         }
     }
     fn write(&self, buf: UserBuffer) -> usize {
-        assert!(self.writable());
+        assert_eq!(self.writable(), true);
         let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;
         loop {
-            let mut ring_buffer = self.buffer.exclusive_access();
+            let mut ring_buffer = self.buffer.lock();
             let loop_write = ring_buffer.available_write();
             if loop_write == 0 {
                 drop(ring_buffer);
                 suspend_current_and_run_next();
                 continue;
             }
-            // write at most loop_write bytes
+
             for _ in 0..loop_write {
                 if let Some(byte_ref) = buf_iter.next() {
                     ring_buffer.write_byte(unsafe { *byte_ref });
@@ -236,15 +235,15 @@ impl File for Pipe {
 
     fn get_offset(&self) -> usize {
         return 0; // just for pass
-        panic!("pipe not implement get_offset");
+                  // panic!("pipe not implement get_offset");
     }
 
-    fn set_offset(&self, offset: usize) {
+    fn set_offset(&self, _offset: usize) {
         return; // just for pass
-        panic!("pipe not implement set_offset");
+                // panic!("pipe not implement set_offset");
     }
 
-    fn set_flags(&self, flag: OpenFlags) {
+    fn set_flags(&self, _flag: OpenFlags) {
         panic!("pipe not implement set_flags");
     }
 
@@ -252,9 +251,26 @@ impl File for Pipe {
         panic!("pipe not implement set_cloexec");
     }
     fn read_kernel_space(&self) -> Vec<u8> {
-        panic!("pipe not implement read_kernel_space");
+        assert_eq!(self.readable(), true);
+        let mut buf: Vec<u8> = Vec::new();
+        loop {
+            let mut ring_buffer = self.buffer.lock();
+            let loop_read = ring_buffer.available_read();
+            if loop_read == 0 {
+                if ring_buffer.all_write_ends_closed() {
+                    return buf;
+                }
+                drop(ring_buffer);
+                suspend_current_and_run_next();
+                continue;
+            }
+            for _ in 0..loop_read {
+                buf.push(ring_buffer.read_byte());
+            }
+            return buf;
+        }
     }
-    fn write_kernel_space(&self, data: Vec<u8>) -> usize {
+    fn write_kernel_space(&self, _data: Vec<u8>) -> usize {
         panic!("pipe not implement write_kernel_space");
     }
 }
