@@ -98,7 +98,12 @@ impl VFile {
         (section, offset)
     }
 
-    fn first_cluster(&self) -> u32 {
+    pub fn set_first_cluster(&self, clu:u32){
+        self.modify_short_dirent(|se:&mut ShortDirEntry|{
+            se.set_first_cluster(clu);
+        })
+    }
+    pub fn first_cluster(&self) -> u32 {
         self.read_short_dirent(|se: &ShortDirEntry| se.first_cluster())
     }
 
@@ -659,7 +664,7 @@ impl VFile {
                 let attribute = short_ent.attr();
                 let first_cluster = short_ent.first_cluster();
                 offset += DIRENT_SZ;
-                return Some((name, offset as u32,first_cluster, attribute));
+                return Some((name, offset as u32, first_cluster, attribute));
             } else {
                 is_long = true;
                 //order += 1;

@@ -38,7 +38,7 @@ use core::arch::asm;
 use core::arch::global_asm;
 use riscv::register::sstatus::{set_fs, FS};
 
-use crate::mm::{frame_usage, heap_usage};
+use crate::mm::memory_usage;
 global_asm!(include_str!("entry.asm")); // 代码的第一条语句，执行指定的汇编文件，汇编程序再调用Rust实现的内核
 global_asm!(include_str!("buildin_app.S")); // 将 c_usertests 程序放入内核区内存空间
 
@@ -67,8 +67,7 @@ pub fn rust_main() -> ! {
         fs::list_apps();
         task::add_initproc();
         println!("[kernel] add initproc!");
-        heap_usage();
-        frame_usage();
+        memory_usage();
         task::run_tasks();
         panic!("Unreachable in rust_main!");
     } else {

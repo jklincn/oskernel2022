@@ -19,7 +19,7 @@ use crate::task::{
     exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,current_task
 };
 use crate::timer::set_next_trigger;
-use crate::mm::{VirtAddr, heap_usage};
+use crate::mm::VirtAddr;
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -74,21 +74,16 @@ pub fn trap_handler() -> ! {
     let scause = scause::read();    // 用于描述 Trap 的原因
     let stval = stval::read();       // 给出 Trap 附加信息
     match scause.cause() {
-        // 触发 Trap 的原因是来自 U 特权级的 Environment Call，也就是系统调用
         Trap::Exception(Exception::UserEnvCall) => {
-            // 由于应用的 Trap 上下文不在内核地址空间，因此我们调用 current_trap_cx 来获取当前应用的 Trap 上下文的可变引用
             let mut cx = current_trap_cx();
             // heap_usage();
             // println!("syscall_id: {}",cx.x[17]);
-            cx.sepc += 4;   // 我们希望trap返回后应用程序从下一条指令开始执行
-            // 从 Trap 上下文取出作为 syscall ID 的 a7 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值放到 a0
+            cx.sepc += 4;
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
             cx.x[10] = result as usize;
         }
-
-        // 处理应用程序出现访存错误，判断能否CoW/lazy
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadFault)
@@ -139,8 +134,6 @@ pub fn trap_handler() -> ! {
 
             current_add_signal(SignalFlags::SIGSEGV);
         }
-
-        // 处理应用程序出现非法指令错误
         Trap::Exception(Exception::IllegalInstruction) => {
             // println!("[kernel] IllegalInstruction in application, kernel killed it.");
             // // illegal instruction exit code
@@ -151,8 +144,6 @@ pub fn trap_handler() -> ! {
             // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(sepc.into());
             current_add_signal(SignalFlags::SIGILL);
         }
-
-        // 时间片到中断
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
             suspend_current_and_run_next();
@@ -165,7 +156,6 @@ pub fn trap_handler() -> ! {
             );
         }
     }
-    
     // check signals
     if let Some((errno, msg)) = check_signals_of_current() {
         println!("[kernel] {}", msg);

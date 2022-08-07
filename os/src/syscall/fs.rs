@@ -1,8 +1,8 @@
+use super::errno::*;
 use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statfs, Stdin, Timespec, MNT_TABLE};
-use crate::mm::{heap_usage, translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token, RLIMIT_NOFILE};
 use alloc::{sync::Arc, vec::Vec};
-
 use core::mem::size_of;
 
 const AT_FDCWD: isize = -100;
@@ -63,9 +63,6 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
-// 暂时写在这里
-const EMFILE: isize = 24;
-
 pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
@@ -76,7 +73,10 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     // todo
     _ = mode;
     let oflags = OpenFlags::from_bits(flags).expect("unsupported open flag!");
-    // println!("[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:{:?}, mode:{:o}", dirfd, path, oflags, mode);
+    // println!(
+    //     "[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:{:?}, mode:{:o}",
+    //     dirfd, path, oflags, mode
+    // );
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags) {
@@ -305,25 +305,24 @@ pub fn sys_umount(p_special: *const u8, flags: usize) -> isize {
 }
 
 pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
-    0
-    // let task = current_task().unwrap();
-    // let token = current_user_token();
-    // let inner = task.inner_exclusive_access();
+    let task = current_task().unwrap();
+    let token = current_user_token();
+    let inner = task.inner_exclusive_access();
 
-    // // todo
-    // _ = flags;
+    // todo
+    _ = flags;
 
-    // let path = translated_str(token, path);
-    // if fd == AT_FDCWD {
-    //     if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::from_bits(0).unwrap()) {
-    //         file.delete();
-    //         0
-    //     } else {
-    //         -1
-    //     }
-    // } else {
-    //     unimplemented!();
-    // }
+    let path = translated_str(token, path);
+    if fd == AT_FDCWD {
+        if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::from_bits(0).unwrap()) {
+            file.delete();
+            0
+        } else {
+            -1
+        }
+    } else {
+        unimplemented!();
+    }
 }
 
 pub fn sys_chdir(path: *const u8) -> isize {
@@ -341,6 +340,7 @@ pub fn sys_chdir(path: *const u8) -> isize {
 }
 
 pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
+    println!("[DEBUG] enter sys_fstat: fd:{}, buf:0x{:x}", fd, buf as usize);
     let token = current_user_token();
     let task = current_task().unwrap();
     let buf_vec = translated_byte_buffer(token, buf, size_of::<Kstat>());
@@ -392,7 +392,6 @@ pub fn sys_getdents64(fd: isize, buf: *mut u8, len: usize) -> isize {
             return -1;
         }
     } else {
-        
         if let Some(file) = &inner.fd_table[fd as usize] {
             loop {
                 if total_len + dent_len > len {
@@ -444,11 +443,14 @@ pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
                 (off_t + current_offset) as isize
             }
             SeekFlags::SEEK_END => {
-                // 这边打开目录目前也是针对测试用例，需要完善
-                let inode = open("/tmp", file.get_name().as_str(), OpenFlags::O_RDONLY).unwrap();
+                let inode = open(
+                    inner.get_work_path().clone().as_str(),
+                    file.get_name().as_str(),
+                    OpenFlags::O_RDONLY,
+                )
+                .unwrap();
                 let end = inode.file_size();
                 file.set_offset(end + off_t);
-                // println!("end:{}",end);
                 (end + off_t) as isize
             }
             // flag wrong
@@ -529,35 +531,32 @@ pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
     }
 }
 
-pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, flags: usize) -> isize {
+pub fn sys_newfstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, _flags: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     let path = translated_str(token, pathname);
 
     // println!(
-    //     "[DEBUG] enter sys_fstatat: dirfd:{}, pathname:{}, satabuf:0x{:x}, flags:0x{:x}",
+    //     "[DEBUG] enter sys_newfstatat: dirfd:{}, pathname:{}, satabuf:0x{:x}, flags:0x{:x}",
     //     dirfd, path, satabuf as usize, flags
     // );
-    // todo
-    _ = flags;
+
     let buf_vec = translated_byte_buffer(token, satabuf as *const u8, size_of::<Kstat>());
     let mut userbuf = UserBuffer::new(buf_vec);
     let mut kstat = Kstat::new();
 
     if dirfd == AT_FDCWD {
-        // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
             inode.get_fstat(&mut kstat);
             userbuf.write(kstat.as_bytes());
             // panic!();
             0
         } else {
-            -1
+            -ENOENT
         }
     } else {
         let dirfd = dirfd as usize;
-        // dirfd 不合法
         if dirfd >= inner.fd_table.len() && dirfd > FD_LIMIT {
             return -1;
         }
@@ -570,36 +569,50 @@ pub fn sys_fstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, fla
                 -1
             }
         } else {
-            -1
+            -ENOENT
         }
     }
 }
 
 pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flags: usize) -> isize {
-    println!("[DEBUG] dirfd:{}, pathname:{}, time:{}, flags:{}",dirfd,pathname as usize,time as usize,flags);
+    // println!(
+    //     "[DEBUG] enter sys_utimensat: dirfd:{}, pathname:{}, time:{}, flags:{}",
+    //     dirfd, pathname as usize, time as usize, flags
+    // );
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
-    if time as usize == 0 {
-        // both timestamps are set to the current time
-        return 0;
-    }
-    let timespec_buf = translated_byte_buffer(token, time as *const u8, size_of::<Kstat>()).pop().unwrap();
-    let addr = timespec_buf.as_ptr() as *const _ as usize;
-    let timespec = unsafe { &*(addr as *const Timespec) };
+
     _ = flags;
 
-    if pathname as usize == 0 {
-        if dirfd >= inner.fd_table.len() as isize || dirfd < 0 {
-            return 0;
+    if dirfd == AT_FDCWD {
+        if pathname as usize == 0 {
+            unimplemented!();
+        } else {
+            let pathname = translated_str(token, pathname);
+            if let Some(_file) =  open(inner.get_work_path().as_str(),pathname.as_str(),OpenFlags::O_RDWR){
+                unimplemented!();
+            } else{
+                -ENOENT
+            }
         }
-        if let Some(file) = &inner.fd_table[dirfd as usize] {
-            file.set_time(timespec);
-        }
-        0
     } else {
-        // unimplemented!();
-        0
+        if pathname as usize == 0 {
+            if dirfd >= inner.fd_table.len() as isize || dirfd < 0 {
+                return 0;
+            }
+            if let Some(file) = &inner.fd_table[dirfd as usize] {
+                let timespec_buf = translated_byte_buffer(token, time as *const u8, size_of::<Kstat>()).pop().unwrap();
+                let addr = timespec_buf.as_ptr() as *const _ as usize;
+                let timespec = unsafe { &*(addr as *const Timespec) };
+                file.set_time(timespec);
+                0
+            } else {
+                -1
+            }
+        } else {
+            unimplemented!();
+        }
     }
 }
 
@@ -685,6 +698,7 @@ pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
             let mut inner = task.inner_exclusive_access();
             let start_num = arg.unwrap();
             let mut new_fd = 0;
+            _ = new_fd;
             let mut tmp_fd = Vec::new();
             loop {
                 new_fd = inner.alloc_fd();
@@ -734,12 +748,11 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> is
     }
 }
 
-pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, count: usize) -> isize {
-    // println!(
-    //     "[DEBUG] enter sys_sendfile: out_fd:{}, in_fd:{}, offset:{}, count:{}",
-    //     out_fd, in_fd, offset, count
-    // );
-
+pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, _count: usize) -> isize {
+    println!(
+        "[DEBUG] enter sys_sendfile: out_fd:{}, in_fd:{}, offset:{}, count:{}",
+        out_fd, in_fd, offset, _count
+    );
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     let mut total_write_size = 0usize;
@@ -760,5 +773,45 @@ pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, count: usize) ->
             }
         }
         total_write_size as isize
+    }
+}
+
+// 目前仅支持同当前目录下文件名称更改
+pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, new_path: *const u8, flags: u32) -> isize {
+    let task = current_task().unwrap();
+    let token = current_user_token();
+    let inner = task.inner_exclusive_access();
+    let old_path = translated_str(token, old_path);
+    let new_path = translated_str(token, new_path);
+
+    // println!(
+    //     "[DEBUG] enter sys_renameat2: old_dirfd:{}, old_path:{}, new_dirfd:{}, new_path:{}, flags:0x{:x}",
+    //     old_dirfd, old_path, new_dirfd, new_path, flags
+    // );
+    if old_dirfd == AT_FDCWD {
+        if let Some(old_file) = open(inner.get_work_path().as_str(), old_path.as_str(), OpenFlags::O_RDWR) {
+            if new_dirfd == AT_FDCWD {
+                if let Some(new_file) = open(
+                    inner.get_work_path().as_str(),
+                    new_path.as_str(),
+                    OpenFlags::O_RDWR | OpenFlags::O_CREATE,
+                ) {
+                    let first_cluster = old_file.get_head_cluster();
+                    new_file.set_head_cluster(first_cluster);
+                    old_file.delete();
+                    0
+                } else {
+                    // panic!("can't find new file");
+                    -1
+                }
+            } else {
+                unimplemented!();
+            }
+        } else {
+            // panic!("can't find old file");
+            -1
+        }
+    } else {
+        unimplemented!();
     }
 }

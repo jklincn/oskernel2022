@@ -2,7 +2,7 @@ use super::{
     stat::{S_IFCHR, S_IFDIR, S_IFREG},
     Dirent, File, Kstat, Timespec,
 };
-use crate::{drivers::BLOCK_DEVICE, mm::{UserBuffer, heap_usage}};
+use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
@@ -119,6 +119,18 @@ impl OSInode {
         inner.inode.file_size() as usize
     }
 
+    pub fn set_head_cluster(&self, cluster:u32) {
+        let inner = self.inner.lock();
+        let vfile = &inner.inode;
+        vfile.set_first_cluster(cluster);
+    }    
+
+    pub fn get_head_cluster(&self)->u32 {
+        let inner = self.inner.lock();
+        let vfile = &inner.inode;
+        vfile.first_cluster()
+    }
+
 }
 
 // 这里在实例化的时候进行文件系统的打开
@@ -130,8 +142,8 @@ lazy_static! {
 }
 
 pub fn list_apps() {
-    // 决赛第一阶段内容:
     open("/", "proc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
+    open("/", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     // open("/", "dev", OpenFlags::O_DIRECTROY);
     // open("/dev", "null", OpenFlags::O_CREATE);
     // open("/dev", "zero", OpenFlags::O_CREATE);
@@ -324,7 +336,20 @@ impl File for OSInode {
     }
 
     fn write_kernel_space(&self,data:Vec<u8>)->usize{
-        panic!("OSInode not implement write_kernel_space");
+        let mut inner = self.inner.lock();
+        let mut remain = data.len();
+        let mut base = 0;
+        loop {
+            let len = remain.min(512);
+            inner.inode.write_at(inner.offset, &data.as_slice()[base .. base + len]);
+            inner.offset += len;
+            base += len;
+            remain -= len;
+            if remain == 0{
+                break;
+            }
+        }
+        return base
     }
 
     fn set_time(&self, timespec: &Timespec) {
@@ -370,7 +395,7 @@ impl File for OSInode {
         }
         let mut inner = self.inner.lock();
         let offset = inner.offset as u32;
-        if let Some((name, off,first_clu, attr)) = inner.inode.dirent_info(offset as usize) {
+        if let Some((name, off,first_clu, _attr)) = inner.inode.dirent_info(offset as usize) {
             dirent.init(name.as_str(),off as isize,first_clu as usize);
             inner.offset = off as usize;
             let len = (name.len() + 8 * 4) as isize;
@@ -384,6 +409,7 @@ impl File for OSInode {
         let inner = self.inner.lock();
         let vfile = inner.inode.clone();
         let mut st_mode = 0;
+        _ = st_mode;
         // todo
         let (st_size, st_blksize, st_blocks, is_dir, time) = vfile.stat();
         if is_dir {

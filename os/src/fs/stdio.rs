@@ -11,7 +11,7 @@ use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
 use alloc::{string::String, vec::Vec};
 
-pub use super::{list_apps, open, OSInode, OpenFlags};
+use super::OpenFlags;
 
 pub struct Stdin;
 
@@ -74,12 +74,11 @@ impl File for Stdin {
         return 0; // just for pass
     }
 
-    fn set_offset(&self, offset: usize) {
-        _ = offset;
+    fn set_offset(&self, _offset: usize) {
         return;
     }
 
-    fn set_flags(&self, flag: OpenFlags) {
+    fn set_flags(&self, _flag: OpenFlags) {
         panic!("Stdin not implement set_flags");
     }
 
@@ -90,7 +89,7 @@ impl File for Stdin {
     fn read_kernel_space(&self) -> Vec<u8> {
         panic!("Stdin not implement read_kernel_space");
     }
-    fn write_kernel_space(&self, data: Vec<u8>) -> usize {
+    fn write_kernel_space(&self, _data: Vec<u8>) -> usize {
         panic!("Stdin not implement write_kernel_space");
     }
 }
@@ -139,11 +138,11 @@ impl File for Stdout {
         panic!("Stdout not implement get_offset");
     }
 
-    fn set_offset(&self, offset: usize) {
+    fn set_offset(&self, _offset: usize) {
         panic!("Stdout not implement set_offset");
     }
 
-    fn set_flags(&self, flag: OpenFlags) {
+    fn set_flags(&self, _flag: OpenFlags) {
         panic!("Stdout not implement set_flags");
     }
 

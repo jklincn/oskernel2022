@@ -33,8 +33,8 @@ static ALLOCATOR: LockedHeap = LockedHeap::empty();
 pub fn init_heap() {
     unsafe {
         ALLOCATOR.lock().init(HEAP_SPACE.as_ptr() as usize, KERNEL_HEAP_SIZE);
-        println!("bottom:0x{:x}",ALLOCATOR.lock().bottom());
-        println!("top:0x{:x}",ALLOCATOR.lock().top());
+        // println!("bottom:0x{:x}",ALLOCATOR.lock().bottom());
+        // println!("top:0x{:x}",ALLOCATOR.lock().top());
     }
 }
 

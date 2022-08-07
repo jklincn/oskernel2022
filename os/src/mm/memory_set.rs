@@ -12,7 +12,7 @@ use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
-use crate::mm::{frame_usage, MmapFlags, heap_usage};
+use crate::mm::MmapFlags;
 use crate::sync::UPSafeCell;
 use crate::task::{current_task, AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
 use alloc::collections::BTreeMap;
@@ -36,6 +36,7 @@ extern "C" {
     fn ebss();
     fn ekernel();
     fn strampoline();
+    fn boot_stack();
 }
 
 lazy_static! {
@@ -139,6 +140,7 @@ impl MemorySet {
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
         println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
         println!(".bss [{:#x}, {:#x})", sbss_with_stack as usize, ebss as usize);
+        println!("boot_stack:{:#x}",boot_stack as usize);
         println!("mapping .text section");
         // 总体思路：通过Linker.ld中的标签划分内核空间为不同的区块，为每个区块采用恒等映射的方式生成逻辑段，压入地址空间
         memory_set.push(
@@ -233,7 +235,6 @@ impl MemorySet {
         let mut elf_interpreter = false;
         // 动态链接器加载地址
         let mut interp_entry_point = 0;
-
         // 遍历程序段进行加载
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
@@ -727,7 +728,9 @@ impl MapArea {
             }
             MapType::Framed => {
                 // 获取一个物理页帧
+                println!("map_one");
                 let frame = frame_alloc().unwrap();
+                // println!("1234");
                 ppn = frame.ppn;
                 // println!("current vpn:0x{:x},get ppn:0x{:x}",vpn.0,ppn.0);
                 // 将vpn和分配到的物理页帧配对

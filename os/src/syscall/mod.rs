@@ -13,7 +13,7 @@ const SYSCALL_CHDIR:    usize = 49;
 const SYSCALL_OPENAT:   usize = 56;
 const SYSCALL_CLOSE:    usize = 57;
 const SYSCALL_PIPE:     usize = 59;
-const SYSCALL_GETDENTS64: usize = 61;
+const SYSCALL_GETDENTS64:usize = 61;
 const SYSCALL_LSEEK:    usize = 62;
 const SYSCALL_READ:     usize = 63;
 const SYSCALL_WRITE:    usize = 64;
@@ -22,12 +22,12 @@ const SYSCALL_WRITEV:   usize = 66;
 const SYSCALL_PREAD64:  usize = 67;
 const SYSCALL_SENDFILE: usize = 71;
 const SYSCALL_PPOLL:    usize = 73;
-const SYSCALL_FSTATAT:  usize = 79;
+const SYSCALL_NEWFSTATAT:  usize = 79;
 const SYSCALL_FSTAT:    usize = 80;
 const SYSCALL_UTIMENSAT:usize = 88;
 const SYSCALL_EXIT:     usize = 93;
 const SYSCALL_EXIT_GROUP:     usize = 94;
-const SYSCALL_SET_TID_ADDRESS:     usize = 96;
+const SYSCALL_SET_TID_ADDRESS:usize = 96;
 const SYSCALL_FUTEX:    usize = 98;
 const SYSCALL_NANOSLEEP:usize = 101;
 const SYSCALL_CLOCK_GETTIME:usize = 113;
@@ -39,13 +39,13 @@ const SYSCALL_RT_SIGPROCMASK: usize = 135;
 const SYSCALL_RT_SIGTIMEDWAIT: usize = 137;
 const SYSCALL_RT_SIGRETURN: usize = 139;
 const SYSCALL_TIMES:    usize = 153;
-const SYSCALL_SETPGID:      usize = 154;
-const SYSCALL_GETPGID:      usize = 155;
+const SYSCALL_SETPGID:  usize = 154;
+const SYSCALL_GETPGID:  usize = 155;
 const SYSCALL_UNAME:    usize = 160;
 const SYSCALL_GET_TIME: usize = 169;
 const SYSCALL_GETPID:   usize = 172;
 const SYSCALL_GETPPID:  usize = 173;
-const SYSCALL_GETUID:       usize = 174;
+const SYSCALL_GETUID:   usize = 174;
 const SYSCALL_GETEUID:  usize = 175;
 const SYSCALL_GETEGID:  usize = 177;
 const SYSCALL_GETTID:   usize = 178;
@@ -65,14 +65,17 @@ const SYSCALL_FORK:     usize = 220;
 const SYSCALL_EXEC:     usize = 221;
 const SYSCALL_MMAP:     usize = 222;
 const SYSCALL_MPROTECT: usize = 226;
+const SYSCALL_MADVISE:  usize = 233;
 const SYSCALL_WAITPID:  usize = 260;
 const SYSCALL_PRLIMIT64:usize = 261;
+const SYSCALL_RENAMEAT2: usize = 276;
 
 mod fs;
 mod process;
 mod thread;
 mod sigset;
 mod socket;
+mod errno;
 
 use fs::*;
 use process::*;
@@ -108,7 +111,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_PREAD64=>   sys_pread64(args[0], args[1] as *const u8, args[2],args[3]),
         SYSCALL_SENDFILE=>  sys_sendfile(args[0], args[1], args[2],args[3]),
         SYSCALL_PPOLL  =>   sys_ppoll(),
-        SYSCALL_FSTATAT=>   sys_fstatat(args[0] as isize, args[1] as *const u8,args[2] as *const usize,args[3]),
+        SYSCALL_NEWFSTATAT=>sys_newfstatat(args[0] as isize, args[1] as *const u8,args[2] as *const usize,args[3]),
         SYSCALL_FSTAT=>     sys_fstat(args[0] as isize, args[1] as *mut u8),
         SYSCALL_UTIMENSAT=> sys_utimensat(args[0] as isize, args[1] as *const u8,args[2] as *const usize,args[3]),
         SYSCALL_EXIT =>     sys_exit(args[0] as i32),
@@ -137,7 +140,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_FORK =>     sys_fork(args[0], args[1], args[2], args[3], args[4]),
         SYSCALL_EXEC =>     sys_exec(args[0] as *const u8, args[1] as *const usize,args[2] as *const usize),
         SYSCALL_GETTID =>   sys_gettid(),
-        SYSCALL_SYSINFO=>   0,
+        SYSCALL_SYSINFO=>   sys_sysinfo(),
         SYSCALL_SOCKET =>   sys_socket(),
         SYSCALL_BIND   =>   sys_bind(),
         SYSCALL_LISTEN =>   sys_listen(),
@@ -151,8 +154,11 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_MMAP=>      sys_mmap(args[0], args[1], args[2], args[3], args[4] as isize, args[5]),
         SYSCALL_MUNMAP =>   sys_munmap(args[0], args[1]),
         SYSCALL_MPROTECT=>  0,
+        SYSCALL_MADVISE=>   sys_madvise(args[0] as *const u8, args[1], args[2]),
         SYSCALL_WAITPID =>  sys_waitpid(args[0] as isize, args[1] as *mut i32),
         SYSCALL_PRLIMIT64=> sys_prlimit64(args[0], args[1], args[2] as *const u8, args[3] as *const u8),
+        SYSCALL_RENAMEAT2=> sys_renameat2(args[0] as isize, args[1] as *const u8,args[2] as isize, args[3] as *const u8, args[4] as u32
+        ),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }
 }

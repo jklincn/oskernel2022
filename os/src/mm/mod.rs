@@ -15,7 +15,7 @@ mod vma;            // 虚拟内存地址映射空间
 
 use address::VPNRange;
 pub use address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
-pub use frame_allocator::{frame_alloc, frame_dealloc, FrameTracker,frame_usage};
+pub use frame_allocator::{frame_alloc, frame_dealloc, FrameTracker};
 pub use memory_set::{kernel_token, MapPermission, MemorySet, KERNEL_SPACE};
 use page_table::PTEFlags;
 pub use page_table::{
@@ -23,7 +23,6 @@ pub use page_table::{
     PageTableEntry, UserBuffer, UserBufferIterator,
 };
 pub use vma::*;
-pub use heap_allocator::heap_usage;
 
 /// 内存管理子系统的初始化
 pub fn init() {
@@ -31,4 +30,9 @@ pub fn init() {
     frame_allocator::init_frame_allocator();
     // 从这一刻开始 SV39 分页模式就被启用了
     KERNEL_SPACE.exclusive_access().activate();
+}
+
+pub fn memory_usage(){
+    frame_allocator::frame_usage();
+    heap_allocator::heap_usage();
 }

@@ -1,7 +1,7 @@
 use crate::mm::{translated_byte_buffer, UserBuffer};
 use crate::task::{current_task, current_user_token, SIG_BLOCK, SIG_SETMASK, SIG_UNBLOCK};
 
-pub fn sys_rt_sigprocmask(how: i32, set: *const usize, oldset: *const usize, sigsetsize: usize) -> isize {
+pub fn sys_rt_sigprocmask(how: i32, set: *const usize, oldset: *const usize, _sigsetsize: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     // println!("enter sys_rt_sigprocmask!");

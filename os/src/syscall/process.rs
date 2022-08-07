@@ -12,12 +12,12 @@
 /// ```
 //
 use crate::fs::{open, OpenFlags};
-use crate::mm::{frame_usage, heap_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next, new, pid2task, suspend_current_and_run_next, RLimit, SignalFlags,
+    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags,
 };
 use crate::timer::{get_TimeVal, get_time_ms, tms, TimeVal};
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
@@ -111,6 +111,7 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
 
     // let tid = new_task.getpid();
     let flags = CloneFlags::from_bits(flags).unwrap();
+    _ = flags;
     // if flags.contains(CloneFlags::CLONE_CHILD_SETTID) && ctid != 0{
     //     new_task.inner_exclusive_access().address.set_child_tid = ctid;
     //     *translated_refmut(new_task.inner_exclusive_access().get_user_token(), ctid as *mut i32) = tid  as i32;
@@ -149,7 +150,7 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
 ///     - 'envs' 环境变量，暂未处理，直接加地址0结束
 /// - 返回值：如果出错的话（如找不到名字相符的可执行文件）则返回 -1，否则返回参数个数 `argc`。
 /// - syscall ID：221
-pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize) -> isize {
+pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize) -> isize {
     let token = current_user_token();
     // 读取到用户空间的应用程序名称（路径）
     let path = translated_str(token, path);
@@ -167,12 +168,15 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
             }
         }
     }
-
-    // 空数组
-    let mut envs_vec: Vec<String> = Vec::new();
     let argc = args_vec.len();
+
+    // 环境变量
+    let mut envs_vec: Vec<String> = Vec::new();
+    envs_vec.push("LD_LIBRARY_PATH=/".to_string());
+    envs_vec.push("PATH=/".to_string());
+    
     let task = current_task().unwrap();
-    // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
+    println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
     if path == "./busybox" || path =="//busybox" {
         task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
         return argc as isize;
@@ -185,7 +189,6 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut envs: *const usize)
         task.exec(all_data.as_slice(), args_vec, envs_vec);
         drop(all_data); // 这里内存释放不干净，残留 40KB 左右堆空间
         // return argc because cx.x[10] will be covered with it later
-        heap_usage();
         argc as isize
     } else {
         -1
@@ -350,7 +353,7 @@ pub fn sys_brk(brk_addr: usize) -> isize {
     addr_new as isize
 }
 
-pub fn sys_prlimit64(pid: usize, resource: usize, new_limit: *const u8, old_limit: *const u8) -> isize {
+pub fn sys_prlimit64(_pid: usize, resource: usize, new_limit: *const u8, old_limit: *const u8) -> isize {
     let token = current_user_token();
     // println!("[DEBUG] enter sys_prlimit64: pid:{},resource:{},new_limit:{},old_limit:{}",pid,resource,new_limit as usize,old_limit as usize);
     if old_limit as usize != 0 {
@@ -382,9 +385,9 @@ pub fn sys_prlimit64(pid: usize, resource: usize, new_limit: *const u8, old_limi
     0
 }
 
-pub fn sys_clock_gettime(clk_id: usize, ts: *mut usize) -> isize {
+pub fn sys_clock_gettime(_clk_id: usize, ts: *mut usize) -> isize {
     let token = current_user_token();
-    *translated_refmut(token, ts) = 0 as usize;
+    *translated_refmut(token, ts) = get_time_ms() as usize;
     0
 }
 
@@ -431,5 +434,10 @@ pub fn sys_sysinfo()->isize{
 }
 
 pub fn sys_faccessat()->isize{
+    0
+}
+
+pub fn sys_madvise(_addr: *const u8,_length:usize,_advice:usize)->isize{
+    // println!("[DEBUG] enter sys_madvise: addr:{}, length:{}, advice:{}",addr as usize,length,advice);
     0
 }

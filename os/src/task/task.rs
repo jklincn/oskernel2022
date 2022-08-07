@@ -10,12 +10,11 @@ use super::signal::SigSet;
 use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
-use crate::console::print;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, MmapFlags, heap_usage};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -207,9 +206,7 @@ impl TaskControlBlock {
         // 从 ELF 文件生成一个全新的地址空间并直接替换
         let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data, &mut auxs);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
-        let mut envs: Vec<String> = Vec::new();
-        envs.push("LD_LIBRARY_PATH=/".to_string());
-        envs.push("PATH=/".to_string());
+        
         // 计算对齐位置
         let mut total_len = 0;
         for i in 0..envs.len() {
@@ -285,8 +282,8 @@ impl TaskControlBlock {
         // argc
         user_sp -= core::mem::size_of::<usize>();
         *translated_refmut(memory_set.token(), user_sp as *mut usize) = args.len();
-
         let mut inner = self.inner_exclusive_access();
+
         inner.memory_set = memory_set; // 这将导致原有的地址空间生命周期结束，里面包含的全部物理页帧都会被回收
         inner.heap_start = user_heap;
         inner.heap_pt = user_heap;
