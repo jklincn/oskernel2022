@@ -90,7 +90,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 return -EMFILE;
             }
             inner.fd_table[fd] = Some(inode);
-            println!("sys_openat return new fd:{}", fd);
+            // println!("sys_openat return new fd:{}", fd);
             fd as isize
         } else {
             // println!("[WARNING] sys_openat return -1, path:{}",path);
@@ -684,7 +684,7 @@ bitflags! {
 }
 
 pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
-    println!("[DEBUG] enter sys_fcntl: fd:{}, cmd:{}, arg:{:?}", fd, cmd, arg);
+    // println!("[DEBUG] enter sys_fcntl: fd:{}, cmd:{}, arg:{:?}", fd, cmd, arg);
     let task = current_task().unwrap();
     let cmd = FcntlFlags::from_bits(cmd).unwrap();
     match cmd {

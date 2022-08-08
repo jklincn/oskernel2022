@@ -1,10 +1,3 @@
-/// # 标准输入输出接口
-/// `os/src/fs/stdio.rs`
-/// ```
-/// pub struct Stdin
-/// pub struct Stdout
-/// ```
-//
 use super::{Dirent, File, Kstat, Timespec};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
@@ -93,7 +86,7 @@ impl File for Stdin {
         panic!("Stdin not implement write_kernel_space");
     }
     fn file_size(&self) -> usize {
-        panic!("Stdin not implement file_size");
+        core::usize::MAX
     }
 }
 
