@@ -452,7 +452,15 @@ impl TaskControlBlock {
 
     pub fn munmap(&self, start: usize, len: usize) -> isize {
         let mut inner = self.inner_exclusive_access();
+
+        // println!("[Kernel munmap] start munmap start: 0x{:x} len: 0x{:x};", start, len);
+        // inner.memory_set.debug_show_layout();
+        
         inner.memory_set.remove_area_with_start_vpn(VirtAddr::from(start).into());
+
+        // println!("[Kernel munmap] after munmap;");
+        // inner.memory_set.debug_show_layout();
+
         inner.mmap_area.remove(start, len)
     }
 
