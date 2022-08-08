@@ -168,65 +168,29 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
 
     let task = current_task().unwrap();
     println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
-    if path == "./busybox" || path == "//busybox" {
-        task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
-        memory_usage();
-        return argc as isize;
-    }
-    if path == "./lua" || path == "//lua" {
-        task.exec(LUA.as_slice(), args_vec, envs_vec);
-        memory_usage();
-        return argc as isize;
-    }
 
-    if path.ends_with(".sh"){
-        let mut new_args = Vec::new();
-        new_args.push("./busybox".to_string());
-        new_args.push("sh".to_string());
-        for i in &args_vec {
-            new_args.push(i.clone());
-        }
-        println!("new_args:{:?}",new_args);
-        task.exec(BUSYBOX.as_slice(), new_args, envs_vec);
-        memory_usage();
-        return argc as isize;
-    }
+    // if path.ends_with(".sh"){
+    //     let mut new_args = Vec::new();
+    //     new_args.push("./busybox".to_string());
+    //     new_args.push("sh".to_string());
+    //     for i in &args_vec {
+    //         new_args.push(i.clone());
+    //     }
+    //     println!("new_args:{:?}",new_args);
+    //     task.exec(BUSYBOX.as_slice(), new_args, envs_vec);
+    //     memory_usage();
+    //     return argc as isize;
+    // }
 
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-        let all_data = app_inode.read_all();
         drop(inner);
-        task.exec(all_data.as_slice(), args_vec, envs_vec);
-        drop(all_data);
+        task.exec(app_inode, args_vec, envs_vec);
         memory_usage();
         argc as isize
     } else {
         -1
     }
-}
-
-lazy_static! {
-    pub static ref BUSYBOX: Vec<u8> = {
-        let task = current_task().unwrap();
-        let inner = task.inner_exclusive_access();
-        if let Some(app_inode) = open(inner.current_path.as_str(), "busybox", OpenFlags::O_RDONLY) {
-            app_inode.read_all()
-        } else {
-            panic!("can't find busybox");
-        }
-    };
-}
-
-lazy_static! {
-    pub static ref LUA: Vec<u8> = {
-        let task = current_task().unwrap();
-        let inner = task.inner_exclusive_access();
-        if let Some(app_inode) = open(inner.current_path.as_str(), "lua", OpenFlags::O_RDONLY) {
-            app_inode.read_all()
-        } else {
-            panic!("can't find lua");
-        }
-    };
 }
 
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。

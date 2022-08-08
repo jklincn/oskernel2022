@@ -2,15 +2,17 @@ use super::signal::SigSet;
 use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
-use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, heap_usage};
+use crate::fs::{open, File, OSInode, OpenFlags, Stdin, Stdout};
+use crate::mm::{heap_usage, translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
+use crate::task::current_task;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
+use lazy_static::*;
 
 pub struct TaskControlBlock {
     /// 进程标识符
@@ -158,10 +160,13 @@ impl TaskControlBlock {
     }
 
     /// 用来实现 exec 系统调用，即当前进程加载并执行另一个 ELF 格式可执行文件
-    pub fn exec(&self, elf_data: &[u8], args: Vec<String>, envs: Vec<String>) {
+    pub fn exec(&self, elf_file: Arc<OSInode>, args: Vec<String>, envs: Vec<String>) {
         let mut auxs = aux::new();
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data, &mut auxs);
+        let elf_data = elf_file.read_all();
+        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data.as_slice(), &mut auxs);
+        drop(elf_data);
+
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
 
         // 计算对齐位置
@@ -455,7 +460,7 @@ impl TaskControlBlock {
 
         // println!("[Kernel munmap] start munmap start: 0x{:x} len: 0x{:x};", start, len);
         // inner.memory_set.debug_show_layout();
-        
+
         inner.memory_set.remove_area_with_start_vpn(VirtAddr::from(start).into());
 
         // println!("[Kernel munmap] after munmap;");
@@ -509,4 +514,28 @@ pub enum TaskStatus {
     Ready,   // 准备运行
     Running, // 正在运行
     Zombie,  // 僵尸态
+}
+
+lazy_static! {
+    pub static ref BUSYBOX: Vec<u8> = {
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
+        if let Some(app_inode) = open(inner.current_path.as_str(), "busybox", OpenFlags::O_RDONLY) {
+            app_inode.read_all()
+        } else {
+            panic!("can't find busybox");
+        }
+    };
+}
+
+lazy_static! {
+    pub static ref LUA: Vec<u8> = {
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
+        if let Some(app_inode) = open(inner.current_path.as_str(), "lua", OpenFlags::O_RDONLY) {
+            app_inode.read_all()
+        } else {
+            panic!("can't find lua");
+        }
+    };
 }
