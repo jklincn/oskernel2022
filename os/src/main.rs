@@ -55,24 +55,35 @@ pub fn id() -> u64 {
 #[no_mangle]
 pub fn rust_main() -> ! {
     clear_bss();
-    if id() == 0 {
-        println!("[kernel] Hello, world!");
-        unsafe {
-            set_fs(FS::Dirty);
-        }
-        mm::init();
-        trap::init();
-        trap::enable_timer_interrupt();
-        timer::set_next_trigger();
-        fs::list_apps();
-        task::add_initproc();
-        println!("[kernel] add initproc!");
-        memory_usage();
-        task::run_tasks();
-        panic!("Unreachable in rust_main!");
-    } else {
-        loop {}
-    }
+    // if id() == 0 {
+    //     println!("[kernel] Hello, world!");
+    //     unsafe {
+    //         set_fs(FS::Dirty);
+    //     }
+    //     mm::init();
+    //     trap::init();
+    //     trap::enable_timer_interrupt();
+    //     timer::set_next_trigger();
+    //     fs::list_apps();
+    //     task::add_initproc();
+    //     println!("[kernel] add initproc!");
+    //     memory_usage();
+    //     task::run_tasks();
+    //     panic!("Unreachable in rust_main!");
+    // } else {
+    //     loop {}
+    // }
+    println!("[kernel] Hello, world!");
+    mm::init();
+    trap::init();
+    trap::enable_timer_interrupt();
+    timer::set_next_trigger();
+    fs::list_apps();
+    task::add_initproc();
+    println!("[kernel] add initproc!");
+    memory_usage();
+    task::run_tasks();
+    panic!("Unreachable in rust_main!");
 }
 
 /// 初始化内存.bbs区域
