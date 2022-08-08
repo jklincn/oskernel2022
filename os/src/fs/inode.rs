@@ -9,12 +9,19 @@ use bitflags::*;
 use lazy_static::*;
 use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
+use core::fmt::{self, Debug, Formatter};
 
 /// 表示进程中一个被打开的常规文件或目录
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     inner: Mutex<OSInodeInner>,
+}
+
+impl Debug for OSInode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("OSInode debug:{{todo}}"))
+    }
 }
 
 pub struct OSInodeInner {

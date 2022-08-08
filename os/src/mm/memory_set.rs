@@ -7,12 +7,11 @@
 /// pub struct MapArea
 /// ```
 //
-use super::{frame_alloc, FrameTracker, MmapArea};
+use super::{frame_alloc, FrameTracker, VMArea};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
-use crate::mm::MmapFlags;
 use crate::sync::UPSafeCell;
 use crate::task::{current_task, AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
 use alloc::collections::BTreeMap;
@@ -64,12 +63,12 @@ pub fn kernel_token() -> usize {
 /// ```
 pub struct MemorySet {
     /// 挂着所有多级页表的节点所在的物理页帧
-    page_table: PageTable,
+    pub page_table: PageTable,
     /// 挂着对应逻辑段中的数据所在的物理页帧
     areas: Vec<MapArea>,
-    // chunks: ChunkArea,
-    stack_chunks: ChunkArea,
-    mmap_chunks: Vec<ChunkArea>,
+    pub vma: Vec<VMArea>,
+    pub data_frames: Vec<FrameTracker>,
+
 }
 
 impl MemorySet {
@@ -78,12 +77,11 @@ impl MemorySet {
         Self {
             page_table: PageTable::new(),
             areas: Vec::new(),
-            // chunks: ChunkArea::new(MapType::Framed,
-            //                     MapPermission::R | MapPermission::W | MapPermission::U),
-            mmap_chunks: Vec::new(),
-            stack_chunks: ChunkArea::new(MapType::Framed, MapPermission::R | MapPermission::W | MapPermission::U),
+            vma: Vec::new(),
+            data_frames: Vec::new(),
         }
     }
+
 
     /// 获取当前页表的 token (符合 satp CSR 格式要求的多级页表的根节点所在的物理页号)
     pub fn token(&self) -> usize {
@@ -106,15 +104,15 @@ impl MemorySet {
             self.areas.remove(idx);
         }
 
-        if let Some((idx, chunk)) = self
-            .mmap_chunks
-            .iter_mut()
-            .enumerate()
-            .find(|(_, chunk)| chunk.mmap_start.floor() == start_vpn)
-        {
-            chunk.unmap(&mut self.page_table);
-            self.mmap_chunks.remove(idx);
-        }
+        // if let Some((idx, chunk)) = self
+        //     .mmap_chunks
+        //     .iter_mut()
+        //     .enumerate()
+        //     .find(|(_, chunk)| chunk.mmap_start.floor() == start_vpn)
+        // {
+        //     chunk.unmap(&mut self.page_table);
+        //     self.mmap_chunks.remove(idx);
+        // }
     }
 
     /// ### 在当前地址空间插入一个新的逻辑段
@@ -361,47 +359,47 @@ impl MemorySet {
     }
 
     /// 复制一个完全相同的地址空间
-    pub fn from_existed_user(user_space: &MemorySet, mmap_area: &MmapArea) -> MemorySet {
+    pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
         let mut memory_set = Self::new_bare();
         // 映射跳板
         memory_set.map_trampoline();
         // 循环拷贝每一个逻辑段到新的地址空间
-        for area in user_space.areas.iter() {
-            let new_area = MapArea::from_another(area);
-            memory_set.push(new_area, None, 0);
-            // 按物理页帧拷贝数据
-            for vpn in area.vpn_range {
-                let src_ppn = user_space.translate(vpn).unwrap().ppn();
-                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
-                dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
-            }
-        }
-        for chunk in user_space.mmap_chunks.iter() {
-            // memory_set.insert_mmap_area(chunk.mmap_start, chunk.mmap_end, chunk.map_perm);
-            let mut new_chunk = ChunkArea::from_another(chunk);
-            // println!("[kernel fork] push mmap_chunk start_va:{:x} end_va:{:x}",chunk.mmap_start.0, chunk.mmap_end.0);
-            if mmap_area.mmap_type_of(chunk.mmap_start.0).unwrap().contains(MmapFlags::MAP_ANONYMOUS) {
-                // println!("[Kernel mmap] copy MAP_ANONYMOUS data.");
-                for vpn in chunk.vpn_table.iter() {
-                    new_chunk.map_one(&mut memory_set.page_table, (*vpn).clone());
-                    let src_ppn = user_space.translate(*vpn).unwrap().ppn();
-                    let dst_ppn = memory_set.translate(*vpn).unwrap().ppn();
-                    dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
-                }
-            }
-            memory_set.mmap_chunks.push(new_chunk);
-        }
+        // for area in user_space.areas.iter() {
+        //     let new_area = MapArea::from_another(area);
+        //     memory_set.push(new_area, None, 0);
+        //     // 按物理页帧拷贝数据
+        //     for vpn in area.vpn_range {
+        //         let src_ppn = user_space.translate(vpn).unwrap().ppn();
+        //         let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
+        //         dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
+        //     }
+        // }
+        // for chunk in user_space.mmap_chunks.iter() {
+        //     // memory_set.insert_mmap_area(chunk.mmap_start, chunk.mmap_end, chunk.map_perm);
+        //     let mut new_chunk = ChunkArea::from_another(chunk);
+        //     // println!("[kernel fork] push mmap_chunk start_va:{:x} end_va:{:x}",chunk.mmap_start.0, chunk.mmap_end.0);
+        //     if mmap_area.mmap_type_of(chunk.mmap_start.0).unwrap().contains(MmapFlags::MAP_ANONYMOUS) {
+        //         // println!("[Kernel mmap] copy MAP_ANONYMOUS data.");
+        //         for vpn in chunk.vpn_table.iter() {
+        //             new_chunk.map_one(&mut memory_set.page_table, (*vpn).clone());
+        //             let src_ppn = user_space.translate(*vpn).unwrap().ppn();
+        //             let dst_ppn = memory_set.translate(*vpn).unwrap().ppn();
+        //             dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
+        //         }
+        //     }
+        //     memory_set.mmap_chunks.push(new_chunk);
+        // }
         memory_set
     }
 
     /// 为mmap缺页分配空页表
     pub fn lazy_mmap(&mut self, stval: VirtAddr) -> isize {
-        for mmap_chunk in self.mmap_chunks.iter_mut() {
-            if stval >= mmap_chunk.mmap_start && stval < mmap_chunk.mmap_end {
-                mmap_chunk.push_vpn(stval.floor(), &mut self.page_table);
-                return 0;
-            }
-        }
+        // for mmap_chunk in self.mmap_chunks.iter_mut() {
+        //     if stval >= mmap_chunk.mmap_start && stval < mmap_chunk.mmap_end {
+        //         mmap_chunk.push_vpn(stval.floor(), &mut self.page_table);
+        //         return 0;
+        //     }
+        // }
         -1
     }
 
@@ -445,9 +443,9 @@ impl MemorySet {
     ///     - vpn_table
     ///     - data_frames
     pub fn insert_mmap_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
-        let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission);
-        new_chunk_area.set_mmap_range(start_va, end_va);
-        self.mmap_chunks.push(new_chunk_area);
+        // let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission);
+        // new_chunk_area.set_mmap_range(start_va, end_va);
+        // self.mmap_chunks.push(new_chunk_area);
     }
 
     #[allow(unused)]
@@ -517,119 +515,119 @@ impl MemorySet {
                 println!("-");
             };
         }
-        for chunk in &self.mmap_chunks {
-            print!(
-                "ChunkArea: {:010x}--{:010x} len:{:08x} ",
-                chunk.mmap_start.0,
-                chunk.mmap_end.0,
-                chunk.mmap_end.0 - chunk.mmap_start.0
-            );
-            if chunk.map_perm.is_user() {
-                print!("U");
-            } else {
-                print!("-");
-            };
-            if chunk.map_perm.is_read() {
-                print!("R");
-            } else {
-                print!("-");
-            };
-            if chunk.map_perm.is_write() {
-                print!("W");
-            } else {
-                print!("-");
-            };
-            if chunk.map_perm.is_execute() {
-                println!("X");
-            } else {
-                println!("-");
-            };
-        }
+        // for chunk in &self.mmap_chunks {
+        //     print!(
+        //         "ChunkArea: {:010x}--{:010x} len:{:08x} ",
+        //         chunk.mmap_start.0,
+        //         chunk.mmap_end.0,
+        //         chunk.mmap_end.0 - chunk.mmap_start.0
+        //     );
+        //     if chunk.map_perm.is_user() {
+        //         print!("U");
+        //     } else {
+        //         print!("-");
+        //     };
+        //     if chunk.map_perm.is_read() {
+        //         print!("R");
+        //     } else {
+        //         print!("-");
+        //     };
+        //     if chunk.map_perm.is_write() {
+        //         print!("W");
+        //     } else {
+        //         print!("-");
+        //     };
+        //     if chunk.map_perm.is_execute() {
+        //         println!("X");
+        //     } else {
+        //         println!("-");
+        //     };
+        // }
         println!("-------------------------------------------------------");
     }
 }
 
-/// ### 离散逻辑段
-pub struct ChunkArea {
-    vpn_table: Vec<VirtPageNum>,
-    data_frames: BTreeMap<VirtPageNum, FrameTracker>,
-    map_type: MapType,
-    map_perm: MapPermission,
-    mmap_start: VirtAddr,
-    mmap_end: VirtAddr,
-}
+// /// ### 离散逻辑段
+// pub struct ChunkArea {
+//     vpn_table: Vec<VirtPageNum>,
+//     data_frames: BTreeMap<VirtPageNum, FrameTracker>,
+//     map_type: MapType,
+//     map_perm: MapPermission,
+//     mmap_start: VirtAddr,
+//     mmap_end: VirtAddr,
+// }
 
-impl ChunkArea {
-    pub fn new(map_type: MapType, map_perm: MapPermission) -> Self {
-        Self {
-            vpn_table: Vec::new(),
-            data_frames: BTreeMap::new(),
-            map_type,
-            map_perm,
-            mmap_start: 0.into(),
-            mmap_end: 0.into(),
-        }
-    }
-    pub fn set_mmap_range(&mut self, start: VirtAddr, end: VirtAddr) {
-        self.mmap_start = start;
-        self.mmap_end = end;
-    }
-    pub fn push_vpn(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
-        self.vpn_table.push(vpn);
-        self.map_one(page_table, vpn);
-    }
-    pub fn from_another(another: &ChunkArea) -> Self {
-        Self {
-            vpn_table: another.vpn_table.clone(),
-            data_frames: BTreeMap::new(),
-            map_type: another.map_type,
-            map_perm: another.map_perm,
-            mmap_start: another.mmap_start,
-            mmap_end: another.mmap_end,
-        }
-    }
-    // Alloc and map one page
-    pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
-        let ppn: PhysPageNum;
-        match self.map_type {
-            MapType::Identical => {
-                ppn = PhysPageNum(vpn.0);
-            }
-            MapType::Framed => {
-                if let Some(frame) = frame_alloc() {
-                    ppn = frame.ppn;
-                    self.data_frames.insert(vpn, frame);
-                } else {
-                    panic!("No more memory!");
-                }
-            }
-        }
-        let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
-        // [WARNING]:因为没有map，所以不能使用
-        page_table.map(vpn, ppn, pte_flags);
-    }
-    pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
-        match self.map_type {
-            MapType::Framed => {
-                self.data_frames.remove(&vpn);
-            }
-            _ => {}
-        }
-        page_table.unmap(vpn);
-    }
+// impl ChunkArea {
+//     pub fn new(map_type: MapType, map_perm: MapPermission) -> Self {
+//         Self {
+//             vpn_table: Vec::new(),
+//             data_frames: BTreeMap::new(),
+//             map_type,
+//             map_perm,
+//             mmap_start: 0.into(),
+//             mmap_end: 0.into(),
+//         }
+//     }
+//     pub fn set_mmap_range(&mut self, start: VirtAddr, end: VirtAddr) {
+//         self.mmap_start = start;
+//         self.mmap_end = end;
+//     }
+//     pub fn push_vpn(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
+//         self.vpn_table.push(vpn);
+//         self.map_one(page_table, vpn);
+//     }
+//     pub fn from_another(another: &ChunkArea) -> Self {
+//         Self {
+//             vpn_table: another.vpn_table.clone(),
+//             data_frames: BTreeMap::new(),
+//             map_type: another.map_type,
+//             map_perm: another.map_perm,
+//             mmap_start: another.mmap_start,
+//             mmap_end: another.mmap_end,
+//         }
+//     }
+//     // Alloc and map one page
+//     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+//         let ppn: PhysPageNum;
+//         match self.map_type {
+//             MapType::Identical => {
+//                 ppn = PhysPageNum(vpn.0);
+//             }
+//             MapType::Framed => {
+//                 if let Some(frame) = frame_alloc() {
+//                     ppn = frame.ppn;
+//                     self.data_frames.insert(vpn, frame);
+//                 } else {
+//                     panic!("No more memory!");
+//                 }
+//             }
+//         }
+//         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+//         // [WARNING]:因为没有map，所以不能使用
+//         page_table.map(vpn, ppn, pte_flags);
+//     }
+//     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+//         match self.map_type {
+//             MapType::Framed => {
+//                 self.data_frames.remove(&vpn);
+//             }
+//             _ => {}
+//         }
+//         page_table.unmap(vpn);
+//     }
 
-    // Alloc and map all pages
-    // pub fn map(&mut self, page_table: &mut PageTable) {
-    //     for vpn in self.vpn_table {
-    //         self.map_one(page_table, vpn);
-    //     }
-    // }
-    pub fn unmap(&mut self, page_table: &mut PageTable) {
-        for vpn in self.vpn_table.clone() {
-            self.unmap_one(page_table, vpn);
-        }
-    }
-}
+//     // Alloc and map all pages
+//     // pub fn map(&mut self, page_table: &mut PageTable) {
+//     //     for vpn in self.vpn_table {
+//     //         self.map_one(page_table, vpn);
+//     //     }
+//     // }
+//     pub fn unmap(&mut self, page_table: &mut PageTable) {
+//         for vpn in self.vpn_table.clone() {
+//             self.unmap_one(page_table, vpn);
+//         }
+//     }
+// }
 
 /// ### 虚拟页面映射到物理页帧的方式
 /// |内容|描述|
@@ -808,4 +806,126 @@ lazy_static! {
             panic!("can't find libc.so");
         }
     };
+}
+
+impl MemorySet {
+    pub fn load_elf(elf_file: Arc<OSInode>, auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
+        let mut memory_set = Self::new_bare();
+        memory_set.map_trampoline(); // 将跳板插入到应用地址空间
+
+        // 为了使用这个外部库，这边做两次读取，第一次读取前64确定程序表的位置与大小
+        let elf_head_data = elf_file.read_vec(0, 64);
+        let elf = xmas_elf::ElfFile::new(elf_head_data.as_slice()).unwrap();
+
+        let ph_entry_size = elf.header.pt2.ph_entry_size() as usize;
+        let ph_offset = elf.header.pt2.ph_offset() as usize;
+        let ph_count = elf.header.pt2.ph_count() as usize;
+
+        // 进行第二次读取，这样的elf对象才能正确解析程序段头的信息
+        let elf_head_data = elf_file.read_vec(0, ph_offset + ph_count * ph_entry_size);
+
+        let elf = xmas_elf::ElfFile::new(elf_head_data.as_slice()).unwrap();
+
+        // 记录目前涉及到的最大的虚拟页号
+        let mut max_end_vpn = VirtPageNum(0);
+
+        // 遍历程序段进行加载
+        for i in 0..ph_count as u16 {
+            let ph = elf.program_header(i).unwrap();
+            match ph.get_type().unwrap() {
+                // xmas_elf::program::Type::Phdr => auxs.push(AuxEntry(AT_PHDR, ph.virtual_addr() as usize)),
+                // xmas_elf::program::Type::Interp => {
+                //     // 加入解释器需要的 aux 字段
+                //     auxs.push(AuxEntry(AT_PHENT, elf.header.pt2.ph_entry_size().into()));
+                //     auxs.push(AuxEntry(AT_PHNUM, ph_count.into()));
+                //     auxs.push(AuxEntry(AT_ENTRY, elf.header.pt2.entry_point() as usize));
+                // }
+                xmas_elf::program::Type::Load => {
+                    let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
+                    let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
+
+                    // 设置映射权限
+                    let mut mmap_prots = MmapProts::empty();
+                    let ph_flags = ph.flags();
+                    if ph_flags.is_read() {
+                        mmap_prots.insert(MmapProts::PROT_READ);
+                    }
+                    if ph_flags.is_write() {
+                        mmap_prots.insert(MmapProts::PROT_WRITE);
+                    }
+                    if ph_flags.is_execute() {
+                        mmap_prots.insert(MmapProts::PROT_EXEC);
+                    }
+
+                    let vma = VMArea::new(
+                        start_va,
+                        end_va,
+                        mmap_prots,
+                        MmapFlags::MAP_FILE,
+                        Some(elf_file.clone()),
+                        ph.offset() as usize,
+                        ph.file_size() as usize,
+                    );
+
+                    memory_set.vma.push(vma);
+
+                    max_end_vpn = end_va.ceil(); // 做上取整
+                }
+                _ => continue,
+            }
+        }
+
+        // 用户栈
+        let max_end_va: VirtAddr = max_end_vpn.into();
+        let mut user_stack_bottom: usize = max_end_va.into();
+        user_stack_bottom += PAGE_SIZE; // 在已用最大虚拟页之上放置一个保护页
+        let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址
+        memory_set.vma.push(VMArea::new(
+            user_stack_bottom.into(),
+            user_stack_top.into(),
+            MmapProts::PROT_READ | MmapProts::PROT_WRITE,
+            MmapFlags::MAP_ANONYMOUS,
+            None,
+            0,
+            0,
+        ));
+
+        // 用户堆
+        let mut user_heap_bottom: usize = user_stack_top;
+        user_heap_bottom += PAGE_SIZE; // 放置一个保护页
+        let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
+        memory_set.vma.push(VMArea::new(
+            user_heap_bottom.into(),
+            user_heap_top.into(),
+            MmapProts::PROT_READ | MmapProts::PROT_WRITE,
+            MmapFlags::MAP_ANONYMOUS,
+            None,
+            0,
+            0,
+        ));
+
+        // 在应用地址空间中映射次高页面来存放 Trap 上下文
+        memory_set.vma.push(VMArea::new(
+            TRAP_CONTEXT.into(),
+            TRAMPOLINE.into(),
+            MmapProts::PROT_READ | MmapProts::PROT_WRITE,
+            MmapFlags::MAP_ANONYMOUS,
+            None,
+            0,
+            0,
+        ));
+
+        // 默认mmap区域
+        memory_set.vma.push(VMArea::new(
+            MMAP_BASE.into(),
+            MMAP_BASE.into(),
+            MmapProts::PROT_READ | MmapProts::PROT_WRITE,
+            MmapFlags::MAP_ANONYMOUS,
+            None,
+            0,
+            0,
+        ));
+
+        (memory_set, user_stack_top, user_heap_bottom, elf.header.pt2.entry_point() as usize)
+    }
 }
