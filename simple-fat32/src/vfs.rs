@@ -555,7 +555,7 @@ impl VFile {
     pub fn stat(&self) -> (i64, i64, u64, bool, u64) {
         self.read_short_dirent(|short_entry: &ShortDirEntry| {
             let first_cluster = short_entry.first_cluster();
-            let mut file_size = short_entry.size();
+            let mut file_size = short_entry.file_size();
             let fs_reader = self.fs.read();
             let fat = fs_reader.get_fat();
             let fat_reader = fat.read();

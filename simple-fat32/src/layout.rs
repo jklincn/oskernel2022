@@ -218,10 +218,6 @@ impl ShortDirEntry {
         self.dir_attr
     }
 
-    pub fn size(&self) -> u32 {
-        self.dir_file_size
-    }
-
     pub fn file_size(&self) -> u32 {
         self.dir_file_size
     }
@@ -325,6 +321,7 @@ impl ShortDirEntry {
         fat: &Arc<RwLock<FAT>>,
         block_device: &Arc<dyn BlockDevice>,
     ) -> usize {
+        // println!("enter read_at: offset:{}",offset);
         let manager_reader = manager.read();
         let fat_reader = fat.read();
         let bytes_per_sector = manager_reader.bytes_per_sector() as usize;
@@ -366,7 +363,7 @@ impl ShortDirEntry {
                     });
                 rest -= len;
                 read_size += len;
-                offset = 0
+                offset = 0;
             }
             if rest == 0 {
                 break;

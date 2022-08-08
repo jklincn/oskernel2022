@@ -3,7 +3,7 @@ use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, heap_usage};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;

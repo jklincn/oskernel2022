@@ -92,6 +92,9 @@ impl File for Stdin {
     fn write_kernel_space(&self, _data: Vec<u8>) -> usize {
         panic!("Stdin not implement write_kernel_space");
     }
+    fn file_size(&self) -> usize {
+        panic!("Stdin not implement file_size");
+    }
 }
 
 impl File for Stdout {
@@ -154,8 +157,13 @@ impl File for Stdout {
         panic!("Stdout not implement read_kernel_space");
     }
     fn write_kernel_space(&self, data: Vec<u8>) -> usize {
+        // println!("data:{:?}",data);
         let buffer = data.as_slice();
+        // println!("str:{:?}",core::str::from_utf8(buffer).unwrap());
         print!("{}", core::str::from_utf8(buffer).unwrap());
         data.len()
+    }
+    fn file_size(&self) -> usize {
+        panic!("Stdout not implement file_size");
     }
 }

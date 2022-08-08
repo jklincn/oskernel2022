@@ -41,7 +41,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 /// - `len` 表示读取字符个数。
 /// - 返回值：读出的字符。
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
-    // println!("[DEBUG] enter sys_read: fd:{}, buf:{}, len:{}", fd, buf as usize, len);
+    // println!("[DEBUG] enter sys_read: fd:{}, buffer address:0x{:x}, len:{}", fd, buf as usize, len);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -57,6 +57,11 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         let file = file.clone();
         // 释放 taskinner 以避免多次借用
         drop(inner);
+        let file_size = file.file_size();
+        if file_size == 0 {
+            println!("[WARNING] sys_read: file_size is zero!");
+        }
+        let len = file_size.min(len);
         file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
@@ -85,7 +90,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 return -EMFILE;
             }
             inner.fd_table[fd] = Some(inode);
-            // println!("sys_openat return new fd:{}",fd);
+            println!("sys_openat return new fd:{}", fd);
             fd as isize
         } else {
             // println!("[WARNING] sys_openat return -1, path:{}",path);
@@ -590,9 +595,9 @@ pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flag
             unimplemented!();
         } else {
             let pathname = translated_str(token, pathname);
-            if let Some(_file) =  open(inner.get_work_path().as_str(),pathname.as_str(),OpenFlags::O_RDWR){
+            if let Some(_file) = open(inner.get_work_path().as_str(), pathname.as_str(), OpenFlags::O_RDWR) {
                 unimplemented!();
-            } else{
+            } else {
                 -ENOENT
             }
         }
@@ -620,12 +625,10 @@ pub fn sys_readv(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
-    // 文件描述符不合法
     if fd >= inner.fd_table.len() {
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
-        // 文件不可读
         if !file.readable() {
             return -1;
         }
@@ -633,15 +636,20 @@ pub fn sys_readv(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
             .pop()
             .unwrap();
         let file = file.clone();
+        let file_size = file.file_size();
+        if file_size == 0 {
+            println!("[WARNING] sys_readv: file_size is zero!");
+        }
         let mut addr = iovp_buf.as_ptr() as *const _ as usize;
         let mut total_read_len = 0;
         drop(inner);
         for _ in 0..iovcnt {
             let iovp = unsafe { &*(addr as *const Iovec) };
+            let len = file_size.min(iovp.iov_len);
             total_read_len += file.read(UserBuffer::new(translated_byte_buffer(
                 token,
                 iovp.iov_base as *const u8,
-                iovp.iov_len,
+                len,
             )));
             addr += size_of::<Iovec>();
         }
@@ -676,22 +684,42 @@ bitflags! {
 }
 
 pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
-    // println!("[DEBUG] enter sys_fcntl:fd:{},cmd:{},arg:{:?}", fd, cmd, arg);
-
+    println!("[DEBUG] enter sys_fcntl: fd:{}, cmd:{}, arg:{:?}", fd, cmd, arg);
     let task = current_task().unwrap();
-
     let cmd = FcntlFlags::from_bits(cmd).unwrap();
     match cmd {
         FcntlFlags::F_SETFL => {
             let inner = task.inner_exclusive_access();
             if let Some(file) = &inner.fd_table[fd as usize] {
                 file.set_flags(OpenFlags::from_bits(arg.unwrap() as u32).unwrap());
+            } else {
+                panic!("sys_fcntl: fd is not an open file descriptor");
             }
         }
+        // Currently, only one such flag is defined: FD_CLOEXEC (value: 1)
         FcntlFlags::F_GETFD => {
-            return 1;
+            // Return (as the function result) the file descriptor flags; arg is ignored.
+            let inner = task.inner_exclusive_access();
+            if let Some(file) = &inner.fd_table[fd as usize] {
+                return file.available() as isize;
+            } else {
+                panic!("sys_fcntl: fd is not an open file descriptor");
+            }
+        }
+        FcntlFlags::F_SETFD => {
+            // Set the file descriptor flags to the value specified by arg.
+            let inner = task.inner_exclusive_access();
+            if let Some(file) = &inner.fd_table[fd as usize] {
+                if arg.unwrap() != 0 {
+                    file.set_cloexec();
+                }
+            } else {
+                panic!("sys_fcntl: fd is not an open file descriptor");
+            }
         }
         FcntlFlags::F_GETFL => {
+            // Return (as the function result) the file access mode and the file status flags; arg is ignored.
+            // todo
             return 04000;
         }
         FcntlFlags::F_DUPFD_CLOEXEC => {
@@ -712,11 +740,15 @@ pub fn sys_fcntl(fd: isize, cmd: usize, arg: Option<usize>) -> isize {
             for i in tmp_fd {
                 inner.fd_table[i].take();
             }
-            inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd as usize].as_ref().unwrap()));
+            inner.fd_table[new_fd] = Some(Arc::clone(
+                inner.fd_table[fd as usize]
+                    .as_ref()
+                    .expect("sys_fcntl: fd is not an open file descriptor"),
+            ));
             inner.fd_table[new_fd].as_ref().unwrap().set_cloexec();
             return new_fd as isize;
         }
-        _ => {}
+        _ => panic!("sys_ioctl: unsupported request!"),
     }
     0
 }
@@ -764,6 +796,7 @@ pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, _count: usize) -
         let mut data_buffer;
         loop {
             data_buffer = in_file.read_kernel_space();
+            // println!("data_buffer:{:?}",data_buffer);
             let len = data_buffer.len();
             if len == 0 {
                 break;

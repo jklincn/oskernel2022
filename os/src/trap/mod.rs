@@ -20,7 +20,7 @@ use crate::task::{
 };
 use crate::timer::set_next_trigger;
 use crate::mm::VirtAddr;
-use crate::mm::frame_usage;
+use crate::mm::{frame_usage,heap_usage};
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -78,6 +78,7 @@ pub fn trap_handler() -> ! {
         Trap::Exception(Exception::UserEnvCall) => {
             let mut cx = current_trap_cx();
             // frame_usage();
+            // heap_usage();
             // println!("syscall_id: {}",cx.x[17]);
             cx.sepc += 4;
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);

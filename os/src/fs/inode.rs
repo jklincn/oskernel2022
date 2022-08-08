@@ -39,10 +39,14 @@ impl OSInode {
         }
     }
     pub fn read_all(&self) -> Vec<u8> {
-        let mut inner = self.inner.lock();
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
-        v.reserve(1200000);// 手动扩大到 1.144M 以充分利用堆空间
+        if self.name() == "busybox"{
+            v.reserve(1120000);  // 提前保留空间来防止过度扩容
+        } else if self.name() == "lua" {
+            v.reserve(300000);
+        }
+        let mut inner = self.inner.lock();
         loop {
             let len = inner.inode.read_at(inner.offset, &mut buffer);
             if len == 0 {
@@ -282,13 +286,21 @@ impl File for OSInode {
     }
     
     fn read(&self, mut buf: UserBuffer) -> usize {
+        // println!("osinode read, current offset:{}",self.inner.lock().offset);
         // 对 /dev/zero 的处理，暂时先加在这里
         if self.name() == "zero" {
             let zero: Vec<u8> = (0..buf.buffers.len()).map(|_| 0).collect();
             buf.write(zero.as_slice());
             return buf.buffers.len();
         }
-
+        let offset = self.inner.lock().offset;
+        let file_size = self.file_size();
+        if file_size == 0 {
+            println!("[WARNING] OSinode read: file_size is zero!");
+        }
+        if offset >= file_size{
+            return 0;
+        }
         let mut inner = self.inner.lock();
         let mut total_read_size = 0usize;
 
@@ -301,6 +313,8 @@ impl File for OSInode {
             inner.offset += read_size;
             total_read_size += read_size;
         }
+        // println!("return total_read_size:{}",total_read_size);
+        // println!("return userbuffer:{:?}",buf);
         total_read_size
     }
 
@@ -421,5 +435,9 @@ impl File for OSInode {
             st_mode = S_IFCHR;
         }
         kstat.init(st_size, st_blksize as i32, st_blocks, st_mode, time);
+    }
+
+    fn file_size(&self) ->usize{
+        self.file_size()
     }
 }

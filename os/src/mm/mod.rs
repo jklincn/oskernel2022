@@ -23,6 +23,7 @@ pub use page_table::{
     PageTableEntry, UserBuffer, UserBufferIterator,
 };
 pub use vma::*;
+pub use heap_allocator::heap_usage;
 
 /// 内存管理子系统的初始化
 pub fn init() {
@@ -33,6 +34,8 @@ pub fn init() {
 }
 
 pub fn memory_usage(){
+    println!("---------------------Memory usage---------------------");
     frame_allocator::frame_usage();
     heap_allocator::heap_usage();
+    println!("------------------------------------------------------");
 }

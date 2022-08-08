@@ -37,6 +37,8 @@ pub trait File: Send + Sync {
     fn read_kernel_space(&self) -> Vec<u8>;
 
     fn write_kernel_space(&self,data:Vec<u8>)->usize;
+
+    fn file_size(&self) ->usize;
 }
 
 pub use dirent::Dirent;

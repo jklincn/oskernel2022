@@ -1,5 +1,5 @@
 // 模块下有两套堆分配器
-// 1. simple_chunk_allocator
+// 1. simple_chunk_allocator(如交到评测机还需添加本地库依赖)
 // 2. linked_list_allocator(正在使用)
 
 // use crate::config::KERNEL_HEAP_SIZE;
@@ -40,6 +40,7 @@ pub fn init_heap() {
 
 #[alloc_error_handler]
 pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
+    heap_usage();
     panic!("Heap allocation error, layout = {:?}", layout);
 }
 

@@ -1,5 +1,5 @@
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, memory_usage};
+use crate::mm::{memory_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags,
 };
@@ -93,7 +93,10 @@ pub fn sys_times(buf: *const u8) -> isize {
 /// - 返回值：对于子进程返回 0，对于当前进程则返回子进程的 PID 。
 /// - syscall ID：220
 pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _newtls: usize) -> isize {
-    println!("[DEBUG] enter sys_fork: flags:{}, stack_ptr:{}, ptid:{}, ctid:{}, newtls:{}",flags,stack_ptr,_ptid,_ctid,_newtls);
+    println!(
+        "[DEBUG] enter sys_fork: flags:{}, stack_ptr:{}, ptid:{}, ctid:{}, newtls:{}",
+        flags, stack_ptr, _ptid, _ctid, _newtls
+    );
     let current_task = current_task().unwrap();
     let new_task = current_task.fork(false);
 
@@ -162,12 +165,17 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     let mut envs_vec: Vec<String> = Vec::new();
     envs_vec.push("LD_LIBRARY_PATH=/".to_string());
     envs_vec.push("PATH=/".to_string());
-    
+
     let task = current_task().unwrap();
     println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
-    memory_usage();
-    if path == "./busybox" || path =="//busybox" {
+    if path == "./busybox" || path == "//busybox" {
         task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
+        memory_usage();
+        return argc as isize;
+    }
+    if path == "./lua" || path == "//lua" {
+        task.exec(LUA.as_slice(), args_vec, envs_vec);
+        memory_usage();
         return argc as isize;
     }
 
@@ -176,8 +184,8 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         let all_data = app_inode.read_all();
         drop(inner);
         task.exec(all_data.as_slice(), args_vec, envs_vec);
-        drop(all_data); // 这里内存释放不干净，残留 40KB 左右堆空间
-        // return argc because cx.x[10] will be covered with it later
+        drop(all_data);
+        memory_usage();
         argc as isize
     } else {
         -1
@@ -196,6 +204,17 @@ lazy_static! {
     };
 }
 
+lazy_static! {
+    pub static ref LUA: Vec<u8> = {
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
+        if let Some(app_inode) = open(inner.current_path.as_str(), "lua", OpenFlags::O_RDONLY) {
+            app_inode.read_all()
+        } else {
+            panic!("can't find lua");
+        }
+    };
+}
 
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
 /// - 参数：
@@ -417,16 +436,15 @@ pub fn sys_ppoll() -> isize {
     1
 }
 
-
-pub fn sys_sysinfo()->isize{
+pub fn sys_sysinfo() -> isize {
     0
 }
 
-pub fn sys_faccessat()->isize{
+pub fn sys_faccessat() -> isize {
     0
 }
 
-pub fn sys_madvise(_addr: *const u8,_length:usize,_advice:usize)->isize{
+pub fn sys_madvise(_addr: *const u8, _length: usize, _advice: usize) -> isize {
     // println!("[DEBUG] enter sys_madvise: addr:{}, length:{}, advice:{}",addr as usize,length,advice);
     0
 }

@@ -1,9 +1,9 @@
 use super::{PhysAddr, PhysPageNum};
 use crate::config::MEMORY_END;
 use alloc::vec::Vec;
-use spin::Mutex;
 use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
+use spin::Mutex;
 
 /// ### 物理页帧
 /// 借用RAII思想，在通过物理页号创建的时候初始化物理页帧
@@ -39,16 +39,15 @@ impl Drop for FrameTracker {
 
 /// 物理页帧管理器
 trait FrameAllocator {
-    /// 新建一个实例，在使用前需要初始化 
+    /// 新建一个实例，在使用前需要初始化
     fn new() -> Self;
     /// 从空闲物理页中分配一个物理页
     fn alloc(&mut self) -> Option<PhysPageNum>;
     /// 回收物理页
     fn dealloc(&mut self, ppn: PhysPageNum);
 
-    fn usage(&self) -> (usize,usize,usize,usize);
+    fn usage(&self) -> (usize, usize, usize, usize);
 }
-
 
 /// ### 栈式物理页帧管理器
 pub struct StackFrameAllocator {
@@ -77,7 +76,7 @@ impl FrameAllocator for StackFrameAllocator {
             current: 0,
             end: 0,
             recycled: Vec::new(),
-            base_num:0,
+            base_num: 0,
         }
     }
     fn alloc(&mut self) -> Option<PhysPageNum> {
@@ -86,10 +85,12 @@ impl FrameAllocator for StackFrameAllocator {
         if let Some(ppn) = self.recycled.pop() {
             // println!("recycled alloc ppn:{}",ppn);
             Some(ppn.into())
-        }   // 空间满返回 None
+        }
+        // 空间满返回 None
         else if self.current == self.end {
             None
-        }   // 否则就返回最低的物理页号
+        }
+        // 否则就返回最低的物理页号
         else {
             self.current += 1;
             // println!("alloc ppn:{}",self.current - 1);
@@ -105,8 +106,8 @@ impl FrameAllocator for StackFrameAllocator {
         // 回收，压栈
         self.recycled.push(ppn);
     }
-    fn usage(&self) -> (usize,usize,usize,usize){
-        (self.current,self.recycled.len(),self.end,self.base_num)
+    fn usage(&self) -> (usize, usize, usize, usize) {
+        (self.current, self.recycled.len(), self.end, self.base_num)
     }
 }
 
@@ -117,7 +118,7 @@ lazy_static! {
     /// ### 物理页帧管理器实例
     /// - 全局变量，管理除内核空间外的内存空间
     pub static ref FRAME_ALLOCATOR: Mutex<FrameAllocatorImpl> =
-        unsafe { Mutex::new(FrameAllocatorImpl::new()) };
+        Mutex::new(FrameAllocatorImpl::new());
 }
 
 /// ### 初始化物理页帧管理器
@@ -128,30 +129,31 @@ pub fn init_frame_allocator() {
     extern "C" {
         fn ekernel();
     }
-    FRAME_ALLOCATOR.lock().init(
-        PhysAddr::from(ekernel as usize).ceil(),
-        PhysAddr::from(MEMORY_END).floor(),
-    );
+    FRAME_ALLOCATOR
+        .lock()
+        .init(PhysAddr::from(ekernel as usize).ceil(), PhysAddr::from(MEMORY_END).floor());
 }
 
 /// 分配物理页帧
 pub fn frame_alloc() -> Option<FrameTracker> {
     // frame_usage();
-    FRAME_ALLOCATOR
-        .lock()
-        .alloc()
-        .map(FrameTracker::new)
+    FRAME_ALLOCATOR.lock().alloc().map(FrameTracker::new)
 }
 
 /// 回收物理页帧
 pub fn frame_dealloc(ppn: PhysPageNum) {
     // println!("dealloc ppn:{}",ppn.0);
-    frame_usage();
+    // frame_usage();
     FRAME_ALLOCATOR.lock().dealloc(ppn);
 }
 
-pub fn frame_usage(){
-    let (current,recycled,end,base_num) = FRAME_ALLOCATOR.lock().usage();
-    let usage = (current - base_num - recycled) * 100 / (end - base_num) ; 
-    println!("[kernel] page usage: {}% ({}/{} pages)",usage,current-base_num-recycled,end - base_num);
+pub fn frame_usage() {
+    let (current, recycled, end, base_num) = FRAME_ALLOCATOR.lock().usage();
+    let usage = (current - base_num - recycled) * 100 / (end - base_num);
+    println!(
+        "[kernel] page usage: {}% ({}/{} pages)",
+        usage,
+        current - base_num - recycled,
+        end - base_num
+    );
 }

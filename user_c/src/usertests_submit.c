@@ -2,7 +2,7 @@
 #include "unistd.h"
 #include "stdlib.h"
 
-char *argv[] = {"./busybox", "sh",  0};
+char *argv[] = {"./busybox", "sh", "./test.sh", "./date.lua", 0};
 
 // int offset = 0;
 // #define PROG_NAME_MAX_LENGTH 40
@@ -53,19 +53,20 @@ int main()
 {
 
     // test only one program
-    // int npid = fork();
-    // assert(npid >= 0);
-    // int child_return;
-    // if (npid == 0)
-    // {
-    //     execve("./busybox", argv, NULL);
-    // }
-    // else
-    // {
-    //     // parent
-    //     child_return = -1;
-    //     waitpid(npid, &child_return, 0);
-    // }
+    int npid = fork();
+    assert(npid >= 0);
+    int child_return;
+    if (npid == 0)
+    {
+        execve("./busybox", argv, NULL);
+        // execve("./lua", argv, NULL);
+    }
+    else
+    {
+        // parent
+        child_return = -1;
+        waitpid(npid, &child_return, 0);
+    }
 
     printf("[FINISH] initproc return!\n");
     return 0;
