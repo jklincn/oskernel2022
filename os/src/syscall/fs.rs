@@ -781,10 +781,10 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> is
 }
 
 pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, _count: usize) -> isize {
-    println!(
-        "[DEBUG] enter sys_sendfile: out_fd:{}, in_fd:{}, offset:{}, count:{}",
-        out_fd, in_fd, offset, _count
-    );
+    // println!(
+    //     "[DEBUG] enter sys_sendfile: out_fd:{}, in_fd:{}, offset:{}, count:{}",
+    //     out_fd, in_fd, offset, _count
+    // );
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     let mut total_write_size = 0usize;

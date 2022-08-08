@@ -739,7 +739,7 @@ impl MapArea {
             MapType::Framed => {
                 // 获取一个物理页帧
                 // println!("map_one");
-                let frame = frame_alloc().unwrap();
+                let frame = frame_alloc().expect("out of memory");
                 ppn = frame.ppn;
                 // println!("current vpn:0x{:x},get ppn:0x{:x}",vpn.0,ppn.0);
                 // 将vpn和分配到的物理页帧配对

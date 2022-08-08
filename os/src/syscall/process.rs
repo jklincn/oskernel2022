@@ -179,6 +179,19 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         return argc as isize;
     }
 
+    if path.ends_with(".sh"){
+        let mut new_args = Vec::new();
+        new_args.push("./busybox".to_string());
+        new_args.push("sh".to_string());
+        for i in &args_vec {
+            new_args.push(i.clone());
+        }
+        println!("new_args:{:?}",new_args);
+        task.exec(BUSYBOX.as_slice(), new_args, envs_vec);
+        memory_usage();
+        return argc as isize;
+    }
+
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
