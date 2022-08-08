@@ -848,3 +848,7 @@ pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, ne
         unimplemented!();
     }
 }
+
+pub fn sys_umask()->isize{
+    0
+}

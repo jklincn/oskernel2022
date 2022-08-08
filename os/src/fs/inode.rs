@@ -45,6 +45,8 @@ impl OSInode {
             v.reserve(1120000);  // 提前保留空间来防止过度扩容
         } else if self.name() == "lua" {
             v.reserve(300000);
+        } else if self.name() == "lmbench_all" {
+            v.reserve(1100000);
         }
         let mut inner = self.inner.lock();
         loop {
