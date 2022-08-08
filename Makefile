@@ -10,7 +10,7 @@ all:
 	@cd os && make build BOARD=k210
 	@cp $(BOOTLOADER) $(BOOTLOADER).copy
 	@dd if=./os/target/riscv64imac-unknown-none-elf/release/os.bin of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
-	@mv $(BOOTLOADER).copy ../os.bin
+	@mv $(BOOTLOADER).copy ./os.bin
 
 
 	
