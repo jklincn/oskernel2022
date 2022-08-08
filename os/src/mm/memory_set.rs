@@ -105,6 +105,16 @@ impl MemorySet {
             area.unmap(&mut self.page_table);
             self.areas.remove(idx);
         }
+
+        if let Some((idx, chunk)) = self
+            .mmap_chunks
+            .iter_mut()
+            .enumerate()
+            .find(|(_, chunk)| chunk.mmap_start.floor() == start_vpn)
+        {
+            chunk.unmap(&mut self.page_table);
+            self.mmap_chunks.remove(idx);
+        }
     }
 
     /// ### 在当前地址空间插入一个新的逻辑段
@@ -614,11 +624,11 @@ impl ChunkArea {
     //         self.map_one(page_table, vpn);
     //     }
     // }
-    // pub fn unmap(&mut self, page_table: &mut PageTable) {
-    //     for vpn in self.vpn_table {
-    //         self.unmap_one(page_table, vpn);
-    //     }
-    // }
+    pub fn unmap(&mut self, page_table: &mut PageTable) {
+        for vpn in self.vpn_table.clone() {
+            self.unmap_one(page_table, vpn);
+        }
+    }
 }
 
 /// ### 虚拟页面映射到物理页帧的方式
