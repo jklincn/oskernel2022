@@ -11,17 +11,10 @@ K210_BOOTLOADER_SIZE := 131072
 
 BOARD ?= qemu
 
-# Run K210
-#K210-SERIALPORT	= /dev/ttyUSB0
-#K210-BURNER	= ../tools/kflash.py
-
 # Binutils
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
 
 build: env initproc_submit $(KERNEL_BIN) 
-
-initproc:
-	@cd ../user_c && make build
 
 initproc_submit:
 	@cd ../user_c && make build_initproc_submit
@@ -34,7 +27,6 @@ env:
 
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
-
 
 kernel:
     # @cargo clean
