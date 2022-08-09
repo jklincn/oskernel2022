@@ -336,7 +336,7 @@ impl TaskControlBlock {
         // 更新子进程 trap 上下文中的栈顶指针
         let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
-
+        println!("fork return!");
         task_control_block
     }
 

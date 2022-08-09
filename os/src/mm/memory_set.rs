@@ -141,7 +141,7 @@ impl MemorySet {
         let ppn = frame.ppn.clone();
         self.data_frames.push(frame);
         println!("alloc ppn:{:?}",ppn);
-        self.page_table.map(TRAP_CONTEXT.into(), ppn, PTEFlags::R | PTEFlags::W);
+        self.page_table.map(VirtAddr::from(TRAP_CONTEXT).into(), ppn, PTEFlags::R | PTEFlags::W);
     }
 
     /// ### 生成内核的地址空间
@@ -423,6 +423,7 @@ impl MemorySet {
 
     /// 根据多级页表和 vpn 查找页表项
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
+        println!("translate vpn:{:?}",vpn);
         self.page_table.translate(vpn)
     }
 
