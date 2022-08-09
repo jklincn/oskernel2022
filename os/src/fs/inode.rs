@@ -326,12 +326,22 @@ impl File for OSInode {
     }
 
     fn read_kernel_space(&self) -> Vec<u8> {
+        let file_size = self.file_size();
         let mut inner = self.inner.lock();
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
-        let readsize = inner.inode.read_at(inner.offset, &mut buffer);
-        inner.offset += readsize;
-        v.extend_from_slice(&buffer[..readsize]);
+        loop{
+            if inner.offset > file_size{
+                break;
+            }
+            let readsize = inner.inode.read_at(inner.offset, &mut buffer);
+            if readsize == 0 {
+                break;
+            }
+            inner.offset += readsize;
+            v.extend_from_slice(&buffer[..readsize]);
+        }
+        v.truncate(v.len().min(file_size));
         v
     }
 

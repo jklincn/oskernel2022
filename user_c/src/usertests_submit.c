@@ -2,7 +2,7 @@
 #include "unistd.h"
 #include "stdlib.h"
 
-char *argv[] = {"./busybox", "sh","./busybox_testcode.sh", 0};
+char *argv[] = {"./busybox", "sh", 0};
 
 // int offset = 0;
 // #define PROG_NAME_MAX_LENGTH 40

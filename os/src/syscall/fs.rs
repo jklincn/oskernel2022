@@ -313,13 +313,13 @@ pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
     let inner = task.inner_exclusive_access();
-
     // todo
     _ = flags;
 
     let path = translated_str(token, path);
+    // println!("[DEBUG] enter sys_unlinkat: fd:{}, path:{}, flags:{}",fd,path,flags);
     if fd == AT_FDCWD {
-        if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::from_bits(0).unwrap()) {
+        if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_RDWR) {
             file.delete();
             0
         } else {
@@ -345,7 +345,7 @@ pub fn sys_chdir(path: *const u8) -> isize {
 }
 
 pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
-    println!("[DEBUG] enter sys_fstat: fd:{}, buf:0x{:x}", fd, buf as usize);
+    // println!("[DEBUG] enter sys_fstat: fd:{}, buf:0x{:x}", fd, buf as usize);
     let token = current_user_token();
     let task = current_task().unwrap();
     let buf_vec = translated_byte_buffer(token, buf, size_of::<Kstat>());
@@ -582,10 +582,10 @@ pub fn sys_newfstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, 
 }
 
 pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flags: usize) -> isize {
-    println!(
-        "[DEBUG] enter sys_utimensat: dirfd:{}, pathname:{}, time:{}, flags:{}",
-        dirfd, pathname as usize, time as usize, flags
-    );
+    // println!(
+    //     "[DEBUG] enter sys_utimensat: dirfd:{}, pathname:{}, time:{}, flags:{}",
+    //     dirfd, pathname as usize, time as usize, flags
+    // );
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -598,7 +598,7 @@ pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flag
         } else {
             let pathname = translated_str(token, pathname);
             if let Some(_file) = open(inner.get_work_path().as_str(), pathname.as_str(), OpenFlags::O_RDWR) {
-                unimplemented!();
+                unimplemented!(); // 记得重新制作文件镜像
             } else {
                 -ENOENT
             }

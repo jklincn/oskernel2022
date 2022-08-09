@@ -186,7 +186,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         for i in &args_vec {
             new_args.push(i.clone());
         }
-        println!("new_args:{:?}",new_args);
+        // println!("new_args:{:?}",new_args);
         task.exec(BUSYBOX.as_slice(), new_args, envs_vec);
         // memory_usage();
         return argc as isize;

@@ -7,7 +7,7 @@ use spin::RwLock;
 const LEAD_SIGNATURE: u32 = 0x41615252;
 const STRUC_SIGNATURE: u32 = 0x61417272;
 pub const FREE_CLUSTER: u32 = 0x00000000; // 空闲簇
-pub const END_CLUSTER: u32 = 0x0FFFFFFF; // 最后一个簇
+pub const END_CLUSTER: u32 = 0x0FFFFFF8; // 最后一个簇
 pub const BAD_CLUSTER: u32 = 0x0FFFFFF7;
 
 pub const ATTR_READ_ONLY: u8 = 0x01;
@@ -337,7 +337,7 @@ impl ShortDirEntry {
         let mut read_size = 0usize;
         let mut rest = buf.len();
 
-        while current_cluster != END_CLUSTER && rest > 0 {
+        while current_cluster <= END_CLUSTER && rest > 0 {
             if offset >= bytes_per_cluster {
                 offset -= bytes_per_cluster;
                 current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
@@ -389,7 +389,7 @@ impl ShortDirEntry {
 
         let mut offset = offset;
         let mut current_cluster = self.first_cluster();
-
+        
         if current_cluster == 0 || buf.len() == 0 {
             return 0;
         }
@@ -397,7 +397,7 @@ impl ShortDirEntry {
         let mut write_size = 0usize;
         let mut rest = buf.len();
 
-        while current_cluster != END_CLUSTER && rest > 0 {
+        while current_cluster <= END_CLUSTER && rest > 0 {
             if offset >= bytes_per_cluster {
                 offset -= bytes_per_cluster;
                 current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
