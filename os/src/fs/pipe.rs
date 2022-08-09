@@ -188,7 +188,6 @@ impl File for Pipe {
             }
         }
     }
-
     #[allow(unused_variables)]
     fn get_fstat(&self, kstat: &mut Kstat) {
         panic!("pipe not implement get_fstat");
@@ -245,11 +244,30 @@ impl File for Pipe {
             return buf;
         }
     }
-    fn write_kernel_space(&self, _data: Vec<u8>) -> usize {
-        panic!("pipe not implement write_kernel_space");
+    fn write_kernel_space(&self, data: Vec<u8>) -> usize {
+        assert_eq!(self.writable(), true);
+        let mut data_iter = data.into_iter();
+        let mut write_size = 0usize;
+        loop {
+            let mut ring_buffer = self.buffer.lock();
+            let loop_write = ring_buffer.available_write();
+            if loop_write == 0 {
+                drop(ring_buffer);
+                suspend_current_and_run_next();
+                continue;
+            }
+            for _ in 0..loop_write {
+                if let Some(data_ref) = data_iter.next() {
+                    ring_buffer.write_byte(data_ref);
+                    write_size += 1;
+                } else {
+                    return write_size;
+                }   
+            }
+        }
     }
 
     fn file_size(&self) -> usize {
-        panic!("pipe not implement file_size");
+        core::usize::MAX
     }
 }

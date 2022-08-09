@@ -93,10 +93,10 @@ pub fn sys_times(buf: *const u8) -> isize {
 /// - 返回值：对于子进程返回 0，对于当前进程则返回子进程的 PID 。
 /// - syscall ID：220
 pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _newtls: usize) -> isize {
-    println!(
-        "[DEBUG] enter sys_fork: flags:{}, stack_ptr:{}, ptid:{}, ctid:{}, newtls:{}",
-        flags, stack_ptr, _ptid, _ctid, _newtls
-    );
+    // println!(
+    //     "[DEBUG] enter sys_fork: flags:{}, stack_ptr:{}, ptid:{}, ctid:{}, newtls:{}",
+    //     flags, stack_ptr, _ptid, _ctid, _newtls
+    // );
     let current_task = current_task().unwrap();
     let new_task = current_task.fork(false);
 
@@ -170,12 +170,12 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
     if path == "./busybox" || path == "//busybox" {
         task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
-        memory_usage();
+        // memory_usage();
         return argc as isize;
     }
     if path == "./lua" || path == "//lua" {
         task.exec(LUA.as_slice(), args_vec, envs_vec);
-        memory_usage();
+        // memory_usage();
         return argc as isize;
     }
 
@@ -188,7 +188,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         }
         println!("new_args:{:?}",new_args);
         task.exec(BUSYBOX.as_slice(), new_args, envs_vec);
-        memory_usage();
+        // memory_usage();
         return argc as isize;
     }
 
@@ -198,7 +198,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         drop(inner);
         task.exec(all_data.as_slice(), args_vec, envs_vec);
         drop(all_data);
-        memory_usage();
+        // memory_usage();
         argc as isize
     } else {
         -1
