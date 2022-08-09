@@ -1,4 +1,4 @@
-BOOTLOADER := ./bootloader/rustsbi-k210.bin.old
+BOOTLOADER := ./bootloader/rustsbi-k210-0.0.2.bin
 K210_BOOTLOADER_SIZE := 131072
 
 # all:

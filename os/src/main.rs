@@ -5,10 +5,6 @@
 #![feature(panic_info_message)] // 让panic函数能通过 PanicInfo::message 获取报错信息
 #![feature(alloc_error_handler)] // 用于处理动态内存分配失败的情形
 
-// Simple Chunk Allocator needs
-#![feature(const_mut_refs)]
-#![feature(allocator_api)]
-
 extern crate alloc;
 
 #[macro_use]
@@ -55,35 +51,35 @@ pub fn id() -> u64 {
 #[no_mangle]
 pub fn rust_main() -> ! {
     clear_bss();
-    // if id() == 0 {
-    //     println!("[kernel] Hello, world!");
-    //     unsafe {
-    //         set_fs(FS::Dirty);
-    //     }
-    //     mm::init();
-    //     trap::init();
-    //     trap::enable_timer_interrupt();
-    //     timer::set_next_trigger();
-    //     fs::list_apps();
-    //     task::add_initproc();
-    //     println!("[kernel] add initproc!");
-    //     memory_usage();
-    //     task::run_tasks();
-    //     panic!("Unreachable in rust_main!");
-    // } else {
-    //     loop {}
-    // }
-    println!("[kernel] Hello, world!");
-    mm::init();
-    trap::init();
-    trap::enable_timer_interrupt();
-    timer::set_next_trigger();
-    fs::list_apps();
-    task::add_initproc();
-    println!("[kernel] add initproc!");
-    memory_usage();
-    task::run_tasks();
-    panic!("Unreachable in rust_main!");
+    if id() == 0 {
+        println!("[kernel] Hello, world!");
+        unsafe {
+            set_fs(FS::Dirty);
+        }
+        mm::init();
+        trap::init();
+        trap::enable_timer_interrupt();
+        timer::set_next_trigger();
+        fs::list_apps();
+        task::add_initproc();
+        println!("[kernel] add initproc!");
+        memory_usage();
+        task::run_tasks();
+        panic!("Unreachable in rust_main!");
+    } else {
+        loop {}
+    }
+    // println!("[kernel] Hello, world!");
+    // mm::init();
+    // trap::init();
+    // trap::enable_timer_interrupt();
+    // timer::set_next_trigger();
+    // fs::list_apps();
+    // task::add_initproc();
+    // println!("[kernel] add initproc!");
+    // memory_usage();
+    // task::run_tasks();
+    // panic!("Unreachable in rust_main!");
 }
 
 /// 初始化内存.bbs区域
