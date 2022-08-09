@@ -1,9 +1,12 @@
 use super::signal::SigSet;
-use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
+use super::{aux, current_user_token, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{open, File, OSInode, OpenFlags, Stdin, Stdout};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, PhysPageNum, VMArea, VirtAddr, KERNEL_SPACE};
+use crate::mm::{
+    frame_alloc, translated_byte_buffer, translated_refmut, MapPermission, MemorySet, MmapFlags, PTEFlags, PhysPageNum, UserBuffer, VMArea,
+    VirtAddr, KERNEL_SPACE,
+};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -11,7 +14,6 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
-use core::slice::SlicePattern;
 
 pub struct TaskControlBlock {
     /// 进程标识符
@@ -160,10 +162,13 @@ impl TaskControlBlock {
     pub fn exec(&self, elf_file: Arc<OSInode>, args: Vec<String>, envs: Vec<String>) {
         let mut auxs = aux::new();
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let elf_data = elf_file.read_all();
-        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data.as_slice(), &mut auxs);
-        drop(elf_data);
+        // let elf_data = elf_file.read_all();
+        // let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data.as_slice(), &mut auxs);
+        // drop(elf_data);
+        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::load_elf(elf_file, &mut auxs);
+
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
+        println!("trap_cx_ppn:0x{:x}",trap_cx_ppn.0);
 
         // 计算对齐位置
         let mut total_len = 0;
@@ -293,7 +298,9 @@ impl TaskControlBlock {
         let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
         for fd in parent_inner.fd_table.iter() {
             if let Some(file) = fd {
-                new_fd_table.push(Some(file.clone()));
+                if !file.available() {
+                    new_fd_table.push(Some(file.clone()));
+                }
             } else {
                 new_fd_table.push(None);
             }
@@ -340,10 +347,60 @@ impl TaskControlBlock {
     ///     - `0`：成功加载缺页
     ///     - `-1`：加载缺页失败
     pub fn check_lazy(&self, va: VirtAddr, is_load: bool) -> isize {
-        // let inner = self.inner_exclusive_access();
-        // let mmap_start = inner.mmap_area.mmap_start;
-        // let mmap_end = inner.mmap_area.mmap_top;
-        // drop(inner);
+        let token = current_user_token();
+        let mut inner = self.inner_exclusive_access();
+
+        let memory_set = &mut inner.memory_set;
+        let page_table = &mut memory_set.page_table;
+        let vma_vec = &memory_set.vma;
+
+        let vpn = va.floor(); // 向下取整
+                              // 检查是否在 vma 中
+        for i in vma_vec {
+            if i.vm_start_page < vpn && vpn < i.vm_end_page {
+                // 检查一些东西，todo
+
+                // 申请分配一个物理页帧
+                let frame = frame_alloc().unwrap();
+                let ppn = frame.ppn;
+
+                // 将物理页帧的生命周期捆绑到 memory_set 上
+                memory_set.data_frames.push(frame);
+
+                // 在多级页表中建立映射
+                let pte_flags = PTEFlags::W | PTEFlags::R | PTEFlags::X | PTEFlags::V;
+                page_table.map(vpn, ppn, pte_flags);
+
+                match i.vm_flags {
+                    MmapFlags::MAP_ANONYMOUS => {
+                        // alloc 时已经初始化为0
+                    }
+                    MmapFlags::MAP_ELF => {
+                        let file = i.file.as_ref().unwrap();
+                        // if vpn == i.vm_start_page {
+                        //     let offset = va.0 - VirtAddr::from(i.vm_start_page).0;
+                        //     let data = file.read_vec(i.offset, PAGE_SIZE - offset);
+                        //     let dst = &mut page_table.translate(vpn).unwrap().ppn().get_bytes_array()[offset..PAGE_SIZE];
+                        //     println!("dst len:{},data len:{}", dst.len(), data.as_slice().len());
+                        //     dst.copy_from_slice(data.as_slice());
+                        // } else {
+                        //     let data = file.read_vec(i.offset + va.0 - i.vm_start.0, PAGE_SIZE);
+                        //     let dst = &mut page_table.translate(vpn).unwrap().ppn().get_bytes_array()[0..PAGE_SIZE];
+                        //     println!("dst len:{},data len:{}", dst.len(), data.as_slice().len());
+                        //     dst.copy_from_slice(data.as_slice());
+                        // }
+                        let read_size = file.read(UserBuffer::new(translated_byte_buffer(
+                            token,
+                            (vpn.0 - i.vm_start_page.0) as *const u8,
+                            PAGE_SIZE,
+                        )));
+                    }
+                    _ => {}
+                }
+                return 0;
+            }
+        }
+        -1
 
         // // print!("[kernel mmap] Check_lazy...");
         // if va >= mmap_start && va < mmap_end {
@@ -407,20 +464,21 @@ impl TaskControlBlock {
             panic!("mmap: start_va not aligned");
         }
 
-        let mut inner = self.inner_exclusive_access();
-        if fd != 0 && fd as usize >= inner.fd_table.len() {
+        let inner = self.inner_exclusive_access();
+        if fd != -1 && fd as usize >= inner.fd_table.len() {
             println!("[WARNING] mmap return -1: fd > fd_table.len()");
             return -1;
         }
-        if fd != 0 && inner.fd_table[fd as usize].is_none() {
+        if fd != -1 && inner.fd_table[fd as usize].is_none() {
             println!("[WARNING] mmap return -1: fd_table[fd] is none");
             return -1;
         }
         let file = open(
             inner.get_work_path().as_str(),
-            &inner.fd_table[fd as usize].unwrap().get_name(),
-            OpenFlags::O_RDWR | OpenFlags::O_EXCL,  // todo
-        ).expect("[kernel] mmap open file return none");
+            &inner.fd_table[fd as usize].as_ref().unwrap().get_name(),
+            OpenFlags::O_RDWR | OpenFlags::O_EXCL, // todo
+        )
+        .expect("[kernel] mmap open file return none");
 
         // // "prot<<1" is equal to meaning of "MapPermission"
         // // "1<<4" means user
@@ -437,22 +495,21 @@ impl TaskControlBlock {
             //     startvpn += 1;
             // }
             // return start;
-        } 
-        else {
+        } else {
             unimplemented!();
-        //     // "Start" va not mapped
+            //     // "Start" va not mapped
             // let va_top = inner.mmap_area.get_mmap_top();
             // let end_va = VirtAddr::from(va_top.0 + len);
             // let token = inner.get_user_token();
-        //     inner
-        //         .memory_set
-        //         .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
+            //     inner
+            //         .memory_set
+            //         .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
 
-        //     inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
+            //     inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
 
-        //     drop(inner);
+            //     drop(inner);
 
-        //     va_top.0
+            //     va_top.0
         }
         0
     }

@@ -20,7 +20,7 @@ pub struct OSInode {
 
 impl Debug for OSInode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("OSInode debug:{{todo}}"))
+        f.write_fmt(format_args!("OSInode debug: file name:{}",self.name()))
     }
 }
 
@@ -73,6 +73,8 @@ impl OSInode {
         let old_offset = inner.offset;
         if offset >= 0 {
             inner.offset = offset as usize;
+        } else{
+            panic!("[DEBUG] read_vec: offset < 0");
         }
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();

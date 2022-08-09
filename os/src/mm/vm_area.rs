@@ -1,7 +1,6 @@
 use alloc::sync::Arc;
-
 use crate::fs::OSInode;
-
+use core::fmt::{self, Debug, Formatter};
 use super::{VirtAddr, VirtPageNum};
 
 bitflags! {
@@ -30,6 +29,7 @@ bitflags! {
         const MAP_PRIVATE = 0x02;
         const MAP_FIXED = 0x10;
         const MAP_ANONYMOUS = 0x20;
+        const MAP_ELF = 0x40;
     }
     // 应用场景：
     // MAP_FILE | MAP_SHARED: 两个进程共同读写一个文本文件
@@ -38,10 +38,10 @@ bitflags! {
     // MAP_ANONYMOUS | MAP_PRIVATE: malloc()
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct VMArea {
-    pub vm_start: VirtAddr,
-    pub vm_end: VirtAddr,
+    // pub vm_start: VirtAddr,
+    // pub vm_end: VirtAddr,
     pub vm_start_page: VirtPageNum,
     pub vm_end_page: VirtPageNum,
     pub vm_prot: MmapProts,
@@ -50,6 +50,20 @@ pub struct VMArea {
     pub file: Option<Arc<OSInode>>,
     pub offset: usize,
     pub file_len: usize,
+}
+
+impl Debug for VMArea {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        println!("\n---------VMArea--------");
+        println!("vm_start_page: 0x{:x}",self.vm_start_page.0);
+        println!("vm_end_page: 0x{:x}",self.vm_end_page.0);
+        println!("vm_prot: {:?}",self.vm_prot);
+        println!("vm_flags: {:?}",self.vm_flags);
+        println!("file: {:?}",self.file);
+        println!("offset: 0x{:x}",self.offset);
+        println!("file_len: 0x{:x}",self.file_len);
+        f.write_fmt(format_args!("-----------------------"))
+    }
 }
 
 impl VMArea {
@@ -63,10 +77,10 @@ impl VMArea {
         file_len: usize,
     ) -> Self {
         let vm_start_page = vm_start.floor();
-        let vm_end_page = vm_start.ceil();
+        let vm_end_page = vm_end.ceil();
         Self {
-            vm_start,
-            vm_end,
+            // vm_start,
+            // vm_end,
             vm_start_page,
             vm_end_page,
             vm_prot,

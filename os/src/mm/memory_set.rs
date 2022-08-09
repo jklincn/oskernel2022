@@ -7,7 +7,7 @@
 /// pub struct MapArea
 /// ```
 //
-use super::{frame_alloc, FrameTracker, VMArea, MmapProts, MmapFlags};
+use super::{frame_alloc, FrameTracker, MmapFlags, MmapProts, VMArea};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
@@ -22,7 +22,7 @@ use lazy_static::*;
 use riscv::register::satp;
 
 // 动态链接部分
-use crate::fs::{open, OpenFlags, OSInode};
+use crate::fs::{open, OSInode, OpenFlags};
 
 extern "C" {
     fn stext();
@@ -68,7 +68,7 @@ pub struct MemorySet {
     areas: Vec<MapArea>,
     pub vma: Vec<VMArea>,
     pub data_frames: Vec<FrameTracker>,
-
+    pub default_mmap_end: VirtPageNum,
 }
 
 impl MemorySet {
@@ -79,9 +79,9 @@ impl MemorySet {
             areas: Vec::new(),
             vma: Vec::new(),
             data_frames: Vec::new(),
+            default_mmap_end:MMAP_BASE.into(),
         }
     }
-
 
     /// 获取当前页表的 token (符合 satp CSR 格式要求的多级页表的根节点所在的物理页号)
     pub fn token(&self) -> usize {
@@ -132,7 +132,7 @@ impl MemorySet {
         self.page_table.map(
             VirtAddr::from(TRAMPOLINE).into(),
             PhysAddr::from(strampoline as usize).into(),
-            PTEFlags::R | PTEFlags::X,
+            PTEFlags::R | PTEFlags::X | PTEFlags::W,
         );
     }
 
@@ -148,7 +148,7 @@ impl MemorySet {
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
         println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
         println!(".bss [{:#x}, {:#x})", sbss_with_stack as usize, ebss as usize);
-        println!("boot_stack:{:#x}",boot_stack as usize);
+        println!("boot_stack:{:#x}", boot_stack as usize);
         println!("mapping .text section");
         // 总体思路：通过Linker.ld中的标签划分内核空间为不同的区块，为每个区块采用恒等映射的方式生成逻辑段，压入地址空间
         memory_set.push(
@@ -364,16 +364,16 @@ impl MemorySet {
         // 映射跳板
         memory_set.map_trampoline();
         // 循环拷贝每一个逻辑段到新的地址空间
-        // for area in user_space.areas.iter() {
-        //     let new_area = MapArea::from_another(area);
-        //     memory_set.push(new_area, None, 0);
-        //     // 按物理页帧拷贝数据
-        //     for vpn in area.vpn_range {
-        //         let src_ppn = user_space.translate(vpn).unwrap().ppn();
-        //         let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
-        //         dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
-        //     }
-        // }
+        for area in user_space.areas.iter() {
+            let new_area = MapArea::from_another(area);
+            memory_set.push(new_area, None, 0);
+            // 按物理页帧拷贝数据
+            for vpn in area.vpn_range {
+                let src_ppn = user_space.translate(vpn).unwrap().ppn();
+                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
+                dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
+            }
+        }
         // for chunk in user_space.mmap_chunks.iter() {
         //     // memory_set.insert_mmap_area(chunk.mmap_start, chunk.mmap_end, chunk.map_perm);
         //     let mut new_chunk = ChunkArea::from_another(chunk);
@@ -616,12 +616,6 @@ impl MemorySet {
 //         page_table.unmap(vpn);
 //     }
 
-//     // Alloc and map all pages
-//     // pub fn map(&mut self, page_table: &mut PageTable) {
-//     //     for vpn in self.vpn_table {
-//     //         self.map_one(page_table, vpn);
-//     //     }
-//     // }
 //     pub fn unmap(&mut self, page_table: &mut PageTable) {
 //         for vpn in self.vpn_table.clone() {
 //             self.unmap_one(page_table, vpn);
@@ -845,23 +839,25 @@ impl MemorySet {
                     let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
 
                     // 设置映射权限
-                    let mut mmap_prots = MmapProts::empty();
-                    let ph_flags = ph.flags();
-                    if ph_flags.is_read() {
-                        mmap_prots.insert(MmapProts::PROT_READ);
-                    }
-                    if ph_flags.is_write() {
-                        mmap_prots.insert(MmapProts::PROT_WRITE);
-                    }
-                    if ph_flags.is_execute() {
-                        mmap_prots.insert(MmapProts::PROT_EXEC);
-                    }
+                    let mmap_prots = MmapProts::PROT_READ | MmapProts::PROT_WRITE | MmapProts::PROT_EXEC;
+
+                    // let mut mmap_prots = MmapProts::empty();
+                    // let ph_flags = ph.flags();
+                    // if ph_flags.is_read() {
+                    //     mmap_prots.insert(MmapProts::PROT_READ);
+                    // }
+                    // if ph_flags.is_write() {
+                    //     mmap_prots.insert(MmapProts::PROT_WRITE);
+                    // }
+                    // if ph_flags.is_execute() {
+                    //     mmap_prots.insert(MmapProts::PROT_EXEC);
+                    // }
                     let vma = VMArea::new(
                         start_va,
                         end_va,
                         mmap_prots,
-                        MmapFlags::MAP_FILE,
-                        Some(elf_file),
+                        MmapFlags::MAP_ELF,
+                        Some(elf_file.clone()),
                         ph.offset() as usize,
                         ph.file_size() as usize,
                     );
@@ -923,7 +919,7 @@ impl MemorySet {
             0,
             0,
         ));
-
+        println!("load elf return");
         (memory_set, user_stack_top, user_heap_bottom, elf.header.pt2.entry_point() as usize)
     }
 }
