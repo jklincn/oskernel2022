@@ -409,11 +409,11 @@ impl TaskControlBlock {
 
         let mut inner = self.inner_exclusive_access();
         if fd != 0 && fd as usize >= inner.fd_table.len() {
-            println!("[WARNING] mmap: fd > fd_table.len()");
+            println!("[WARNING] mmap return -1: fd > fd_table.len()");
             return -1;
         }
         if fd != 0 && inner.fd_table[fd as usize].is_none() {
-            println!("[WARNING] mmap: fd_table[fd] is none");
+            println!("[WARNING] mmap return -1: fd_table[fd] is none");
             return -1;
         }
         let file = open(
@@ -438,7 +438,8 @@ impl TaskControlBlock {
             // }
             // return start;
         } 
-        // else {
+        else {
+            unimplemented!();
         //     // "Start" va not mapped
             // let va_top = inner.mmap_area.get_mmap_top();
             // let end_va = VirtAddr::from(va_top.0 + len);
@@ -452,7 +453,7 @@ impl TaskControlBlock {
         //     drop(inner);
 
         //     va_top.0
-        // }
+        }
         0
     }
 
