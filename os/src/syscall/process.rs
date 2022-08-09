@@ -11,7 +11,6 @@ use core::arch::asm;
 use core::mem::size_of;
 // use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 pub use crate::task::{CloneFlags, Utsname, UTSNAME};
-use lazy_static::*;
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -344,7 +343,7 @@ pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, 
     // let inner = task.inner_exclusive_access();
     // inner.memory_set.debug_show_layout();
 
-    return result_addr as isize;
+    return result_addr;
 }
 
 //use crate::mm::HEAP_ALLOCATOR;

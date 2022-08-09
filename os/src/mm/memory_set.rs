@@ -7,7 +7,7 @@
 /// pub struct MapArea
 /// ```
 //
-use super::{frame_alloc, FrameTracker, VMArea};
+use super::{frame_alloc, FrameTracker, VMArea, MmapProts, MmapFlags};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
@@ -22,7 +22,7 @@ use lazy_static::*;
 use riscv::register::satp;
 
 // 动态链接部分
-use crate::fs::{open, OpenFlags};
+use crate::fs::{open, OpenFlags, OSInode};
 
 extern "C" {
     fn stext();
@@ -856,17 +856,15 @@ impl MemorySet {
                     if ph_flags.is_execute() {
                         mmap_prots.insert(MmapProts::PROT_EXEC);
                     }
-
                     let vma = VMArea::new(
                         start_va,
                         end_va,
                         mmap_prots,
                         MmapFlags::MAP_FILE,
-                        Some(elf_file.clone()),
+                        Some(elf_file),
                         ph.offset() as usize,
                         ph.file_size() as usize,
                     );
-
                     memory_set.vma.push(vma);
 
                     max_end_vpn = end_va.ceil(); // 做上取整

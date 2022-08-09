@@ -15,12 +15,13 @@ bitflags! {
     }
 }
 
+
 bitflags! {
     /// |名称|值|映射方式|
     /// |--|--|--|
     /// |MAP_FILE|0|文件映射，使用文件内容初始化内存|
-    /// |MAP_SHARED|0x01|共享映射，多进程间数据共享，修改反应到磁盘实际文件中。|
-    /// |MAP_PRIVATE|0x02|私有映射，多进程间数据共享，修改不反应到磁盘实际文件，|
+    /// |MAP_SHARED|0x01|共享映射，修改对所有进程可见，多进程读写同一个文件需要调用者提供互斥机制|
+    /// |MAP_PRIVATE|0x02|私有映射，进程A的修改对进程B不可见的，利用 COW 机制，修改只会存在于内存中，不会同步到外部的磁盘文件上|
     /// |MAP_FIXED|0x10||
     /// |MAP_ANONYMOUS|0x20|匿名映射，初始化全为0的内存空间|
     pub struct MmapFlags: u32 {
@@ -30,9 +31,14 @@ bitflags! {
         const MAP_FIXED = 0x10;
         const MAP_ANONYMOUS = 0x20;
     }
+    // 应用场景：
+    // MAP_FILE | MAP_SHARED: 两个进程共同读写一个文本文件
+    // MAP_FILE | MAP_PRIVATE: 进程对动态链接库的使用
+    // MAP_ANONYMOUS | MAP_SHARED: 作为进程间通信机制的POSIX共享内存(Linux 中共享内存对应tmpfs的一个文件，也可视为共享文件映射)
+    // MAP_ANONYMOUS | MAP_PRIVATE: malloc()
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct VMArea {
     pub vm_start: VirtAddr,
     pub vm_end: VirtAddr,
@@ -41,15 +47,21 @@ pub struct VMArea {
     pub vm_prot: MmapProts,
     pub vm_flags: MmapFlags,
     // 如果是文件映射，则下面保存文件节点、起始偏移量与该段数据长度
-    pub file:isize,
+    pub file: Option<Arc<OSInode>>,
     pub offset: usize,
-    pub file_len:usize,
-    // ELF文件
-    pub elf: Option<Arc<OSInode>>,
+    pub file_len: usize,
 }
 
 impl VMArea {
-    pub fn new(vm_start: VirtAddr, vm_end: VirtAddr, vm_prot: MmapProts, vm_flags: MmapFlags,file:isize, offset: usize,file_len:usize, elf: Option<Arc<OSInode>>) -> Self {
+    pub fn new(
+        vm_start: VirtAddr,
+        vm_end: VirtAddr,
+        vm_prot: MmapProts,
+        vm_flags: MmapFlags,
+        file: Option<Arc<OSInode>>,
+        offset: usize,
+        file_len: usize,
+    ) -> Self {
         let vm_start_page = vm_start.floor();
         let vm_end_page = vm_start.ceil();
         Self {
@@ -62,7 +74,6 @@ impl VMArea {
             file,
             offset,
             file_len,
-            elf,
         }
     }
 }

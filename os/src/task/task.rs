@@ -2,8 +2,8 @@ use super::signal::SigSet;
 use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
-use crate::fs::{File, Stdin, Stdout, OSInode};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,VMArea};
+use crate::fs::{open, File, OSInode, OpenFlags, Stdin, Stdout};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, PhysPageNum, VMArea, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -402,51 +402,54 @@ impl TaskControlBlock {
     ///     - `fd`：映射文件描述符
     ///     - `off`: 偏移量
     /// - 返回值：从文件的哪个位置开始映射
-    pub fn mmap(&self, start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> usize {
-        // if start % PAGE_SIZE != 0 {
-        //     panic!("mmap: start_va not aligned");
-        // }
+    pub fn mmap(&self, start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
+        if start % PAGE_SIZE != 0 {
+            panic!("mmap: start_va not aligned");
+        }
 
-        // let mut inner = self.inner_exclusive_access();
-        // let fd_table = inner.fd_table.clone();
-        // let token = inner.get_user_token();
-        // let va_top = inner.mmap_area.get_mmap_top();
-        // let end_va = VirtAddr::from(va_top.0 + len);
+        let mut inner = self.inner_exclusive_access();
+        if fd != 0 && fd as usize >= inner.fd_table.len() {
+            println!("[WARNING] mmap: fd > fd_table.len()");
+            return -1;
+        }
+        if fd != 0 && inner.fd_table[fd as usize].is_none() {
+            println!("[WARNING] mmap: fd_table[fd] is none");
+            return -1;
+        }
+        let file = open(
+            inner.get_work_path().as_str(),
+            &inner.fd_table[fd as usize].unwrap().get_name(),
+            OpenFlags::O_RDWR | OpenFlags::O_EXCL,  // todo
+        ).expect("[kernel] mmap open file return none");
 
         // // "prot<<1" is equal to meaning of "MapPermission"
         // // "1<<4" means user
         // let map_flags = (((prot & 0b111) << 1) + (1 << 4)) as u8;
 
-        // let mut startvpn = start / PAGE_SIZE;
-
-        // if start != 0 {
-        //     // "Start" va Already mapped
-        //     while startvpn < (start + len) / PAGE_SIZE {
-        //         if inner.memory_set.set_pte_flags(startvpn.into(), map_flags as usize) == -1 {
-        //             panic!("mmap: start_va not mmaped");
-        //         }
-        //         startvpn += 1;
-        //     }
-        //     return start;
-        // } else {
+        if start != 0 {
+            unimplemented!();
+            // "Start" va Already mapped
+            // let mut startvpn = start / PAGE_SIZE;
+            // while startvpn < (start + len) / PAGE_SIZE {
+            //     if inner.memory_set.set_pte_flags(startvpn.into(), map_flags as usize) == -1 {
+            //         panic!("mmap: start_va not mmaped");
+            //     }
+            //     startvpn += 1;
+            // }
+            // return start;
+        } 
+        // else {
         //     // "Start" va not mapped
+            // let va_top = inner.mmap_area.get_mmap_top();
+            // let end_va = VirtAddr::from(va_top.0 + len);
+            // let token = inner.get_user_token();
         //     inner
         //         .memory_set
         //         .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
 
-        //     // 创建mmap后直接加载一页，不使用lazy mmap
-        //     // inner.memory_set.lazy_mmap(va_top);
-
         //     inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
-        //     // println!("[DEBUG] mmap: va:{}, len:{}",va_top.0,len);
-        //     // inner.memory_set.debug_show_layout();
-        //     // println!("ppn: 0x{:x}", inner.memory_set.translate(va_top.into()).unwrap().ppn().0);
-        //     // inner.memory_set.debug_show_data(va_top);
-        //     //-------------------------------------
 
         //     drop(inner);
-        //     // super::processor::current_task().unwrap().check_lazy(va_top, true);
-        //     // self.check_lazy(va_top, true);
 
         //     va_top.0
         // }
@@ -458,7 +461,7 @@ impl TaskControlBlock {
 
         // // println!("[Kernel munmap] start munmap start: 0x{:x} len: 0x{:x};", start, len);
         // // inner.memory_set.debug_show_layout();
-        
+
         // inner.memory_set.remove_area_with_start_vpn(VirtAddr::from(start).into());
 
         // // println!("[Kernel munmap] after munmap;");
