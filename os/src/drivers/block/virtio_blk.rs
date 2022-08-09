@@ -14,7 +14,7 @@ use crate::mm::{
     frame_alloc, frame_dealloc, kernel_token, FrameTracker, PageTable, PhysAddr, PhysPageNum,
     StepByOne, VirtAddr,
 };
-use crate::sync::UPSafeCell;
+use spin::Mutex;
 use alloc::vec::Vec;
 use lazy_static::*;
 use virtio_drivers::{VirtIOBlk, VirtIOHeader};
@@ -23,7 +23,7 @@ use virtio_drivers::{VirtIOBlk, VirtIOHeader};
 const VIRTIO0: usize = 0x10001000;
 
 lazy_static! {
-    static ref QUEUE_FRAMES: UPSafeCell<Vec<FrameTracker>> = unsafe { UPSafeCell::new(Vec::new()) };
+    static ref QUEUE_FRAMES: Mutex<Vec<FrameTracker>> = unsafe { Mutex::new(Vec::new()) };
 }
 
 /// ### VirtIO 总线架构下的块设备
@@ -34,19 +34,19 @@ lazy_static! {
 /// fn write_block()
 /// pub fn new()
 /// ```
-pub struct VirtIOBlock(UPSafeCell<VirtIOBlk<'static>>);
+pub struct VirtIOBlock(Mutex<VirtIOBlk<'static>>);
 
 impl BlockDevice for VirtIOBlock {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
         // println!("block_id:{}",block_id);
         self.0
-            .exclusive_access()
+            .lock()
             .read_block(block_id, buf)
             .expect("Error when reading VirtIOBlk");
     }
     fn write_block(&self, block_id: usize, buf: &[u8]) {
         self.0
-            .exclusive_access()
+            .lock()
             .write_block(block_id, buf)
             .expect("Error when writing VirtIOBlk");
     }
@@ -57,7 +57,7 @@ impl VirtIOBlock {
     #[allow(unused)]
     pub fn new() -> Self {
         unsafe {
-            Self(UPSafeCell::new(
+            Self(Mutex::new(
                 // VirtIOHeader 实际上就代表以 MMIO 方式访问 VirtIO 设备所需的一组设备寄存器
                 VirtIOBlk::new(&mut *(VIRTIO0 as *mut VirtIOHeader)).unwrap(),
             ))
@@ -74,7 +74,7 @@ pub extern "C" fn virtio_dma_alloc(pages: usize) -> PhysAddr {
             ppn_base = frame.ppn;
         }
         assert_eq!(frame.ppn.0, ppn_base.0 + i);
-        QUEUE_FRAMES.exclusive_access().push(frame);
+        QUEUE_FRAMES.lock().push(frame);
     }
     ppn_base.into()
 }

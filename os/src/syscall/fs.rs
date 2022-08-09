@@ -473,9 +473,10 @@ const TCSETS: usize = 0x5402;
 const TIOCGPGRP: usize = 0x540f;
 const TIOCSPGRP: usize = 0x5410;
 const TIOCGWINSZ: usize = 0x5413;
+const RTC_RD_TIME: usize = 0xffffffff80247009;  // 这个值还需考量
 
 pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
-    // println!("enter sys_ioctl: fd:{}, request:0x{:x}, argp:{}",fd,request,argp as usize);
+    // println!("enter sys_ioctl: fd:{}, request:0x{:x}, argp:{}", fd, request, argp as usize);
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -489,6 +490,7 @@ pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
         TIOCGPGRP => *translated_refmut(token, argp) = 0 as u8,
         TIOCSPGRP => {}
         TIOCGWINSZ => *translated_refmut(token, argp) = 0 as u8,
+        RTC_RD_TIME=>{},
         _ => panic!("sys_ioctl: unsupported request!"),
     }
     0
@@ -580,10 +582,10 @@ pub fn sys_newfstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, 
 }
 
 pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flags: usize) -> isize {
-    // println!(
-    //     "[DEBUG] enter sys_utimensat: dirfd:{}, pathname:{}, time:{}, flags:{}",
-    //     dirfd, pathname as usize, time as usize, flags
-    // );
+    println!(
+        "[DEBUG] enter sys_utimensat: dirfd:{}, pathname:{}, time:{}, flags:{}",
+        dirfd, pathname as usize, time as usize, flags
+    );
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
@@ -646,11 +648,7 @@ pub fn sys_readv(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
         for _ in 0..iovcnt {
             let iovp = unsafe { &*(addr as *const Iovec) };
             let len = file_size.min(iovp.iov_len);
-            total_read_len += file.read(UserBuffer::new(translated_byte_buffer(
-                token,
-                iovp.iov_base as *const u8,
-                len,
-            )));
+            total_read_len += file.read(UserBuffer::new(translated_byte_buffer(token, iovp.iov_base as *const u8, len)));
             addr += size_of::<Iovec>();
         }
         total_read_len as isize
@@ -787,12 +785,14 @@ pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, _count: usize) -
     // );
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
+    let fd_table = inner.fd_table.clone();
+    drop(inner);
     let mut total_write_size = 0usize;
     if offset as usize != 0 {
         unimplemented!();
     } else {
-        let in_file = &inner.fd_table[in_fd].as_ref().unwrap();
-        let out_file = &inner.fd_table[out_fd].as_ref().unwrap();
+        let in_file = fd_table[in_fd].as_ref().unwrap();
+        let out_file = fd_table[out_fd].as_ref().unwrap();
         let mut data_buffer;
         loop {
             data_buffer = in_file.read_kernel_space();
@@ -849,6 +849,6 @@ pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, ne
     }
 }
 
-pub fn sys_umask()->isize{
+pub fn sys_umask() -> isize {
     0
 }

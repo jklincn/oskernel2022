@@ -150,6 +150,11 @@ lazy_static! {
 pub fn list_apps() {
     open("/", "proc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
+    open("/", "dev", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
+    open("/dev", "misc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
+    open("/proc", "mounts", OpenFlags::O_CREATE);
+    open("/proc", "meminfo", OpenFlags::O_CREATE);
+    open("/dev/misc", "rtc", OpenFlags::O_CREATE);
     // open("/", "dev", OpenFlags::O_DIRECTROY);
     // open("/dev", "null", OpenFlags::O_CREATE);
     // open("/dev", "zero", OpenFlags::O_CREATE);

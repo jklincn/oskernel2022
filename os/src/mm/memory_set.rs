@@ -13,7 +13,6 @@ use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
 use crate::mm::MmapFlags;
-use crate::sync::UPSafeCell;
 use crate::task::{current_task, AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
@@ -21,6 +20,7 @@ use alloc::vec::Vec;
 use core::arch::asm;
 use lazy_static::*;
 use riscv::register::satp;
+use spin::Mutex;
 
 // 动态链接部分
 use crate::fs::{open, OpenFlags};
@@ -40,11 +40,11 @@ extern "C" {
 }
 
 lazy_static! {
-    pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> = Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
+    pub static ref KERNEL_SPACE: Arc<Mutex<MemorySet>> = Arc::new(unsafe { Mutex::new(MemorySet::new_kernel()) });
 }
 
 pub fn kernel_token() -> usize {
-    KERNEL_SPACE.exclusive_access().token()
+    KERNEL_SPACE.lock().token()
 }
 
 /// ### 地址空间

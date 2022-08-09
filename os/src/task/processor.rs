@@ -16,7 +16,7 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
-use crate::sync::UPSafeCell;
+use spin::Mutex;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -60,14 +60,14 @@ impl Processor {
 lazy_static! {
     /// - Processor 是描述 CPU执行状态 的数据结构。
     /// - 在单核CPU环境下，我们仅创建单个 Processor 的全局实例 PROCESSOR
-    pub static ref PROCESSOR: UPSafeCell<Processor> = unsafe { UPSafeCell::new(Processor::new()) };
+    pub static ref PROCESSOR: Mutex<Processor> = Mutex::new(Processor::new());
 }
 
 /// 进入 idle 控制流，它运行在这个 CPU 核的启动栈上，
 /// 功能是循环调用 fetch_task 直到顺利从任务管理器中取出一个任务，随后便准备通过任务切换的方式来执行
 pub fn run_tasks() {
     loop {
-        let mut processor = PROCESSOR.exclusive_access();
+        let mut processor = PROCESSOR.lock();
         // TASK_MANAGER.exclusive_access().list_alltask();
         if let Some(task) = fetch_task() {
             let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
@@ -89,12 +89,12 @@ pub fn run_tasks() {
 
 /// 从全局变量 `PROCESSOR` 中取出当前正在执行的任务
 pub fn take_current_task() -> Option<Arc<TaskControlBlock>> {
-    PROCESSOR.exclusive_access().take_current()
+    PROCESSOR.lock().take_current()
 }
 
 /// 从全局变量 `PROCESSOR` 中取出当前正在执行任务的任务控制块的引用计数的一份拷贝
 pub fn current_task() -> Option<Arc<TaskControlBlock>> {
-    PROCESSOR.exclusive_access().current()
+    PROCESSOR.lock().current()
 }
 
 /// 从全局变量 `PROCESSOR` 中取出当前正在执行任务的用户地址空间 token
@@ -113,7 +113,7 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 
 /// 换到 idle 控制流并开启新一轮的任务调度
 pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
-    let mut processor = PROCESSOR.exclusive_access();
+    let mut processor = PROCESSOR.lock();
     let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
     drop(processor);
     unsafe {

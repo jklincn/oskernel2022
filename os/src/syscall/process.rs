@@ -167,7 +167,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     envs_vec.push("PATH=/".to_string());
 
     let task = current_task().unwrap();
-    println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
+    // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
     if path == "./busybox" || path == "//busybox" {
         task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
         // memory_usage();
@@ -305,7 +305,7 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
 /// - syscall_ID: 160
 pub fn sys_uname(buf: *const u8) -> isize {
     let token = current_user_token();
-    let uname = UTSNAME.exclusive_access();
+    let uname = UTSNAME.lock();
     let buf_vec = translated_byte_buffer(token, buf, core::mem::size_of::<Utsname>());
     let mut userbuf = UserBuffer::new(buf_vec);
     userbuf.write(uname.as_bytes());

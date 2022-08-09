@@ -1,4 +1,3 @@
-use crate::sync::UPSafeCell;
 /// # 系统信息模块
 /// `os/src/task/info.rs`
 /// ```
@@ -8,6 +7,7 @@ use crate::sync::UPSafeCell;
 //
 //use alloc::sync::Arc;
 use lazy_static::*;
+use spin::Mutex;
 
 pub struct Utsname {
     pub sysname: [u8; 65],
@@ -19,7 +19,7 @@ pub struct Utsname {
 }
 
 lazy_static! {
-    pub static ref UTSNAME: UPSafeCell<Utsname> = unsafe { UPSafeCell::new(Utsname::new()) };
+    pub static ref UTSNAME: Mutex<Utsname> = Mutex::new(Utsname::new());
 }
 
 impl Utsname {

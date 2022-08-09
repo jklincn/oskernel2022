@@ -28,7 +28,7 @@ mod fs; // 内核文件系统接口
 mod lang_items; // Rust语言相关参数
 mod mm; // 内存空间模块
 mod sbi; // 实现了 RustSBI 通信的相关功能
-mod sync; // 允许在单核处理器上将引用做全局变量使用
+// mod sync; // 允许在单核处理器上将引用做全局变量使用
 mod syscall; // 系统调用模块
 mod task; // 任务管理模块
 mod timer; // 时间片模块

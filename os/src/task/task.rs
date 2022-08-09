@@ -4,13 +4,12 @@ use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, heap_usage};
-use crate::sync::UPSafeCell;
+use spin::{Mutex, MutexGuard};
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
-use core::cell::RefMut;
 
 pub struct TaskControlBlock {
     /// 进程标识符
@@ -19,7 +18,7 @@ pub struct TaskControlBlock {
     pub tgid: usize,
     /// 应用内核栈
     pub kernel_stack: KernelStack,
-    inner: UPSafeCell<TaskControlBlockInner>,
+    inner: Mutex<TaskControlBlockInner>,
 }
 
 pub struct TaskControlBlockInner {
@@ -95,8 +94,8 @@ impl TaskControlBlockInner {
 }
 
 impl TaskControlBlock {
-    pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
-        self.inner.exclusive_access()
+    pub fn inner_exclusive_access(&self) -> MutexGuard<TaskControlBlockInner> {
+        self.inner.lock()
     }
 
     /// 通过 elf 数据新建一个任务控制块，目前仅用于内核中手动创建唯一一个初始进程 initproc
@@ -116,8 +115,7 @@ impl TaskControlBlock {
             pid: pid_handle,
             tgid,
             kernel_stack,
-            inner: unsafe {
-                UPSafeCell::new(TaskControlBlockInner {
+            inner:Mutex::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: user_sp,
                     heap_start: user_heap,
@@ -142,7 +140,7 @@ impl TaskControlBlock {
                     sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
                 })
-            },
+            ,
         };
         // 初始化位于该进程应用地址空间中的 Trap 上下文，使得第一次进入用户态的时候时候能正
         // 确跳转到应用入口点并设置好用户栈，同时也保证在 Trap 的时候用户态能正确进入内核态
@@ -150,7 +148,7 @@ impl TaskControlBlock {
         *trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
-            KERNEL_SPACE.exclusive_access().token(),
+            KERNEL_SPACE.lock().token(),
             kernel_stack_top,
             trap_handler as usize,
         );
@@ -257,7 +255,7 @@ impl TaskControlBlock {
         *trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
-            KERNEL_SPACE.exclusive_access().token(),
+            KERNEL_SPACE.lock().token(),
             self.kernel_stack.get_top(),
             trap_handler as usize,
         );
@@ -302,8 +300,7 @@ impl TaskControlBlock {
             pid: pid_handle,
             tgid,
             kernel_stack,
-            inner: unsafe {
-                UPSafeCell::new(TaskControlBlockInner {
+            inner: Mutex::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: parent_inner.base_size,
                     heap_start: parent_inner.heap_start,
@@ -321,7 +318,7 @@ impl TaskControlBlock {
                     sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
                 })
-            },
+            ,
         });
         // 把新生成的进程加入到子进程向量中
         parent_inner.children.push(task_control_block.clone());
@@ -475,26 +472,26 @@ impl TaskControlBlock {
 
     pub fn grow_proc(&self, grow_size: isize) -> usize {
         if grow_size > 0 {
-            let growed_addr: usize = self.inner.exclusive_access().heap_pt + grow_size as usize;
-            let limit = self.inner.exclusive_access().heap_start + USER_HEAP_SIZE;
+            let growed_addr: usize = self.inner.lock().heap_pt + grow_size as usize;
+            let limit = self.inner.lock().heap_start + USER_HEAP_SIZE;
             if growed_addr > limit {
                 panic!(
                     "process doesn't have enough memsize to grow! {} {} {} {}",
                     limit,
-                    self.inner.exclusive_access().heap_pt,
+                    self.inner.lock().heap_pt,
                     growed_addr,
                     self.pid.0
                 );
             }
-            self.inner.exclusive_access().heap_pt = growed_addr;
+            self.inner.lock().heap_pt = growed_addr;
         } else {
-            let shrinked_addr: usize = self.inner.exclusive_access().heap_pt + grow_size as usize;
-            if shrinked_addr < self.inner.exclusive_access().heap_start {
+            let shrinked_addr: usize = self.inner.lock().heap_pt + grow_size as usize;
+            if shrinked_addr < self.inner.lock().heap_start {
                 panic!("Memory shrinked to the lowest boundary!")
             }
-            self.inner.exclusive_access().heap_pt = shrinked_addr;
+            self.inner.lock().heap_pt = shrinked_addr;
         }
-        return self.inner.exclusive_access().heap_pt;
+        return self.inner.lock().heap_pt;
     }
 }
 

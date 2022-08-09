@@ -1,7 +1,7 @@
 use super::ProcessControlBlock;
 use crate::config::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT_BASE, USER_STACK_SIZE};
 use crate::mm::{MapPermission, PhysPageNum, VirtAddr, KERNEL_SPACE};
-use crate::sync::UPSafeCell;
+use spin::Mutex;
 use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
@@ -40,10 +40,10 @@ impl RecycleAllocator {
 }
 
 lazy_static! {
-    static ref PID_ALLOCATOR: UPSafeCell<RecycleAllocator> =
-        unsafe { UPSafeCell::new(RecycleAllocator::new()) };
-    static ref KSTACK_ALLOCATOR: UPSafeCell<RecycleAllocator> =
-        unsafe { UPSafeCell::new(RecycleAllocator::new()) };
+    static ref PID_ALLOCATOR: Mutex<RecycleAllocator> =
+        unsafe { Mutex::new(RecycleAllocator::new()) };
+    static ref KSTACK_ALLOCATOR: Mutex<RecycleAllocator> =
+        unsafe { Mutex::new(RecycleAllocator::new()) };
 }
 
 pub struct PidHandle(pub usize);

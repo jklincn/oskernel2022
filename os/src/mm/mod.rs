@@ -30,7 +30,7 @@ pub fn init() {
     heap_allocator::init_heap();
     frame_allocator::init_frame_allocator();
     // 从这一刻开始 SV39 分页模式就被启用了
-    KERNEL_SPACE.exclusive_access().activate();
+    KERNEL_SPACE.lock().activate();
 }
 
 pub fn memory_usage(){
