@@ -168,7 +168,7 @@ impl TaskControlBlock {
         let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::load_elf(elf_file, &mut auxs);
 
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
-        println!("trap_cx_ppn:0x{:x}",trap_cx_ppn.0);
+        println!("exec trap_cx_ppn:0x{:x}",trap_cx_ppn.0);
 
         // 计算对齐位置
         let mut total_len = 0;
@@ -281,6 +281,7 @@ impl TaskControlBlock {
         // 拷贝用户地址空间
         let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
+        println!("fork: trap_cx_ppn:0x{:x}",trap_cx_ppn.0);
         // 分配一个 PID
         let pid_handle = pid_alloc();
         let mut tgid = 0;

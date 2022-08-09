@@ -190,17 +190,16 @@ impl PageTable {
 
     /// ### 建立一个虚拟页号到物理页号的映射
     /// 根据VPN找到第三级页表中的对应项，将 `PPN` 和 `flags` 写入到页表项
-    #[allow(unused)]
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_create(vpn).unwrap();
         // 断言，保证新获取到的PTE是无效的（不是已分配的）
         assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
+        println!("map: vpn:{:?}, ppn:{:?}",vpn,ppn);
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
     }
 
     /// ### 删除一个虚拟页号到物理页号的映射
     /// 只需根据虚拟页号找到页表项，然后修改或者直接清空其内容即可
-    #[allow(unused)]
     pub fn unmap(&mut self, vpn: VirtPageNum) {
         let pte = self.find_pte(vpn).unwrap();
         assert!(pte.is_valid(), "vpn {:?} is invalid before unmapping", vpn);

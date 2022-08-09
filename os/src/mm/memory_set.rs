@@ -136,6 +136,14 @@ impl MemorySet {
         );
     }
 
+    fn alloc_trap_cx(&mut self){
+        let frame = frame_alloc().unwrap();
+        let ppn = frame.ppn.clone();
+        self.data_frames.push(frame);
+        println!("alloc ppn:{:?}",ppn);
+        self.page_table.map(TRAP_CONTEXT.into(), ppn, PTEFlags::R | PTEFlags::W);
+    }
+
     /// ### 生成内核的地址空间
     /// - Without kernel stacks.
     /// - 采用恒等映射
@@ -908,6 +916,10 @@ impl MemorySet {
             0,
             0,
         ));
+
+        // 分配trap上下文的物理页
+        memory_set.alloc_trap_cx();
+
 
         // 默认mmap区域
         memory_set.vma.push(VMArea::new(
