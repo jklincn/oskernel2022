@@ -165,21 +165,21 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     let mut envs_vec: Vec<String> = Vec::new();
     envs_vec.push("LD_LIBRARY_PATH=/".to_string());
     envs_vec.push("PATH=/".to_string());
-    envs_vec.push("ENOUGH=5000".to_string());
+    envs_vec.push("ENOUGH=3000".to_string());
     envs_vec.push("TIMING_0=7".to_string());
-    envs_vec.push("LOOP_O=0.00249936".to_string());
+    envs_vec.push("LOOP_O=0.2".to_string());
 
     let task = current_task().unwrap();
     // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
     if path == "./busybox" || path == "//busybox" {
         task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
         // memory_usage();
-        return argc as isize;
+        return 0 as isize;
     }
     if path == "./lua" || path == "//lua" {
         task.exec(LUA.as_slice(), args_vec, envs_vec);
         // memory_usage();
-        return argc as isize;
+        return 0 as isize;
     }
 
     if path.ends_with(".sh"){
@@ -192,7 +192,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         // println!("new_args:{:?}",new_args);
         task.exec(BUSYBOX.as_slice(), new_args, envs_vec);
         // memory_usage();
-        return argc as isize;
+        return 0 as isize;
     }
 
     let inner = task.inner_exclusive_access();
@@ -202,7 +202,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         task.exec(all_data.as_slice(), args_vec, envs_vec);
         drop(all_data);
         // memory_usage();
-        argc as isize
+        0 as isize
     } else {
         -1
     }
@@ -288,6 +288,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 }
 
 pub fn sys_kill(pid: usize, signal: u32) -> isize {
+    println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}",pid,signal);
     if let Some(task) = pid2task(pid) {
         if let Some(flag) = SignalFlags::from_bits(signal) {
             task.inner_exclusive_access().signals |= flag;
@@ -364,7 +365,7 @@ pub fn sys_sbrk(grow_size: isize, _is_shrink: usize) -> isize {
 }
 
 pub fn sys_brk(brk_addr: usize) -> isize {
-    println!("[DEBUG] enter sys_brk: brk_addr:0x{:x}",brk_addr);
+    // println!("[DEBUG] enter sys_brk: brk_addr:0x{:x}",brk_addr);
     #[allow(unused_assignments)]
     let mut addr_new = 0;
     if brk_addr == 0 {
@@ -374,7 +375,7 @@ pub fn sys_brk(brk_addr: usize) -> isize {
         let grow_size: isize = (brk_addr - former_addr) as isize;
         addr_new = current_task().unwrap().grow_proc(grow_size);
     }
-    println!("[DEBUG] sys_brk return: 0x{:x}",addr_new);
+    // println!("[DEBUG] sys_brk return: 0x{:x}",addr_new);
     addr_new as isize
 }
 

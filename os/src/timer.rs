@@ -10,21 +10,71 @@
 /// ```
 //
 
+use core::ops::{Add, Sub};
+
 use crate::config::CLOCK_FREQ;
 use crate::sbi::set_timer;
 use riscv::register::time;
 
-const TICKS_PER_SEC: usize = 100;
-const MSEC_PER_SEC: usize = 1000;
+pub const TICKS_PER_SEC: usize = 100;
+pub const MSEC_PER_SEC: usize = 1000;
+pub const USEC_PER_SEC: usize = 1000_000;
+pub const NSEC_PER_SEC: usize = 1000_000_000;
 
 /// ### Linux 时间格式
 /// - `sec`：秒
 /// - `usec`：微秒
 /// - 两个值相加的结果是结构体表示的时间
+#[derive(Copy, Clone)]
 pub struct  TimeVal {
     /// 单位：秒
     pub sec:usize,  /// 单位：微秒
     pub usec:usize,
+}
+
+impl Add for TimeVal {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        let mut sec = self.sec + other.sec;
+        let mut usec = self.usec + other.usec;
+        sec += usec/USEC_PER_SEC;
+        usec %= USEC_PER_SEC;
+        Self {
+            sec,
+            usec,
+        }
+    }
+}
+
+impl Sub for TimeVal {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        if self.sec < other.sec{
+            return Self{sec:0,usec:0}
+        }
+        else if self.sec == other.sec{
+            if self.usec < other.usec{
+                return Self{sec:0,usec:0}
+            }
+            else{
+                return Self{sec:0,usec:self.usec-other.usec}
+            }
+        }
+        else{
+            let mut sec = self.sec - other.sec;
+            let mut usec = self.usec - other.usec;
+            if self.usec < other.usec{
+                sec -= 1;
+                usec = USEC_PER_SEC + self.usec - other.usec;
+            }
+            Self {
+                sec,
+                usec,
+            }
+        }
+    }
 }
 
 impl TimeVal {
@@ -34,7 +84,11 @@ impl TimeVal {
             usec:0
         }
     }
-    
+
+    pub fn is_zero(&self) -> bool{
+        self.sec == 0 && self.usec == 0
+    }
+
     pub fn as_bytes(&self) -> &[u8] {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }

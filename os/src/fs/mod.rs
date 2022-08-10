@@ -4,6 +4,7 @@ mod stdio;
 mod mount;
 mod stat;
 mod dirent;
+mod fdset;
 
 
 use crate::mm::UserBuffer;
@@ -39,6 +40,8 @@ pub trait File: Send + Sync {
     fn write_kernel_space(&self,data:Vec<u8>)->usize;
 
     fn file_size(&self) ->usize;
+    fn r_ready(&self)->bool{true}
+    fn w_ready(&self)->bool{true}
 }
 
 pub use dirent::Dirent;
@@ -47,3 +50,4 @@ pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::*;
 pub use stdio::{Stdin, Stdout};
+pub use fdset::*;

@@ -331,10 +331,15 @@ pub struct UserBuffer {
 }
 
 impl UserBuffer {
+    pub fn empty() -> Self {
+        Self { buffers: Vec::new() }
+    }
+
     /// 使用 `buffer` 创建一个新的缓冲区实例
     pub fn new(buffers: Vec<&'static mut [u8]>) -> Self {
         Self { buffers }
     }
+    
     pub fn len(&self) -> usize {
         let mut total: usize = 0;
         for b in self.buffers.iter() {
@@ -394,7 +399,7 @@ impl UserBuffer {
         }
         0
     }
-    
+
     // 将UserBuffer的数据读入一个Buffer，返回读取长度
     pub fn read(&self, buff: &mut [u8]) -> usize {
         let len = self.len().min(buff.len());

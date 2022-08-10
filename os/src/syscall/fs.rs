@@ -1,7 +1,8 @@
 use super::errno::*;
-use crate::fs::{chdir, make_pipe, open, Dirent, File, Kstat, OpenFlags, Statfs, Stdin, Timespec, MNT_TABLE};
-use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
-use crate::task::{current_task, current_user_token, RLIMIT_NOFILE};
+use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, Timespec, MNT_TABLE};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::task::{current_task, current_user_token, suspend_current_and_run_next, RLIMIT_NOFILE};
+use crate::timer::{get_TimeVal, TimeVal};
 use alloc::{sync::Arc, vec::Vec};
 use core::mem::size_of;
 
@@ -810,7 +811,7 @@ pub fn sys_sendfile(out_fd: usize, in_fd: usize, offset: usize, _count: usize) -
 }
 
 // 目前仅支持同当前目录下文件名称更改
-pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, new_path: *const u8, flags: u32) -> isize {
+pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, new_path: *const u8, _flags: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
     let inner = task.inner_exclusive_access();
@@ -854,7 +855,7 @@ pub fn sys_umask() -> isize {
 }
 
 pub fn sys_readlinkat(dirfd: isize, pathname: *const u8, buf: *const u8, bufsiz: usize) -> isize {
-    if dirfd == AT_FDCWD{
+    if dirfd == AT_FDCWD {
         let token = current_user_token();
         let path = translated_str(token, pathname);
         if path.as_str() != "/proc/self/exe" {
@@ -863,10 +864,170 @@ pub fn sys_readlinkat(dirfd: isize, pathname: *const u8, buf: *const u8, bufsiz:
         let mut userbuf = UserBuffer::new(translated_byte_buffer(token, buf, bufsiz));
         let procinfo = "/lmbench_all\0";
         userbuf.write(procinfo.as_bytes());
-        let len = procinfo.len()-1;
+        let len = procinfo.len() - 1;
         return len as isize;
-    }
-    else{
+    } else {
         panic!("sys_readlinkat: fd not support");
     }
+}
+
+pub fn sys_pselect(nfds: usize, readfds: *mut u8, writefds: *mut u8, exceptfds: *mut u8, timeout: *mut usize) -> isize {
+    let token = current_user_token();
+    let mut r_ready_count = 0;
+    let mut w_ready_count = 0;
+    let mut e_ready_count = 0;
+
+    let mut timer_interval = TimeVal::new();
+    unsafe {
+        let sec = translated_ref(token, timeout);
+        let usec = translated_ref(token, timeout.add(1));
+        timer_interval.sec = *sec;
+        timer_interval.usec = *usec;
+    }
+    let timer = timer_interval + get_TimeVal();
+
+    let mut rfd_set = FdSet::new();
+    let mut wfd_set = FdSet::new();
+
+    let mut ubuf_rfds = {
+        if readfds as usize != 0 {
+            UserBuffer::new(translated_byte_buffer(token, readfds, size_of::<FdSet>()))
+        } else {
+            UserBuffer::empty()
+        }
+    };
+    ubuf_rfds.read(rfd_set.as_bytes_mut());
+
+    let mut ubuf_wfds = {
+        if writefds as usize != 0 {
+            UserBuffer::new(translated_byte_buffer(token, writefds, size_of::<FdSet>()))
+        } else {
+            UserBuffer::empty()
+        }
+    };
+    ubuf_wfds.read(wfd_set.as_bytes_mut());
+
+    let mut ubuf_efds = {
+        if exceptfds as usize != 0 {
+            UserBuffer::new(translated_byte_buffer(token, exceptfds, size_of::<FdSet>()))
+        } else {
+            UserBuffer::empty()
+        }
+    };
+
+    // println!("[DEBUG] enter sys_pselect: nfds:{}, readfds:{:?} ,writefds:{:?}, exceptfds:{:?}, timeout:{:?}",nfds,ubuf_rfds,ubuf_wfds,ubuf_efds,timer_interval);
+
+
+    let mut r_has_nready = false;
+    let mut w_has_nready = false;
+    let mut r_all_ready = false;
+    let mut w_all_ready = false;
+
+    let mut rfd_vec = Vec::new();
+    let mut wfd_vec = Vec::new();
+
+    loop {
+        /* handle read fd set */
+        let task = current_task().unwrap();
+        let inner = task.inner_exclusive_access();
+        let fd_table = &inner.fd_table;
+        if readfds as usize != 0 && !r_all_ready {
+            if rfd_vec.len() == 0 {
+                rfd_vec = rfd_set.get_fd_vec();
+                if rfd_vec[rfd_vec.len() - 1] >= nfds {
+                    return -1; // invalid fd
+                }
+            }
+
+            for i in 0..rfd_vec.len() {
+                let fd = rfd_vec[i];
+                if fd == 1024 {
+                    continue;
+                }
+                if fd > fd_table.len() || fd_table[fd].is_none() {
+                    return -1; // invalid fd
+                }
+                let fdescript = fd_table[fd].as_ref().unwrap();
+                if fdescript.r_ready() {
+                    r_ready_count += 1;
+                    rfd_set.set_fd(fd);
+                    // marked for being ready
+                    rfd_vec[i] = 1024;
+                } else {
+                    rfd_set.clear_fd(fd);
+                    r_has_nready = true;
+                }
+            }
+            if !r_has_nready {
+                r_all_ready = true;
+                ubuf_rfds.write(rfd_set.as_bytes());
+            }
+        }
+
+        /* handle write fd set */
+        if writefds as usize != 0 && !w_all_ready {
+            if wfd_vec.len() == 0 {
+                wfd_vec = wfd_set.get_fd_vec();
+                if wfd_vec[wfd_vec.len() - 1] >= nfds {
+                    return -1; // invalid fd
+                }
+            }
+
+            for i in 0..wfd_vec.len() {
+                let fd = wfd_vec[i];
+                if fd == 1024 {
+                    continue;
+                }
+                if fd > fd_table.len() || fd_table[fd].is_none() {
+                    return -1; // invalid fd
+                }
+                let fdescript = fd_table[fd].as_ref().unwrap();
+                if fdescript.w_ready() {
+                    w_ready_count += 1;
+                    wfd_set.set_fd(fd);
+                    wfd_vec[i] = 1024;
+                } else {
+                    wfd_set.clear_fd(fd);
+                    w_has_nready = true;
+                }
+            }
+            if !w_has_nready {
+                w_all_ready = true;
+                ubuf_wfds.write(wfd_set.as_bytes());
+            }
+        }
+
+        /* Cannot handle exceptfds for now */
+        if exceptfds as usize != 0 {
+            let mut efd_set = FdSet::new();
+            ubuf_efds.read(efd_set.as_bytes_mut());
+            e_ready_count = efd_set.count() as isize;
+            efd_set.clear_all();
+            ubuf_efds.write(efd_set.as_bytes());
+        }
+
+        // return anyway
+        // return r_ready_count + w_ready_count + e_ready_count;
+        // if there are some fds not ready, just wait until time up
+        if r_has_nready || w_has_nready {
+            r_has_nready = false;
+            w_has_nready = false;
+            let time_remain = get_TimeVal() - timer;
+            if time_remain.is_zero() {
+                // not reach timer (now < timer)
+                drop(fd_table);
+                drop(inner);
+                drop(task);
+                suspend_current_and_run_next();
+            } else {
+                ubuf_rfds.write(rfd_set.as_bytes());
+                ubuf_wfds.write(wfd_set.as_bytes());
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    // println!("pselect return: r_ready_count:{}, w_ready_count:{}, e_ready_count:{}",r_ready_count,w_ready_count,e_ready_count);
+    r_ready_count + w_ready_count + e_ready_count
 }

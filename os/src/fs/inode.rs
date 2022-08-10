@@ -156,7 +156,7 @@ pub fn list_apps() {
     open("/proc", "meminfo", OpenFlags::O_CREATE);
     open("/dev/misc", "rtc", OpenFlags::O_CREATE);
     // open("/", "dev", OpenFlags::O_DIRECTROY);
-    // open("/dev", "null", OpenFlags::O_CREATE);
+    open("/dev", "null", OpenFlags::O_CREATE);
     // open("/dev", "zero", OpenFlags::O_CREATE);
     println!("/**** All Files  ****");
     for app in ROOT_INODE.ls().unwrap() {

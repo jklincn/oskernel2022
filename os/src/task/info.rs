@@ -84,6 +84,7 @@ bitflags! {
     }
 }
 
+#[allow(unused)]
 pub struct RUsage{
     ru_utime   :TimeVal,      /* user CPU time used */
     ru_stime   :TimeVal,      /* system CPU time used */

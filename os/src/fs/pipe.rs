@@ -270,4 +270,16 @@ impl File for Pipe {
     fn file_size(&self) -> usize {
         core::usize::MAX
     }
+    
+    fn r_ready(&self) ->bool {
+        let ring_buffer = self.buffer.lock();
+        let loop_read = ring_buffer.available_read();
+        loop_read > 0
+    }
+
+    fn w_ready(&self) ->bool {
+        let ring_buffer = self.buffer.lock();
+        let loop_write = ring_buffer.available_write();
+        loop_write > 0
+    }
 }
