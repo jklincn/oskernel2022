@@ -473,7 +473,7 @@ const TCSETS: usize = 0x5402;
 const TIOCGPGRP: usize = 0x540f;
 const TIOCSPGRP: usize = 0x5410;
 const TIOCGWINSZ: usize = 0x5413;
-const RTC_RD_TIME: usize = 0xffffffff80247009;  // 这个值还需考量
+const RTC_RD_TIME: usize = 0xffffffff80247009; // 这个值还需考量
 
 pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
     // println!("enter sys_ioctl: fd:{}, request:0x{:x}, argp:{}", fd, request, argp as usize);
@@ -490,7 +490,7 @@ pub fn sys_ioctl(fd: usize, request: usize, argp: *mut u8) -> isize {
         TIOCGPGRP => *translated_refmut(token, argp) = 0 as u8,
         TIOCSPGRP => {}
         TIOCGWINSZ => *translated_refmut(token, argp) = 0 as u8,
-        RTC_RD_TIME=>{},
+        RTC_RD_TIME => {}
         _ => panic!("sys_ioctl: unsupported request!"),
     }
     0
@@ -851,4 +851,23 @@ pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, ne
 
 pub fn sys_umask() -> isize {
     0
+}
+
+pub fn sys_readlinkat(dirfd: isize, pathname: *const u8, buf: *const u8, bufsiz: usize) -> isize {
+    if dirfd == AT_FDCWD{
+        let token = current_user_token();
+        let path = translated_str(token, pathname);
+        if path.as_str() != "/proc/self/exe" {
+            panic!("sys_readlinkat: pathname not support");
+        }
+        let mut userbuf = UserBuffer::new(translated_byte_buffer(token, buf, bufsiz));
+        let procinfo = "/lmbench_all\0";
+        let buff = procinfo.as_bytes();
+        userbuf.write(buff);
+        let len = procinfo.len()-1;
+        return len as isize;
+    }
+    else{
+        panic!("sys_readlinkat: fd not support");
+    }
 }

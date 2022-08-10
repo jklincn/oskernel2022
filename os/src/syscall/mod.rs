@@ -22,6 +22,7 @@ const SYSCALL_WRITEV:   usize = 66;
 const SYSCALL_PREAD64:  usize = 67;
 const SYSCALL_SENDFILE: usize = 71;
 const SYSCALL_PPOLL:    usize = 73;
+const SYSCALL_READLINKAT:usize = 78;
 const SYSCALL_NEWFSTATAT:  usize = 79;
 const SYSCALL_FSTAT:    usize = 80;
 const SYSCALL_UTIMENSAT:usize = 88;
@@ -113,6 +114,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_PREAD64=>   sys_pread64(args[0], args[1] as *const u8, args[2],args[3]),
         SYSCALL_SENDFILE=>  sys_sendfile(args[0], args[1], args[2],args[3]),
         SYSCALL_PPOLL  =>   sys_ppoll(),
+        SYSCALL_READLINKAT =>sys_readlinkat(args[0] as isize,args[1] as *const u8 ,args[2] as *const u8,args[3]),
         SYSCALL_NEWFSTATAT=>sys_newfstatat(args[0] as isize, args[1] as *const u8,args[2] as *const usize,args[3]),
         SYSCALL_FSTAT=>     sys_fstat(args[0] as isize, args[1] as *mut u8),
         SYSCALL_UTIMENSAT=> sys_utimensat(args[0] as isize, args[1] as *const u8,args[2] as *const usize,args[3]),
