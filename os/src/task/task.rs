@@ -2,7 +2,7 @@ use super::signal::SigSet;
 use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
-use crate::fs::{File, Stdin, Stdout};
+use crate::fs::{File, Stdin, Stdout, OSInode};
 use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, heap_usage};
 use spin::{Mutex, MutexGuard};
 use crate::trap::{trap_handler, TrapContext};
@@ -156,10 +156,10 @@ impl TaskControlBlock {
     }
 
     /// 用来实现 exec 系统调用，即当前进程加载并执行另一个 ELF 格式可执行文件
-    pub fn exec(&self, elf_data: &[u8], args: Vec<String>, envs: Vec<String>) {
+    pub fn exec(&self, elf_file: Arc<OSInode>, args: Vec<String>, envs: Vec<String>) {
         let mut auxs = aux::new();
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::from_elf(elf_data, &mut auxs);
+        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::load_elf(elf_file, &mut auxs);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
 
         // 计算对齐位置
