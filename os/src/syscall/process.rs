@@ -1,7 +1,7 @@
 use crate::fs::{open, OpenFlags};
 use crate::mm::{memory_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags,
+    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags, RUsage,
 };
 use crate::timer::{get_TimeVal, get_time_ms, tms, TimeVal};
 use alloc::string::{String, ToString};
@@ -165,6 +165,9 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     let mut envs_vec: Vec<String> = Vec::new();
     envs_vec.push("LD_LIBRARY_PATH=/".to_string());
     envs_vec.push("PATH=/".to_string());
+    envs_vec.push("ENOUGH=5000".to_string());
+    envs_vec.push("TIMING_0=7".to_string());
+    envs_vec.push("LOOP_O=0.00249936".to_string());
 
     let task = current_task().unwrap();
     // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
@@ -306,8 +309,7 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
 pub fn sys_uname(buf: *const u8) -> isize {
     let token = current_user_token();
     let uname = UTSNAME.lock();
-    let buf_vec = translated_byte_buffer(token, buf, core::mem::size_of::<Utsname>());
-    let mut userbuf = UserBuffer::new(buf_vec);
+    let mut userbuf = UserBuffer::new(translated_byte_buffer(token, buf, core::mem::size_of::<Utsname>()));
     userbuf.write(uname.as_bytes());
     0
 }
@@ -362,6 +364,7 @@ pub fn sys_sbrk(grow_size: isize, _is_shrink: usize) -> isize {
 }
 
 pub fn sys_brk(brk_addr: usize) -> isize {
+    println!("[DEBUG] enter sys_brk: brk_addr:0x{:x}",brk_addr);
     #[allow(unused_assignments)]
     let mut addr_new = 0;
     if brk_addr == 0 {
@@ -371,6 +374,7 @@ pub fn sys_brk(brk_addr: usize) -> isize {
         let grow_size: isize = (brk_addr - former_addr) as isize;
         addr_new = current_task().unwrap().grow_proc(grow_size);
     }
+    println!("[DEBUG] sys_brk return: 0x{:x}",addr_new);
     addr_new as isize
 }
 
@@ -459,5 +463,18 @@ pub fn sys_faccessat() -> isize {
 
 pub fn sys_madvise(_addr: *const u8, _length: usize, _advice: usize) -> isize {
     // println!("[DEBUG] enter sys_madvise: addr:{}, length:{}, advice:{}",addr as usize,length,advice);
+    0
+}
+
+const RUSAGE_SELF:isize = 0;
+pub fn sys_getrusage(who: isize, usage: *mut u8) -> isize {
+    if who != RUSAGE_SELF {
+        panic!("sys_getrusage: \"who\" not supported!");
+        return -1;
+    }
+    let token = current_user_token();
+    let mut userbuf = UserBuffer::new(translated_byte_buffer(token, usage, core::mem::size_of::<RUsage>()));
+    let rusage = RUsage::new();
+    userbuf.write(rusage.as_bytes());
     0
 }

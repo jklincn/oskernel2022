@@ -30,7 +30,7 @@ use switch::__switch;
 use task::{TaskControlBlock,TaskStatus};
 
 pub use context::TaskContext;
-pub use info::{Utsname, UTSNAME, CloneFlags};
+pub use info::{Utsname, UTSNAME, CloneFlags,RUsage};
 pub use manager::{add_task, pid2task};
 pub use pid::{pid_alloc, KernelStack, PidHandle};
 pub use processor::{

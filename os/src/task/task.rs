@@ -476,7 +476,7 @@ impl TaskControlBlock {
             let limit = self.inner.lock().heap_start + USER_HEAP_SIZE;
             if growed_addr > limit {
                 panic!(
-                    "process doesn't have enough memsize to grow! {} {} {} {}",
+                    "process doesn't have enough memsize to grow! limit:0x{:x}, heap_pt:0x{:x}, growed_addr:0x{:x}, pid:{}",
                     limit,
                     self.inner.lock().heap_pt,
                     growed_addr,

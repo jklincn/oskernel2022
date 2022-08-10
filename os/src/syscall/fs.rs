@@ -862,8 +862,7 @@ pub fn sys_readlinkat(dirfd: isize, pathname: *const u8, buf: *const u8, bufsiz:
         }
         let mut userbuf = UserBuffer::new(translated_byte_buffer(token, buf, bufsiz));
         let procinfo = "/lmbench_all\0";
-        let buff = procinfo.as_bytes();
-        userbuf.write(buff);
+        userbuf.write(procinfo.as_bytes());
         let len = procinfo.len()-1;
         return len as isize;
     }
