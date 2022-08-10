@@ -165,9 +165,9 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     let mut envs_vec: Vec<String> = Vec::new();
     envs_vec.push("LD_LIBRARY_PATH=/".to_string());
     envs_vec.push("PATH=/".to_string());
-    envs_vec.push("ENOUGH=3000".to_string());
-    envs_vec.push("TIMING_0=7".to_string());
-    envs_vec.push("LOOP_O=0.2".to_string());
+    envs_vec.push("ENOUGH=2500".to_string());
+    // envs_vec.push("TIMING_0=7".to_string());
+    // envs_vec.push("LOOP_O=0.2".to_string());
 
     let task = current_task().unwrap();
     // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
