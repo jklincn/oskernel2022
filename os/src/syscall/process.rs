@@ -187,7 +187,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
             new_args.push(i.clone());
         }
         task.exec(open("/", "busybox", OpenFlags::O_RDONLY).unwrap(), new_args, envs_vec);
-        // memory_usage();
+        memory_usage();
         return argc as isize;
     }
 
@@ -195,7 +195,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         drop(inner);
         task.exec(app_inode, args_vec, envs_vec);
-        // memory_usage();
+        memory_usage();
         argc as isize
     } else {
         -1

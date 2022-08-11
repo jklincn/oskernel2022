@@ -120,12 +120,12 @@ impl MemorySet {
     /// ### 在当前地址空间插入一个新的逻辑段
     /// 如果是以 Framed 方式映射到物理内存,
     /// 还可以可选地在那些被映射到的物理页帧上写入一些初始化数据
-    /// data:(osinode,len,page_offset)
-    fn push(&mut self, mut map_area: MapArea, data: Option<(Arc<OSInode>, usize, usize)>) {
+    /// data:(osinode,offset,len,page_offset)
+    fn push(&mut self, mut map_area: MapArea, data: Option<(Arc<OSInode>, usize,usize, usize)>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             // 写入初始化数据，如果数据存在
-            map_area.copy_data(&mut self.page_table, data.0, data.1, data.2);
+            map_area.copy_data(&mut self.page_table, data.0, data.1, data.2, data.3);
         }
         self.areas.push(map_area); // 将生成的数据段压入 areas 使其生命周期由areas控制
     }
@@ -284,11 +284,11 @@ impl MemorySet {
                     //     map_perm |= MapPermission::X;
                     // }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
-                    println!("start va:0x{:x}, end va:0x{:x}",start_va.0,end_va.0);
-                    println!("{:?}",map_area.vpn_range);
+                    // println!("start va:0x{:x}, end va:0x{:x}",start_va.0,end_va.0);
+                    // println!("{:?}",map_area.vpn_range);
 
                     max_end_vpn = map_area.vpn_range.get_end();
-                    memory_set.push(map_area, Some((elf_file.clone(), ph.file_size() as usize, start_va.page_offset())));
+                    memory_set.push(map_area, Some((elf_file.clone(), ph.offset() as usize, ph.file_size() as usize, start_va.page_offset())));
                 }
                 _ => continue,
             }
@@ -775,7 +775,7 @@ impl MapArea {
     /// 在多级页表中为逻辑块分配空间
     pub fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
-            println!("map vpm:0x{:x}",vpn.0);
+            // println!("map vpm:0x{:x}",vpn.0);
             self.map_one(page_table, vpn);
         }
     }
@@ -809,25 +809,27 @@ impl MapArea {
     //     }
     // }
 
-    pub fn copy_data(&mut self, page_table: &mut PageTable, elf_file: Arc<OSInode>, data_len: usize, page_offset: usize) {
+    pub fn copy_data(&mut self, page_table: &mut PageTable, elf_file: Arc<OSInode>, data_start:usize, data_len: usize, page_offset: usize) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut offset: usize = 0;
         let mut page_offset: usize = page_offset;
         let mut current_vpn = self.vpn_range.get_start();
-        println!("data_len:{}, page_offset:{}",data_len,page_offset);
+        let mut data_len = data_len;
+        // println!("data_len:{}, page_offset:{}",data_len,page_offset);
         loop {
-            println!("current_vpn:0x{:x}, offset:{}",current_vpn.0,offset);
-            let data = elf_file.read_vec(offset as isize, PAGE_SIZE);
-            println!("data:{:?}",data);
+            // println!("current_vpn:0x{:x}, offset:{}",current_vpn.0,offset);
+            // println!("data_len.min(PAGE_SIZE): {}",data_len.min(PAGE_SIZE));
+            let data = elf_file.read_vec((data_start + offset) as isize, data_len.min(PAGE_SIZE));
+            // println!("data:{:?}",data);
             let data_silce = data.as_slice();
-            let src = &data_silce[0..PAGE_SIZE - page_offset];
-            let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[page_offset..(page_offset + src.len())];
+            let src = &data_silce[0..data_len.min(PAGE_SIZE - page_offset)];
+            let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[page_offset..page_offset + src.len()];
             dst.copy_from_slice(src);
-
             offset += PAGE_SIZE - page_offset;
 
             page_offset = 0;
-            if offset >= data_len {
+            data_len -= src.len();
+            if data_len == 0 {
                 break;
             }
             current_vpn.step();
