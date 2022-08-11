@@ -2,14 +2,17 @@ use super::signal::SigSet;
 use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
-use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, heap_usage};
-use spin::{Mutex, MutexGuard};
+use crate::fs::{open, File, OSInode, OpenFlags, Stdin, Stdout};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry};
+
+
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
+use spin::MutexGuard;
+use spin::Mutex;
 
 pub struct TaskControlBlock {
     /// 进程标识符
@@ -90,6 +93,14 @@ impl TaskControlBlockInner {
 
     pub fn get_work_path(&self) -> String {
         self.current_path.clone()
+    }
+    
+    pub fn enquire_vpn(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
+        self.memory_set.translate(vpn)
+    }
+
+    pub fn cow_alloc(&mut self, vpn: VirtPageNum, former_ppn: PhysPageNum) -> isize {
+        self.memory_set.cow_alloc(vpn, former_ppn)
     }
 }
 
@@ -271,7 +282,7 @@ impl TaskControlBlock {
         let mmap_area = parent_inner.mmap_area.clone();
         // mmap_area.debug_show();
         // 拷贝用户地址空间
-        let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set, &parent_inner.mmap_area);
+        let memory_set = MemorySet::from_copy_on_write(&mut parent_inner.memory_set, & mmap_area);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 分配一个 PID
         let pid_handle = pid_alloc();
@@ -347,14 +358,20 @@ impl TaskControlBlock {
             // println!("va:0x{:x} ok", va.0);
             self.lazy_mmap(va, is_load)
         } else {
-            // println!("va:0x{:x} err", va.0);
-            println!("[DEBUG] va: 0x{:x}", va.0);
-            println!("[DEBUG] mmap_start: 0x{:x}", mmap_start.0);
-            println!("[DEBUG] mmap_end: 0x{:x}", mmap_end.0);
-            println!("[DEBUG] current vma:");
-            self.inner_exclusive_access().memory_set.debug_show_layout();
-            -2
-        }
+            let vpn: VirtPageNum = va.floor();
+            let pte = self.inner_exclusive_access().enquire_vpn(vpn);
+            if pte.is_some() && pte.unwrap().is_cow() {
+                let former_ppn = pte.unwrap().ppn();
+                self.inner_exclusive_access().cow_alloc(vpn, former_ppn)
+            } else {
+                println!("[check_lazy] va: 0x{:x}", va.0);
+                println!("[check_lazy] mmap_start: 0x{:x}", mmap_start.0);
+                println!("[check_lazy] mmap_end: 0x{:x}", mmap_end.0);
+                println!("[check_lazy] current vma layout:");
+                self.inner_exclusive_access().memory_set.debug_show_layout();
+                -2
+            }
+        } 
     }
 
     /// ### 用时加载mmap缺页

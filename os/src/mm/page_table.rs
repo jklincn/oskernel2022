@@ -9,7 +9,9 @@
 /// pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]>
 /// ```
 //
-use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+
+use super::{frame_alloc, FrameTracker};
+use super::address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -95,6 +97,23 @@ impl PageTableEntry {
     // only X+W+R can be set
     pub fn set_pte_flags(&mut self, flags: usize) {
         self.bits = (self.bits & !(0b1110 as usize)) | (flags & (0b1110 as usize));
+    }
+
+    pub fn set_flags(&mut self, flags: PTEFlags) {
+        let new_flags: u8 = flags.bits().clone();
+        self.bits = (self.bits & 0xFFFF_FFFF_FFFF_FF00) | (new_flags as usize);
+    }
+
+    pub fn set_cow(&mut self) {
+        (*self).bits = self.bits | (1 << 9);
+    }
+
+    pub fn reset_cow(&mut self) {
+        (*self).bits = self.bits & !(1 << 9);
+    }
+
+    pub fn is_cow(&self) -> bool {
+        self.bits & (1 << 9) != 0
     }
 }
 
@@ -190,7 +209,6 @@ impl PageTable {
 
     /// ### 建立一个虚拟页号到物理页号的映射
     /// 根据VPN找到第三级页表中的对应项，将 `PPN` 和 `flags` 写入到页表项
-    #[allow(unused)]
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_create(vpn).unwrap();
         // 断言，保证新获取到的PTE是无效的（不是已分配的）
@@ -200,7 +218,6 @@ impl PageTable {
 
     /// ### 删除一个虚拟页号到物理页号的映射
     /// 只需根据虚拟页号找到页表项，然后修改或者直接清空其内容即可
-    #[allow(unused)]
     pub fn unmap(&mut self, vpn: VirtPageNum) {
         let pte = self.find_pte(vpn).unwrap();
         assert!(pte.is_valid(), "vpn {:?} is invalid before unmapping", vpn);
@@ -238,12 +255,7 @@ impl PageTable {
         for i in 0..3 {
             let pte = &mut ppn.get_pte_array()[idxs[i]];
             if i == 2 {
-                // if pte == None{
-                //     panic!("set_pte_flags: no such pte");
-                // }
-                // else{
                 pte.set_pte_flags(flags);
-                // }
                 break;
             }
             if !pte.is_valid() {
@@ -252,6 +264,25 @@ impl PageTable {
             ppn = pte.ppn();
         }
         0
+    }
+
+    pub fn set_cow(&mut self, vpn: VirtPageNum) {
+        self.find_pte_create(vpn).unwrap().set_cow();
+    }
+
+    pub fn reset_cow(&mut self, vpn: VirtPageNum) {
+        self.find_pte_create(vpn).unwrap().reset_cow();
+    }
+
+    pub fn set_flags(&mut self, vpn: VirtPageNum, flags: PTEFlags) {
+        self.find_pte_create(vpn).unwrap().set_flags(flags);
+    }
+
+    pub fn remap_cow(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, former_ppn: PhysPageNum) {
+        let pte = self.find_pte_create(vpn).unwrap();
+        *pte = PageTableEntry::new(ppn, pte.flags() | PTEFlags::W);
+        pte.set_cow();
+        ppn.get_bytes_array().copy_from_slice(former_ppn.get_bytes_array());
     }
 }
 

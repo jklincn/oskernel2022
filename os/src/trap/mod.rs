@@ -20,6 +20,7 @@ use crate::task::{
 };
 use crate::timer::set_next_trigger;
 use crate::mm::VirtAddr;
+#[allow(unused)]
 use crate::mm::{frame_usage,heap_usage};
 use core::arch::{asm, global_asm};
 use riscv::register::{
@@ -110,7 +111,7 @@ pub fn trap_handler() -> ! {
                 current_add_signal(SignalFlags::SIGSEGV);
                 current_task().unwrap().inner_exclusive_access().memory_set.debug_show_layout();
                 // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(0x0060000000usize.into());
-                panic!("lazy != 0: va:0x{:x}",va.0);
+                // panic!("lazy != 0: va:0x{:x}",va.0);
             }
 
             
@@ -171,6 +172,7 @@ pub fn trap_handler() -> ! {
 #[no_mangle]
 pub fn trap_return() -> ! {
     set_user_trap_entry();
+    // println!("[trap retrun]");
     let trap_cx_ptr = TRAP_CONTEXT;
     let user_satp = current_user_token();
     extern "C" {

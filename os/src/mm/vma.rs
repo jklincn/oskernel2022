@@ -1,4 +1,5 @@
-use super::{VirtAddr, UserBuffer, translated_byte_buffer};
+use super::{UserBuffer, translated_byte_buffer};
+use super::address::VirtAddr;
 use crate::config::PAGE_SIZE;
 use crate::fs::File;
 use alloc::vec::Vec;
