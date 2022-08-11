@@ -25,12 +25,6 @@ impl TaskManager {
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         self.ready_queue.pop_front()
     }
-    pub fn list_alltask(&self){
-        let read_queue = self.ready_queue.clone();
-        for i in read_queue{
-            println!("pid:{}",(*i).pid.0);
-        }
-    }
 }
 
 lazy_static! {

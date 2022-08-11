@@ -67,8 +67,7 @@ pub struct MemorySet {
     page_table: PageTable,
     /// 挂着对应逻辑段中的数据所在的物理页帧
     areas: Vec<MapArea>,
-    // chunks: ChunkArea,
-    stack_chunks: ChunkArea,
+    _stack_chunks: ChunkArea,
     mmap_chunks: Vec<ChunkArea>,
 }
 
@@ -78,10 +77,8 @@ impl MemorySet {
         Self {
             page_table: PageTable::new(),
             areas: Vec::new(),
-            // chunks: ChunkArea::new(MapType::Framed,
-            //                     MapPermission::R | MapPermission::W | MapPermission::U),
             mmap_chunks: Vec::new(),
-            stack_chunks: ChunkArea::new(MapType::Framed, MapPermission::R | MapPermission::W | MapPermission::U),
+            _stack_chunks: ChunkArea::new(MapType::Framed, MapPermission::R | MapPermission::W | MapPermission::U),
         }
     }
 
@@ -305,9 +302,9 @@ impl MemorySet {
             for i in 0..ph_count {
                 let ph = interp_elf.program_header(i).unwrap();
                 if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
-                    let start_va: VirtAddr = (ph.virtual_addr() as usize + base_address).into();
-                    let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
-                    let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
+                    // let start_va: VirtAddr = (ph.virtual_addr() as usize + base_address).into();
+                    // let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
+                    // let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
                     unimplemented!("[Kernel] elf_interpreter data loading needs rewrite");
                     // memory_set.push(
                     //     MapArea::new(start_va, end_va, MapType::Framed, map_perm),
@@ -873,19 +870,13 @@ lazy_static! {
 }
 
 impl MemorySet {
-    pub fn from_elf(elf_data: &[u8], auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
+    pub fn from_elf(elf_data: &[u8], _auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
         let mut memory_set = Self::new_bare();
-        // 将跳板插入到应用地址空间
         memory_set.map_trampoline();
-        // map program headers of elf, with U flag
-        // 使用外部 crate xmas_elf 来解析传入的应用 ELF 数据并可以轻松取出各个部分
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
-        // 获取 program header 的数目
         let ph_count = elf_header.pt2.ph_count();
-        // 记录目前涉及到的最大的虚拟页号
         let mut max_end_vpn = VirtPageNum(0);
-        // 遍历程序段进行加载
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
             match ph.get_type().unwrap() {
@@ -904,10 +895,8 @@ impl MemorySet {
                 _ => continue,
             }
         }
-        // 分配用户栈
         let max_end_va: VirtAddr = max_end_vpn.into();
         let mut user_stack_bottom: usize = max_end_va.into();
-        // 在已用最大虚拟页之上放置一个保护页
         user_stack_bottom += PAGE_SIZE; // 栈底
         let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址
         memory_set.push(
@@ -919,7 +908,6 @@ impl MemorySet {
             ),
             None,
         );
-        // 在应用地址空间中映射次高页面来存放 Trap 上下文
         memory_set.push(
             MapArea::new(
                 TRAP_CONTEXT.into(),
@@ -929,9 +917,7 @@ impl MemorySet {
             ),
             None,
         );
-        // 分配用户堆
         let mut user_heap_bottom: usize = user_stack_top;
-        //放置一个保护页
         user_heap_bottom += PAGE_SIZE;
         let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
 
@@ -944,8 +930,6 @@ impl MemorySet {
             ),
             None,
         );
-        // memory_set.debug_show_layout();
-        // memory_set.debug_show_data(VirtAddr::from(0x50610));
         (memory_set, user_stack_top, user_heap_bottom, elf_header.pt2.entry_point() as usize)
     }
 

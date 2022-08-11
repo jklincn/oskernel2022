@@ -11,7 +11,6 @@ use core::arch::asm;
 use core::mem::size_of;
 // use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 pub use crate::task::{CloneFlags, Utsname, UTSNAME};
-use lazy_static::*;
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -159,7 +158,6 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
             }
         }
     }
-    let argc = args_vec.len();
 
     // 环境变量
     let mut envs_vec: Vec<String> = Vec::new();
@@ -170,17 +168,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     // envs_vec.push("LOOP_O=0.2".to_string());
 
     let task = current_task().unwrap();
-    println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
-    // if path == "./busybox" || path == "//busybox" {
-    //     task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
-    //     // memory_usage();
-    //     return argc as isize;
-    // }
-    // if path == "./lua" || path == "//lua" {
-    //     task.exec(LUA.as_slice(), args_vec, envs_vec);
-    //     // memory_usage();
-    //     return argc as isize;
-    // }
+    // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
 
     if path.ends_with(".sh"){
         let mut new_args = Vec::new();
@@ -190,44 +178,20 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
             new_args.push(i.clone());
         }
         task.exec(open("/", "busybox", OpenFlags::O_RDONLY).unwrap(), new_args, envs_vec);
-        memory_usage();
-        return argc as isize;
+        // memory_usage();
+        return 0 as isize;
     }
 
     let inner = task.inner_exclusive_access();
     if let Some(app_inode) = open(inner.current_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
         drop(inner);
         task.exec(app_inode, args_vec, envs_vec);
-        memory_usage();
-        argc as isize
+        // memory_usage();
+        0 as isize
     } else {
         -1
     }
 }
-
-// lazy_static! {
-//     pub static ref BUSYBOX: Vec<u8> = {
-//         let task = current_task().unwrap();
-//         let inner = task.inner_exclusive_access();
-//         if let Some(app_inode) = open(inner.current_path.as_str(), "busybox", OpenFlags::O_RDONLY) {
-//             app_inode.read_all()
-//         } else {
-//             panic!("can't find busybox");
-//         }
-//     };
-// }
-
-// lazy_static! {
-//     pub static ref LUA: Vec<u8> = {
-//         let task = current_task().unwrap();
-//         let inner = task.inner_exclusive_access();
-//         if let Some(app_inode) = open(inner.current_path.as_str(), "lua", OpenFlags::O_RDONLY) {
-//             app_inode.read_all()
-//         } else {
-//             panic!("can't find lua");
-//         }
-//     };
-// }
 
 /// ### 当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
 /// - 参数：
@@ -285,7 +249,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 }
 
 pub fn sys_kill(pid: usize, signal: u32) -> isize {
-    println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}",pid,signal);
+    // println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}",pid,signal);
     if let Some(task) = pid2task(pid) {
         if let Some(flag) = SignalFlags::from_bits(signal) {
             task.inner_exclusive_access().signals |= flag;
@@ -468,7 +432,7 @@ const RUSAGE_SELF:isize = 0;
 pub fn sys_getrusage(who: isize, usage: *mut u8) -> isize {
     if who != RUSAGE_SELF {
         panic!("sys_getrusage: \"who\" not supported!");
-        return -1;
+        // return -1;
     }
     let token = current_user_token();
     let mut userbuf = UserBuffer::new(translated_byte_buffer(token, usage, core::mem::size_of::<RUsage>()));
