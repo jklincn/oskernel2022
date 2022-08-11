@@ -271,6 +271,10 @@ impl ShortDirEntry {
         name
     }
 
+    pub fn set_case(&mut self, case: u8){
+        self.dir_ntres = case;
+    }
+
     // 决赛要求64位的时间戳，但 fat32 貌似不是这样，这边先跳过，有空再来完善
     pub fn time(&self) -> u64 {
         self.dir_wrt_time as u64

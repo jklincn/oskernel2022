@@ -330,7 +330,7 @@ impl VFile {
     pub fn create(&self, name: &str, attribute: u8) -> Option<Arc<VFile>> {
         // 检测同名文件
         assert!(self.is_dir());
-        let manager_reader = self.fs.read();
+
         let (name_, ext_) = split_name_ext(name);
         // 搜索空处
         let mut dirent_offset: usize;
@@ -350,7 +350,6 @@ impl VFile {
 
             // 长文件名拆分
             let mut v_long_name = long_name_split(name);
-            drop(manager_reader);
             let long_ent_num = v_long_name.len(); // 需要创建的长文件名目录项个数
 
             // 定义一个空的长文件名目录项用于写入
@@ -372,9 +371,10 @@ impl VFile {
             }
         } else {
             // 短文件名
+            // todo: 短文件名也会生成一个长文件名目录项，用于存储大小写
             let (_name, _ext) = short_name_format(name);
             tmp_short_ent.initialize(&_name, &_ext, attribute);
-            drop(manager_reader);
+            tmp_short_ent.set_case(0x8);  // 全部小写
         }
         // 写短目录项（长文件名也是有短文件名目录项的）
         assert_eq!(self.write_at(dirent_offset, tmp_short_ent.as_bytes_mut()), DIRENT_SZ);
@@ -385,7 +385,7 @@ impl VFile {
                 let (_name, _ext) = short_name_format(".");
                 let mut self_dir = ShortDirEntry::new();
                 self_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
-                self_dir.set_first_cluster(self.first_cluster());
+                self_dir.set_first_cluster(vfile.first_cluster());
                 vfile.write_at(0, self_dir.as_bytes_mut());
 
                 let (_name, _ext) = short_name_format("..");
