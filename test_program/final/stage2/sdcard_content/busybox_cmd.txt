@@ -37,7 +37,6 @@ echo "bbbbbbb" >> test.txt
 echo "aaaaaaa" >> test.txt
 echo "2222222" >> test.txt
 echo "1111111" >> test.txt
-echo "bbbbbbb" >> test.txt
 sort test.txt | ./busybox uniq
 stat test.txt
 strings test.txt 
