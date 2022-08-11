@@ -242,7 +242,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
 
     // todo
     _ = mode;
-
+    // println!("[DEBUG] enter sys_mkdirat: dirfd:{}, path:{}. mode:{:o}",dirfd,path,mode);
     if dirfd == AT_FDCWD {
         if let Some(_) = open(
             inner.get_work_path().as_str(),
@@ -820,29 +820,32 @@ pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, ne
 
     // println!(
     //     "[DEBUG] enter sys_renameat2: old_dirfd:{}, old_path:{}, new_dirfd:{}, new_path:{}, flags:0x{:x}",
-    //     old_dirfd, old_path, new_dirfd, new_path, flags
+    //     old_dirfd, old_path, new_dirfd, new_path, _flags
     // );
     if old_dirfd == AT_FDCWD {
         if let Some(old_file) = open(inner.get_work_path().as_str(), old_path.as_str(), OpenFlags::O_RDWR) {
+            let flag = {
+                if old_file.is_dir() {
+                    OpenFlags::O_RDWR | OpenFlags::O_CREATE | OpenFlags::O_DIRECTROY
+                } else {
+                    OpenFlags::O_RDWR | OpenFlags::O_CREATE
+                }
+            };
             if new_dirfd == AT_FDCWD {
-                if let Some(new_file) = open(
-                    inner.get_work_path().as_str(),
-                    new_path.as_str(),
-                    OpenFlags::O_RDWR | OpenFlags::O_CREATE,
-                ) {
+                if let Some(new_file) = open(inner.get_work_path().as_str(), new_path.as_str(), flag) {
                     let first_cluster = old_file.get_head_cluster();
                     new_file.set_head_cluster(first_cluster);
                     old_file.delete();
                     0
                 } else {
-                    // panic!("can't find new file");
+                    panic!("can't find new file");
                     -1
                 }
             } else {
                 unimplemented!();
             }
         } else {
-            // panic!("can't find old file");
+            panic!("can't find old file");
             -1
         }
     } else {
@@ -916,7 +919,6 @@ pub fn sys_pselect(nfds: usize, readfds: *mut u8, writefds: *mut u8, exceptfds: 
     };
 
     // println!("[DEBUG] enter sys_pselect: nfds:{}, readfds:{:?} ,writefds:{:?}, exceptfds:{:?}, timeout:{:?}",nfds,ubuf_rfds,ubuf_wfds,ubuf_efds,timer_interval);
-
 
     let mut r_has_nready = false;
     let mut w_has_nready = false;
