@@ -66,7 +66,12 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     inner.exit_code = exit_code;
     // do not move to its parent but under initproc
 
+    if task.getpid() == 0{
+        panic!("initproc return!");
+    }
+
     {   // 将这个进程的子进程转移到 initproc 进程的子进程中
+        
         let mut initproc_inner = INITPROC.inner_exclusive_access();
         for child in inner.children.iter() {
             child.inner_exclusive_access().parent = Some(Arc::downgrade(&INITPROC));

@@ -45,6 +45,7 @@ copy-to-fs:
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
 	&& sudo cp -r ../test_program/final/stage2/sdcard_content/* fs/ \
+	&& sleep 1 \
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
@@ -59,5 +60,14 @@ run-inner: build
 
 dump:
 	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) > os_dump
+
+FULLSCORE = 63
+test: copy-to-fs 
+	@make run > output
+ifeq ($(FULLSCORE),$(shell grep -o success output | wc -l ))
+	@echo "All test pass!"
+else
+	@echo "Some test failed, see /os/output"
+endif
 
 .PHONY: dump run submit build-custom-test
