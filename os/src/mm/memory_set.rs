@@ -23,7 +23,7 @@ use riscv::register::satp;
 use spin::Mutex;
 
 // 动态链接部分
-use crate::fs::{open, OpenFlags};
+use crate::fs::{open, OSInode, OpenFlags};
 
 extern "C" {
     fn stext();
@@ -92,7 +92,7 @@ impl MemorySet {
 
     /// 在当前地址空间插入一个 `Framed` 方式映射到物理内存的逻辑段
     pub fn insert_framed_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
-        self.push(MapArea::new(start_va, end_va, MapType::Framed, permission), None, 0);
+        self.push(MapArea::new(start_va, end_va, MapType::Framed, permission), None);
     }
 
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
@@ -120,11 +120,21 @@ impl MemorySet {
     /// ### 在当前地址空间插入一个新的逻辑段
     /// 如果是以 Framed 方式映射到物理内存,
     /// 还可以可选地在那些被映射到的物理页帧上写入一些初始化数据
-    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>, offset: usize) {
+    /// data:(osinode,offset,len,page_offset)
+    fn push(&mut self, mut map_area: MapArea, data: Option<(Arc<OSInode>, usize,usize, usize)>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             // 写入初始化数据，如果数据存在
-            map_area.copy_data(&mut self.page_table, data, offset);
+            map_area.copy_data(&mut self.page_table, data.0, data.1, data.2, data.3);
+        }
+        self.areas.push(map_area); // 将生成的数据段压入 areas 使其生命周期由areas控制
+    }
+
+    fn push2(&mut self, mut map_area: MapArea, data: Option<&[u8]>, offset: usize) {
+        map_area.map(&mut self.page_table);
+        if let Some(data) = data {
+            // 写入初始化数据，如果数据存在
+            map_area.copy_data2(&mut self.page_table, data, offset);
         }
         self.areas.push(map_area); // 将生成的数据段压入 areas 使其生命周期由areas控制
     }
@@ -150,7 +160,7 @@ impl MemorySet {
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
         println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
         println!(".bss [{:#x}, {:#x})", sbss_with_stack as usize, ebss as usize);
-        println!("boot_stack:{:#x}",boot_stack as usize);
+        println!("boot_stack:{:#x}", boot_stack as usize);
         println!("mapping .text section");
         // 总体思路：通过Linker.ld中的标签划分内核空间为不同的区块，为每个区块采用恒等映射的方式生成逻辑段，压入地址空间
         memory_set.push(
@@ -161,7 +171,6 @@ impl MemorySet {
                 MapPermission::R | MapPermission::X,
             ),
             None,
-            0,
         );
         println!("mapping .rodata section");
         memory_set.push(
@@ -172,7 +181,6 @@ impl MemorySet {
                 MapPermission::R,
             ),
             None,
-            0,
         );
         println!("mapping .data section");
         memory_set.push(
@@ -183,7 +191,6 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-            0,
         );
         println!("mapping .bss section");
         memory_set.push(
@@ -194,7 +201,6 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-            0,
         );
         println!("mapping physical memory");
         memory_set.push(
@@ -205,7 +211,6 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-            0,
         );
         println!("mapping memory-mapped registers");
         for pair in MMIO {
@@ -218,7 +223,6 @@ impl MemorySet {
                     MapPermission::R | MapPermission::W,
                 ),
                 None,
-                0,
             );
         }
         memory_set
@@ -229,16 +233,23 @@ impl MemorySet {
     ///     - Self
     ///     - 用户栈顶地址
     ///     - 程序入口地址
-    pub fn from_elf(elf_data: &[u8], auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
+    pub fn load_elf(elf_file: Arc<OSInode>, auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
         let mut memory_set = Self::new_bare();
         // 将跳板插入到应用地址空间
         memory_set.map_trampoline();
-        // map program headers of elf, with U flag
-        // 使用外部 crate xmas_elf 来解析传入的应用 ELF 数据并可以轻松取出各个部分
-        let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
-        let elf_header = elf.header;
-        // 获取 program header 的数目
-        let ph_count = elf_header.pt2.ph_count();
+
+        // 第一次读取前64字节确定程序表的位置与大小
+        let elf_head_data = elf_file.read_vec(0, 64);
+        let elf = xmas_elf::ElfFile::new(elf_head_data.as_slice()).unwrap();
+
+        let ph_entry_size = elf.header.pt2.ph_entry_size() as usize;
+        let ph_offset = elf.header.pt2.ph_offset() as usize;
+        let ph_count = elf.header.pt2.ph_count() as usize;
+
+        // 进行第二次读取，这样的elf对象才能正确解析程序段头的信息
+        let elf_head_data = elf_file.read_vec(0, ph_offset + ph_count * ph_entry_size);
+        let elf = xmas_elf::ElfFile::new(elf_head_data.as_slice()).unwrap();
+
         // 记录目前涉及到的最大的虚拟页号
         let mut max_end_vpn = VirtPageNum(0);
         // 是否为动态加载
@@ -246,15 +257,15 @@ impl MemorySet {
         // 动态链接器加载地址
         let mut interp_entry_point = 0;
         // 遍历程序段进行加载
-        for i in 0..ph_count {
+        for i in 0..ph_count as u16 {
             let ph = elf.program_header(i).unwrap();
             match ph.get_type().unwrap() {
                 xmas_elf::program::Type::Phdr => auxs.push(AuxEntry(AT_PHDR, ph.virtual_addr() as usize)),
                 xmas_elf::program::Type::Interp => {
                     // 加入解释器需要的 aux 字段
-                    auxs.push(AuxEntry(AT_PHENT, elf_header.pt2.ph_entry_size().into()));
+                    auxs.push(AuxEntry(AT_PHENT, elf.header.pt2.ph_entry_size().into()));
                     auxs.push(AuxEntry(AT_PHNUM, ph_count.into()));
-                    auxs.push(AuxEntry(AT_ENTRY, elf_header.pt2.entry_point() as usize));
+                    auxs.push(AuxEntry(AT_ENTRY, elf.header.pt2.entry_point() as usize));
                     elf_interpreter = true;
                 }
                 xmas_elf::program::Type::Load => {
@@ -273,12 +284,11 @@ impl MemorySet {
                     //     map_perm |= MapPermission::X;
                     // }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
+                    // println!("start va:0x{:x}, end va:0x{:x}",start_va.0,end_va.0);
+                    // println!("{:?}",map_area.vpn_range);
+
                     max_end_vpn = map_area.vpn_range.get_end();
-                    memory_set.push(
-                        map_area,
-                        Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
-                        start_va.page_offset(),
-                    );
+                    memory_set.push(map_area, Some((elf_file.clone(), ph.offset() as usize, ph.file_size() as usize, start_va.page_offset())));
                 }
                 _ => continue,
             }
@@ -298,11 +308,12 @@ impl MemorySet {
                     let start_va: VirtAddr = (ph.virtual_addr() as usize + base_address).into();
                     let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
                     let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
-                    memory_set.push(
-                        MapArea::new(start_va, end_va, MapType::Framed, map_perm),
-                        Some(&interp_elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
-                        start_va.page_offset(),
-                    );
+                    unimplemented!("[Kernel] elf_interpreter data loading needs rewrite");
+                    // memory_set.push(
+                    //     MapArea::new(start_va, end_va, MapType::Framed, map_perm),
+                    //     Some(&interp_elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
+                    //     start_va.page_offset(),
+                    // );
                 }
             }
         } else {
@@ -322,7 +333,6 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W | MapPermission::U,
             ),
             None,
-            0,
         );
         // 在应用地址空间中映射次高页面来存放 Trap 上下文
         memory_set.push(
@@ -333,7 +343,6 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W,
             ),
             None,
-            0,
         );
         // 分配用户堆
         let mut user_heap_bottom: usize = user_stack_top;
@@ -349,14 +358,13 @@ impl MemorySet {
                 MapPermission::R | MapPermission::W | MapPermission::U,
             ),
             None,
-            0,
         );
         // memory_set.debug_show_layout();
         // memory_set.debug_show_data(VirtAddr::from(0x50610));
         if elf_interpreter {
             (memory_set, user_stack_top, user_heap_bottom, interp_entry_point)
         } else {
-            (memory_set, user_stack_top, user_heap_bottom, elf_header.pt2.entry_point() as usize)
+            (memory_set, user_stack_top, user_heap_bottom, elf.header.pt2.entry_point() as usize)
         }
     }
 
@@ -368,7 +376,7 @@ impl MemorySet {
         // 循环拷贝每一个逻辑段到新的地址空间
         for area in user_space.areas.iter() {
             let new_area = MapArea::from_another(area);
-            memory_set.push(new_area, None, 0);
+            memory_set.push(new_area, None);
             // 按物理页帧拷贝数据
             for vpn in area.vpn_range {
                 let src_ppn = user_space.translate(vpn).unwrap().ppn();
@@ -380,7 +388,11 @@ impl MemorySet {
             // memory_set.insert_mmap_area(chunk.mmap_start, chunk.mmap_end, chunk.map_perm);
             let mut new_chunk = ChunkArea::from_another(chunk);
             // println!("[kernel fork] push mmap_chunk start_va:{:x} end_va:{:x}",chunk.mmap_start.0, chunk.mmap_end.0);
-            if mmap_area.mmap_type_of(chunk.mmap_start.0).unwrap().contains(MmapFlags::MAP_ANONYMOUS) {
+            if mmap_area
+                .mmap_type_of(chunk.mmap_start.0)
+                .unwrap()
+                .contains(MmapFlags::MAP_ANONYMOUS)
+            {
                 // println!("[Kernel mmap] copy MAP_ANONYMOUS data.");
                 for vpn in chunk.vpn_table.iter() {
                     new_chunk.map_one(&mut memory_set.page_table, (*vpn).clone());
@@ -763,6 +775,7 @@ impl MapArea {
     /// 在多级页表中为逻辑块分配空间
     pub fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
+            // println!("map vpm:0x{:x}",vpn.0);
             self.map_one(page_table, vpn);
         }
     }
@@ -775,7 +788,55 @@ impl MapArea {
         }
     }
 
-    pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8], offset: usize) {
+    // pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8], offset: usize) {
+    //     assert_eq!(self.map_type, MapType::Framed);
+    //     let mut start: usize = 0;
+    //     let mut page_offset: usize = offset;
+    //     let mut current_vpn = self.vpn_range.get_start();
+    //     let len = data.len();
+    //     loop {
+    //         let src = &data[start..len.min(start + PAGE_SIZE - page_offset)];
+    //         let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[page_offset..(page_offset + src.len())];
+    //         dst.copy_from_slice(src);
+
+    //         start += PAGE_SIZE - page_offset;
+
+    //         page_offset = 0;
+    //         if start >= len {
+    //             break;
+    //         }
+    //         current_vpn.step();
+    //     }
+    // }
+
+    pub fn copy_data(&mut self, page_table: &mut PageTable, elf_file: Arc<OSInode>, data_start:usize, data_len: usize, page_offset: usize) {
+        assert_eq!(self.map_type, MapType::Framed);
+        let mut offset: usize = 0;
+        let mut page_offset: usize = page_offset;
+        let mut current_vpn = self.vpn_range.get_start();
+        let mut data_len = data_len;
+        // println!("data_len:{}, page_offset:{}",data_len,page_offset);
+        loop {
+            // println!("current_vpn:0x{:x}, offset:{}",current_vpn.0,offset);
+            // println!("data_len.min(PAGE_SIZE): {}",data_len.min(PAGE_SIZE));
+            let data = elf_file.read_vec((data_start + offset) as isize, data_len.min(PAGE_SIZE));
+            // println!("data:{:?}",data);
+            let data_silce = data.as_slice();
+            let src = &data_silce[0..data_len.min(PAGE_SIZE - page_offset)];
+            let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[page_offset..page_offset + src.len()];
+            dst.copy_from_slice(src);
+            offset += PAGE_SIZE - page_offset;
+
+            page_offset = 0;
+            data_len -= src.len();
+            if data_len == 0 {
+                break;
+            }
+            current_vpn.step();
+        }
+    }
+
+    pub fn copy_data2(&mut self, page_table: &mut PageTable, data: &[u8], offset: usize) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
         let mut page_offset: usize = offset;
@@ -795,6 +856,7 @@ impl MapArea {
             current_vpn.step();
         }
     }
+
 }
 
 // 决赛第一阶段：动态链接器文件缓存
@@ -808,4 +870,83 @@ lazy_static! {
             panic!("can't find libc.so");
         }
     };
+}
+
+impl MemorySet {
+    pub fn from_elf(elf_data: &[u8], auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
+        let mut memory_set = Self::new_bare();
+        // 将跳板插入到应用地址空间
+        memory_set.map_trampoline();
+        // map program headers of elf, with U flag
+        // 使用外部 crate xmas_elf 来解析传入的应用 ELF 数据并可以轻松取出各个部分
+        let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
+        let elf_header = elf.header;
+        // 获取 program header 的数目
+        let ph_count = elf_header.pt2.ph_count();
+        // 记录目前涉及到的最大的虚拟页号
+        let mut max_end_vpn = VirtPageNum(0);
+        // 遍历程序段进行加载
+        for i in 0..ph_count {
+            let ph = elf.program_header(i).unwrap();
+            match ph.get_type().unwrap() {
+                xmas_elf::program::Type::Load => {
+                    let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
+                    let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
+                    let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
+                    let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
+                    max_end_vpn = map_area.vpn_range.get_end();
+                    memory_set.push2(
+                        map_area,
+                        Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
+                        start_va.page_offset(),
+                    );
+                }
+                _ => continue,
+            }
+        }
+        // 分配用户栈
+        let max_end_va: VirtAddr = max_end_vpn.into();
+        let mut user_stack_bottom: usize = max_end_va.into();
+        // 在已用最大虚拟页之上放置一个保护页
+        user_stack_bottom += PAGE_SIZE; // 栈底
+        let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址
+        memory_set.push(
+            MapArea::new(
+                user_stack_bottom.into(),
+                user_stack_top.into(),
+                MapType::Framed,
+                MapPermission::R | MapPermission::W | MapPermission::U,
+            ),
+            None,
+        );
+        // 在应用地址空间中映射次高页面来存放 Trap 上下文
+        memory_set.push(
+            MapArea::new(
+                TRAP_CONTEXT.into(),
+                TRAMPOLINE.into(),
+                MapType::Framed,
+                MapPermission::R | MapPermission::W,
+            ),
+            None,
+        );
+        // 分配用户堆
+        let mut user_heap_bottom: usize = user_stack_top;
+        //放置一个保护页
+        user_heap_bottom += PAGE_SIZE;
+        let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
+
+        memory_set.push(
+            MapArea::new(
+                user_heap_bottom.into(),
+                user_heap_top.into(),
+                MapType::Framed,
+                MapPermission::R | MapPermission::W | MapPermission::U,
+            ),
+            None,
+        );
+        // memory_set.debug_show_layout();
+        // memory_set.debug_show_data(VirtAddr::from(0x50610));
+        (memory_set, user_stack_top, user_heap_bottom, elf_header.pt2.entry_point() as usize)
+    }
+
 }
