@@ -1,6 +1,6 @@
 use crate::config::CLOCK_FREQ;
 use crate::fs::{open, OpenFlags};
-use crate::mm::{memory_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, RUsage,
     SignalFlags,
@@ -446,7 +446,6 @@ const RUSAGE_SELF: isize = 0;
 pub fn sys_getrusage(who: isize, usage: *mut u8) -> isize {
     if who != RUSAGE_SELF {
         panic!("sys_getrusage: \"who\" not supported!");
-        // return -1;
     }
     let token = current_user_token();
     let mut userbuf = UserBuffer::new(translated_byte_buffer(token, usage, core::mem::size_of::<RUsage>()));

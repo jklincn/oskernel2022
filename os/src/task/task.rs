@@ -3,7 +3,7 @@ use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout, OSInode};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, heap_usage};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry};
 use spin::{Mutex, MutexGuard};
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -46,6 +46,7 @@ pub struct TaskControlBlockInner {
     pub mmap_area: MmapArea,
     pub heap_start: usize,
     pub heap_pt: usize,
+    pub stack_top: usize,
 
     // 文件
     /// 文件描述符表
@@ -91,6 +92,21 @@ impl TaskControlBlockInner {
     pub fn get_work_path(&self) -> String {
         self.current_path.clone()
     }
+    
+    pub fn enquire_pte_via_vpn(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
+        self.memory_set.translate(vpn)
+    }
+
+    pub fn cow_alloc(&mut self, vpn: VirtPageNum, former_ppn: PhysPageNum) -> isize {
+        self.memory_set.cow_alloc(vpn, former_ppn)
+    }
+
+    pub fn lazy_alloc_heap(&mut self, vpn: VirtPageNum) -> isize {
+        self.memory_set.lazy_alloc_heap(vpn)
+    }
+    // pub fn lazy_alloc_stack(&mut self, vpn: VirtPageNum) -> isize {
+    //     self.memory_set.lazy_alloc_stack(vpn)
+    // }
 }
 
 impl TaskControlBlock {
@@ -139,6 +155,7 @@ impl TaskControlBlock {
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
                     sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
+                    stack_top: user_sp,
                 })
             ,
         };
@@ -271,7 +288,7 @@ impl TaskControlBlock {
         let mmap_area = parent_inner.mmap_area.clone();
         // mmap_area.debug_show();
         // 拷贝用户地址空间
-        let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set, &parent_inner.mmap_area);
+        let memory_set = MemorySet::from_copy_on_write(&mut parent_inner.memory_set);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 分配一个 PID
         let pid_handle = pid_alloc();
@@ -317,6 +334,7 @@ impl TaskControlBlock {
                     mmap_area,
                     sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
+                    stack_top: parent_inner.stack_top,
                 })
             ,
         });
@@ -340,18 +358,37 @@ impl TaskControlBlock {
         let inner = self.inner_exclusive_access();
         let mmap_start = inner.mmap_area.mmap_start;
         let mmap_end = inner.mmap_area.mmap_top;
+        let stack_start = VirtAddr::from(inner.stack_top - USER_STACK_SIZE);
+        let stack_end = VirtAddr::from(inner.stack_top);
+        let heap_start = VirtAddr::from(inner.heap_start);
+        let heap_end = VirtAddr::from(inner.heap_start + USER_HEAP_SIZE);
         drop(inner);
 
-        // print!("[kernel mmap] Check_lazy...");
-        if va >= mmap_start && va < mmap_end {
-            // println!("va:0x{:x} ok", va.0);
+        let vpn: VirtPageNum = va.floor();
+        let pte = self.inner_exclusive_access().enquire_pte_via_vpn(vpn);
+        if pte.is_some() && pte.unwrap().is_cow() {
+            let former_ppn = pte.unwrap().ppn();
+            return self.inner_exclusive_access().cow_alloc(vpn, former_ppn);
+        } else {
+            if let Some(pte1) = pte {
+                if pte1.is_valid() {
+                    return -4
+                }
+            }
+        }
+        
+        if va >= stack_start && va <= stack_end {
+            // self.inner_exclusive_access().lazy_alloc_stack(va.floor())
+            -3
+        } else if va >= heap_start && va <= heap_end {
+            self.inner_exclusive_access().lazy_alloc_heap(va.floor())
+        } else if va >= mmap_start && va < mmap_end {
             self.lazy_mmap(va, is_load)
         } else {
-            // println!("va:0x{:x} err", va.0);
-            println!("[DEBUG] va: 0x{:x}", va.0);
-            println!("[DEBUG] mmap_start: 0x{:x}", mmap_start.0);
-            println!("[DEBUG] mmap_end: 0x{:x}", mmap_end.0);
-            println!("[DEBUG] current vma:");
+            println!("[check_lazy] va: 0x{:x}", va.0);
+            println!("[check_lazy] mmap_start: 0x{:x}", mmap_start.0);
+            println!("[check_lazy] mmap_end: 0x{:x}", mmap_end.0);
+            println!("[check_lazy] current vma layout:");
             self.inner_exclusive_access().memory_set.debug_show_layout();
             -2
         }
@@ -429,9 +466,8 @@ impl TaskControlBlock {
                 .memory_set
                 .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
 
-            // 创建mmap后直接加载一页，不使用lazy mmap
-            // inner.memory_set.lazy_mmap(va_top);
-
+            // println!("[mmap] push mmap_area start {:?}, writeable:{}", VirtAddr::from(va_top), prot & 0b0010);
+            
             inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
             // println!("[DEBUG] mmap: va:{}, len:{}",va_top.0,len);
             // inner.memory_set.debug_show_layout();
