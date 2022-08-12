@@ -157,7 +157,7 @@ pub fn list_apps() {
     open("/dev/misc", "rtc", OpenFlags::O_CREATE);
     // open("/", "dev", OpenFlags::O_DIRECTROY);
     open("/dev", "null", OpenFlags::O_CREATE);
-    // open("/dev", "zero", OpenFlags::O_CREATE);
+    open("/dev", "zero", OpenFlags::O_CREATE);
     println!("/**** All Files  ****");
     for app in ROOT_INODE.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {
