@@ -35,7 +35,14 @@ kernel:
 	@cargo build --release --offline --features "board_$(BOARD)"
 	@rm src/linker.ld
 
-run: run-inner
+run: build
+	@qemu-system-riscv64 \
+		-machine virt \
+		-nographic \
+		-bios ../bootloader/rustsbi-qemu.bin \
+		-device loader,file=$(KERNEL_BIN),addr=0x80200000 \
+		-drive file=../simple-fat32/fat32.img,if=none,format=raw,id=x0 \
+        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 copy-to-fs: 
 	@cd ../simple-fat32 \
@@ -48,26 +55,26 @@ copy-to-fs:
 	&& sleep 1 \
 	&& sudo umount fs \
 	&& sudo rmdir fs
+	
+dump:
+	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) > os_dump
 
-run-inner: build
+
+FULLSCORE = 62
+TESTSCORE = $(shell grep -o success output | wc -l )
+test: copy-to-fs 
+	@rm -f output
+	@make build > output
+	@echo "\nTest start! Please wait a minute..."
 	@qemu-system-riscv64 \
 		-machine virt \
 		-nographic \
 		-bios ../bootloader/rustsbi-qemu.bin \
 		-device loader,file=$(KERNEL_BIN),addr=0x80200000 \
 		-drive file=../simple-fat32/fat32.img,if=none,format=raw,id=x0 \
-        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
+		> output
+	@echo "Test score: $(TESTSCORE)/$(FULLSCORE)"
 
-dump:
-	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) > os_dump
-
-FULLSCORE = 62
-test: copy-to-fs 
-	@make run > output
-ifeq ($(FULLSCORE),$(shell grep -o success output | wc -l ))
-	@echo "All test pass!"
-else
-	@echo "Some test failed, see /os/output"
-endif
 
 .PHONY: dump run submit build-custom-test
