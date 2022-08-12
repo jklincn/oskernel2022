@@ -61,7 +61,7 @@ run-inner: build
 dump:
 	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) > os_dump
 
-FULLSCORE = 63
+FULLSCORE = 62
 test: copy-to-fs 
 	@make run > output
 ifeq ($(FULLSCORE),$(shell grep -o success output | wc -l ))
