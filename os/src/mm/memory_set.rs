@@ -13,7 +13,7 @@ use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
 use crate::config::*;
 use crate::mm::MmapFlags;
-use crate::task::{current_task, AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
+use crate::task::{AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -23,7 +23,7 @@ use riscv::register::satp;
 use spin::Mutex;
 
 // 动态链接部分
-use crate::fs::{open, OSInode, OpenFlags};
+use crate::fs::OSInode;
 
 extern "C" {
     fn stext();

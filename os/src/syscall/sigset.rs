@@ -28,7 +28,7 @@ pub fn sys_rt_sigprocmask(how: i32, set: *const usize, oldset: *const usize, _si
     0
 }
 
-pub fn sys_rt_sigreturn(setptr: *mut usize) -> isize {
+pub fn sys_rt_sigreturn(_setptr: *mut usize) -> isize {
     0
 }
 

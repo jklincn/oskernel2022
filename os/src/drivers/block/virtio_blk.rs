@@ -23,7 +23,7 @@ use virtio_drivers::{VirtIOBlk, VirtIOHeader};
 const VIRTIO0: usize = 0x10001000;
 
 lazy_static! {
-    static ref QUEUE_FRAMES: Mutex<Vec<FrameTracker>> = unsafe { Mutex::new(Vec::new()) };
+    static ref QUEUE_FRAMES: Mutex<Vec<FrameTracker>> = Mutex::new(Vec::new());
 }
 
 /// ### VirtIO 总线架构下的块设备

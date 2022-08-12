@@ -839,14 +839,12 @@ pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, ne
                     0
                 } else {
                     panic!("can't find new file");
-                    -1
                 }
             } else {
                 unimplemented!();
             }
         } else {
             panic!("can't find old file");
-            -1
         }
     } else {
         unimplemented!();
