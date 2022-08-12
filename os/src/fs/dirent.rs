@@ -1,4 +1,4 @@
-pub const NAME_LIMIT: usize = 256;
+pub const NAME_LIMIT: usize = 64;
 
 /// 存储目录中的文件信息
 #[repr(C)]
