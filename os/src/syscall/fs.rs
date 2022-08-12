@@ -548,7 +548,7 @@ pub fn sys_newfstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, 
 
     // println!(
     //     "[DEBUG] enter sys_newfstatat: dirfd:{}, pathname:{}, satabuf:0x{:x}, flags:0x{:x}",
-    //     dirfd, path, satabuf as usize, flags
+    //     dirfd, path, satabuf as usize, _flags
     // );
 
     let buf_vec = translated_byte_buffer(token, satabuf as *const u8, size_of::<Kstat>());

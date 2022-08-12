@@ -155,12 +155,12 @@ pub fn list_apps() {
     open("/", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/", "dev", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/dev", "misc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
+    open("/dev", "null", OpenFlags::O_CREATE);
+    open("/dev", "zero", OpenFlags::O_CREATE);
     open("/proc", "mounts", OpenFlags::O_CREATE);
     open("/proc", "meminfo", OpenFlags::O_CREATE);
     open("/dev/misc", "rtc", OpenFlags::O_CREATE);
-    // open("/", "dev", OpenFlags::O_DIRECTROY);
-    open("/dev", "null", OpenFlags::O_CREATE);
-    open("/dev", "zero", OpenFlags::O_CREATE);
+
     println!("/**** All Files  ****");
     for app in ROOT_INODE.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {
@@ -451,7 +451,7 @@ impl File for OSInode {
         } else {
             st_mode = S_IFREG;
         }
-        if vfile.name() == "null" {
+        if vfile.name() == "null" || vfile.name() == "zero" {
             st_mode = S_IFCHR;
         }
         kstat.init(st_size, st_blksize as i32, st_blocks, st_mode, time);

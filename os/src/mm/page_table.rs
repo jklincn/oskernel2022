@@ -368,7 +368,7 @@ impl UserBuffer {
     pub fn write_at(&mut self, offset: usize, buff: &[u8]) -> isize {
         let len = buff.len();
         if offset + len > self.len() {
-            return -1;
+            panic!();
         }
         let mut head = 0; // offset of slice in UBuffer
         let mut current = 0; // current offset of buff
@@ -376,8 +376,9 @@ impl UserBuffer {
         for sub_buff in self.buffers.iter_mut() {
             let sblen = (*sub_buff).len();
             if head + sblen < offset {
+                head += sblen;
                 continue;
-            } else if head < offset {
+            } else if head < offset { 
                 for j in (offset - head)..sblen {
                     (*sub_buff)[j] = buff[current];
                     current += 1;

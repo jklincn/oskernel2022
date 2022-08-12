@@ -304,6 +304,7 @@ impl VFile {
                 // 从未分配过簇的情况（例如新文件？）
                 drop(manager_writer);
                 self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
+                    // 貌似失败了
                     short_entry.set_first_cluster(cluster);
                 });
             } else {
@@ -322,7 +323,7 @@ impl VFile {
                 short_entry.set_file_size(new_size);
             });
         } else {
-            panic!("increase size failed!");
+            panic!("[DEBUG] Simple-FAT32: increase size failed! Out of cluster!");
         }
     }
 
@@ -330,7 +331,6 @@ impl VFile {
     pub fn create(&self, name: &str, attribute: u8) -> Option<Arc<VFile>> {
         // 检测同名文件
         assert!(self.is_dir());
-
         let (name_, ext_) = split_name_ext(name);
         // 搜索空处
         let mut dirent_offset: usize;
@@ -382,17 +382,18 @@ impl VFile {
         if let Some(vfile) = self.find_vfile_byname(name) {
             // 如果是目录类型，需要创建.和..
             if attribute & ATTR_DIRECTORY != 0 {
-                let (_name, _ext) = short_name_format(".");
-                let mut self_dir = ShortDirEntry::new();
-                self_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
-                self_dir.set_first_cluster(vfile.first_cluster());
-                vfile.write_at(0, self_dir.as_bytes_mut());
-
+                // 先写入 .. 使得目录获取第一个簇
                 let (_name, _ext) = short_name_format("..");
                 let mut par_dir = ShortDirEntry::new();
                 par_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
                 par_dir.set_first_cluster(self.first_cluster());
                 vfile.write_at(DIRENT_SZ, par_dir.as_bytes_mut());
+
+                let (_name, _ext) = short_name_format(".");
+                let mut self_dir = ShortDirEntry::new();
+                self_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
+                self_dir.set_first_cluster(vfile.first_cluster());
+                vfile.write_at(0, self_dir.as_bytes_mut());
             }
             return Some(Arc::new(vfile));
         } else {
@@ -582,54 +583,6 @@ impl VFile {
         }
         let mut file_entry = LongDirEntry::new();
         let mut offset = offset;
-        // loop {
-        //     let read_size = self.read_short_dirent(|current_dirent: &ShortDirEntry| {
-        //         current_dirent.read_at(
-        //             offset,
-        //             file_entry.as_bytes_mut(),
-        //             &self.fs,
-        //             &self.fs.read().get_fat(),
-        //             &self.block_device,
-        //         )
-        //     });
-        //     // 读取完了
-        //     if read_size != DIRENT_SZ || file_entry.is_empty() {
-        //         return None;
-        //     }
-        //     // 文件被标记删除则跳过
-        //     if file_entry.is_deleted() {
-        //         offset += DIRENT_SZ;
-        //         continue;
-        //     }
-        //     if file_entry.attr() != ATTR_LONG_NAME {
-        //         // 短文件名
-        //         let (_, se_array, _) = unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
-        //         let short_entry = se_array[0];
-        //         return Some((short_entry.get_name_lowercase(), (offset + DIRENT_SZ) as u32, short_entry.attr()));
-        //     } else {
-        //         // 长文件名
-        //         // 如果是长文件名目录项，则必是长文件名最后的那一段
-        //         let mut name = String::new();
-        //         let order = file_entry.order() ^ 0x40;
-        //         for _ in 0..order {
-        //             name.insert_str(0, file_entry.get_name_format().as_str());
-        //             offset += DIRENT_SZ;
-        //             let read_size = self.read_short_dirent(|current_dirent: &ShortDirEntry| {
-        //                 current_dirent.read_at(
-        //                     offset,
-        //                     file_entry.as_bytes_mut(),
-        //                     &self.fs,
-        //                     &self.fs.read().get_fat(),
-        //                     &self.block_device,
-        //                 )
-        //             });
-        //             if read_size != DIRENT_SZ || file_entry.is_empty() {
-        //                 panic!("dirent_info read long name entry error!");
-        //             }
-        //         }
-        //         return Some((name.clone(), offset as u32, file_entry.attr()));
-        //     }
-        // }
         let mut name = String::new();
         let mut is_long = false;
         //let mut order:u8 = 0;

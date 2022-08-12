@@ -2,6 +2,7 @@ pub const NAME_LIMIT: usize = 256;
 
 /// 存储目录中的文件信息
 #[repr(C)]
+#[derive(Debug)]
 pub struct Dirent {
     d_ino: usize,             // 索引节点号
     d_off: isize,             // 从 0 开始到下一个 dirent 的偏移
