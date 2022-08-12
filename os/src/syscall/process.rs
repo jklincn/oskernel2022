@@ -168,6 +168,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     // envs_vec.push("LOOP_O=0.2".to_string());
 
     let task = current_task().unwrap();
+    // memory_usage();
     // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
 
     if path.ends_with(".sh"){
@@ -249,16 +250,20 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 }
 
 pub fn sys_kill(pid: usize, signal: u32) -> isize {
-    // println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}",pid,signal);
+    println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}",pid,signal);
+    if signal == 0 {
+        return 0;
+    }
+    let signal = 1 << signal;
     if let Some(task) = pid2task(pid) {
         if let Some(flag) = SignalFlags::from_bits(signal) {
             task.inner_exclusive_access().signals |= flag;
             0
         } else {
-            -1
+            panic!("[DEBUG] sys_kill: unsupported signal");
         }
     } else {
-        -1
+        1
     }
 }
 

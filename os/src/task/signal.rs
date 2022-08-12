@@ -6,6 +6,8 @@
 //
 use bitflags::*;
 
+use super::current_task;
+
 bitflags! {
     /// 进程状态标志
     pub struct SignalFlags: u32 {   /// - Killed
@@ -13,26 +15,30 @@ bitflags! {
         const SIGILL    = 1 << 4;   /// - Aborted
         const SIGABRT   = 1 << 6;   /// - Erroneous Arithmetic Operation
         const SIGFPE    = 1 << 8;   /// - Segmentation Fault
+        const SIGKILL   = 1 << 9;
+        const SIGUSR1   = 1 << 10;
         const SIGSEGV   = 1 << 11;
     }
 }
 
-impl SignalFlags {
-    pub fn check_error(&self) -> Option<(i32, &'static str)> {
-        if self.contains(Self::SIGINT) {
-            Some((-2, "Killed, SIGINT=2"))
-        } else if self.contains(Self::SIGILL) {
-            Some((-4, "Illegal Instruction, SIGILL=4"))
-        } else if self.contains(Self::SIGABRT) {
-            Some((-6, "Aborted, SIGABRT=6"))
-        } else if self.contains(Self::SIGFPE) {
-            Some((-8, "Erroneous Arithmetic Operation, SIGFPE=8"))
-        } else if self.contains(Self::SIGSEGV) {
-            Some((-11, "Segmentation Fault, SIGSEGV=11"))
-        } else {
-            None
-        }
+pub fn check_signals_of_current() -> Option<(i32, &'static str)> {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_exclusive_access();
+    match task_inner.signals{
+        SignalFlags::SIGINT => Some((-2, "Killed, SIGINT=2")),
+        SignalFlags::SIGILL => Some((-4, "Illegal Instruction, SIGILL=4")),
+        SignalFlags::SIGABRT=> Some((-6, "Aborted, SIGABRT=6")),
+        SignalFlags::SIGFPE => Some((-8, "Erroneous Arithmetic Operation, SIGFPE=8")),
+        SignalFlags::SIGKILL =>Some((-9, "Kill, SIGKILL=9")),
+        SignalFlags::SIGSEGV=> Some((-11, "Segmentation Fault, SIGSEGV=11")),
+        _ => None
     }
+}
+
+pub fn current_add_signal(signal: SignalFlags) {
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_exclusive_access();
+    task_inner.signals |= signal;
 }
 
 // pub const SIGHUP: u32 = 1;
