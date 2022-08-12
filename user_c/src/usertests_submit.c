@@ -2,7 +2,7 @@
 #include "unistd.h"
 #include "stdlib.h"
 
-// #define TEST
+#define TEST
 
 char *argv_sh[] = {"./busybox", "sh", 0};
 char *argv_busybox[] = {"./busybox", "sh", "busybox_testcode.sh", 0};
