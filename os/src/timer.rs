@@ -9,7 +9,6 @@
 /// pub fn set_next_trigger()
 /// ```
 //
-
 use core::ops::{Add, Sub};
 
 use crate::config::CLOCK_FREQ;
@@ -25,11 +24,12 @@ pub const NSEC_PER_SEC: usize = 1000_000_000;
 /// - `sec`：秒
 /// - `usec`：微秒
 /// - 两个值相加的结果是结构体表示的时间
-#[derive(Copy, Clone)]
-pub struct  TimeVal {
+#[derive(Copy, Clone, Debug)]
+pub struct TimeVal {
     /// 单位：秒
-    pub sec:usize,  /// 单位：微秒
-    pub usec:usize,
+    pub sec: usize,
+    /// 单位：微秒
+    pub usec: usize,
 }
 
 impl Add for TimeVal {
@@ -38,12 +38,9 @@ impl Add for TimeVal {
     fn add(self, other: Self) -> Self {
         let mut sec = self.sec + other.sec;
         let mut usec = self.usec + other.usec;
-        sec += usec/USEC_PER_SEC;
+        sec += usec / USEC_PER_SEC;
         usec %= USEC_PER_SEC;
-        Self {
-            sec,
-            usec,
-        }
+        Self { sec, usec }
     }
 }
 
@@ -51,41 +48,35 @@ impl Sub for TimeVal {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
-        if self.sec < other.sec{
-            return Self{sec:0,usec:0}
-        }
-        else if self.sec == other.sec{
-            if self.usec < other.usec{
-                return Self{sec:0,usec:0}
+        if self.sec < other.sec {
+            return Self { sec: 0, usec: 0 };
+        } else if self.sec == other.sec {
+            if self.usec < other.usec {
+                return Self { sec: 0, usec: 0 };
+            } else {
+                return Self {
+                    sec: 0,
+                    usec: self.usec - other.usec,
+                };
             }
-            else{
-                return Self{sec:0,usec:self.usec-other.usec}
-            }
-        }
-        else{
+        } else {
             let mut sec = self.sec - other.sec;
             let mut usec = self.usec - other.usec;
-            if self.usec < other.usec{
+            if self.usec < other.usec {
                 sec -= 1;
                 usec = USEC_PER_SEC + self.usec - other.usec;
             }
-            Self {
-                sec,
-                usec,
-            }
+            Self { sec, usec }
         }
     }
 }
 
 impl TimeVal {
-    pub fn new() -> Self{
-        Self{
-            sec:0,
-            usec:0
-        }
+    pub fn new() -> Self {
+        Self { sec: 0, usec: 0 }
     }
 
-    pub fn is_zero(&self) -> bool{
+    pub fn is_zero(&self) -> bool {
         self.sec == 0 && self.usec == 0
     }
 
@@ -101,11 +92,15 @@ impl TimeVal {
 /// - `tms_stime`：内核态时间
 /// - `tms_cutime`：已回收子进程的用户态时间
 /// - `tms_cstime`：已回收子进程的内核态时间
-pub struct tms {    /// 用户态时间
-    pub tms_utime:isize,    /// 内核态时间
-    pub tms_stime:isize,    /// 已回收子进程的用户态时间
-    pub tms_cutime:isize,   /// 已回收子进程的内核态时间
-    pub tms_cstime:isize,
+pub struct tms {
+    /// 用户态时间
+    pub tms_utime: isize,
+    /// 内核态时间
+    pub tms_stime: isize,
+    /// 已回收子进程的用户态时间
+    pub tms_cutime: isize,
+    /// 已回收子进程的内核态时间
+    pub tms_cstime: isize,
 }
 
 impl tms {
@@ -133,7 +128,7 @@ pub fn get_time_ns() -> usize {
 
 #[allow(unused)]
 pub fn get_time_us() -> usize {
-    get_time() / (CLOCK_FREQ / USEC_PER_SEC) 
+    get_time() / (CLOCK_FREQ / USEC_PER_SEC)
 }
 
 #[allow(unused)]
@@ -144,12 +139,9 @@ pub fn get_time_s() -> usize {
 /// 获取 `TimeVal` 格式的时间信息
 pub fn get_timeval() -> TimeVal {
     let ticks = get_time();
-    let sec = ticks/CLOCK_FREQ;
-    let usec = (ticks%CLOCK_FREQ) * USEC_PER_SEC / CLOCK_FREQ;
-    TimeVal{
-        sec,
-        usec
-    }
+    let sec = ticks / CLOCK_FREQ;
+    let usec = (ticks % CLOCK_FREQ) * USEC_PER_SEC / CLOCK_FREQ;
+    TimeVal { sec, usec }
 }
 
 /// ### 设置下次触发时钟中断的时间

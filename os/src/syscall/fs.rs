@@ -65,6 +65,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         let len = file_size.min(len);
         file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
+        panic!();
         -1
     }
 }
