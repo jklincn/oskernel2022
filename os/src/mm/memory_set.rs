@@ -12,7 +12,6 @@ use super::frame_allocator::{frame_alloc, FrameTracker, frame_add_ref, enquire_r
 use super::page_table::{PTEFlags, PageTable, PageTableEntry};
 use super::address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum, VPNRange};
 use crate::config::*;
-use crate::mm::{MmapFlags, MmapArea};
 use crate::task::{current_task, AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
@@ -40,7 +39,7 @@ extern "C" {
 }
 
 lazy_static! {
-    pub static ref KERNEL_SPACE: Arc<Mutex<MemorySet>> = Arc::new(unsafe { Mutex::new(MemorySet::new_kernel()) });
+    pub static ref KERNEL_SPACE: Arc<Mutex<MemorySet>> = Arc::new(Mutex::new(MemorySet::new_kernel()));
 }
 
 pub fn kernel_token() -> usize {
@@ -67,6 +66,8 @@ pub struct MemorySet {
     page_table: PageTable,
     /// 挂着对应逻辑段中的数据所在的物理页帧
     areas: Vec<MapArea>,
+    // stack_chunk: ChunkArea,
+    heap_chunk: ChunkArea,
     mmap_chunks: Vec<ChunkArea>,
 }
 
@@ -76,8 +77,16 @@ impl MemorySet {
         Self {
             page_table: PageTable::new(),
             areas: Vec::new(),
-            // chunks: ChunkArea::new(MapType::Framed,
-            //                     MapPermission::R | MapPermission::W | MapPermission::U),
+            // stack_chunk: ChunkArea::new(
+            //     MapType::Framed,
+            //     MapPermission::R | MapPermission::W | MapPermission::U,
+            //     0.into(),
+            //     0.into()),
+            heap_chunk: ChunkArea::new(
+                MapType::Framed,
+                MapPermission::R | MapPermission::W | MapPermission::U,
+                0.into(),
+                0.into()),
             mmap_chunks: Vec::new(),
         }
     }
@@ -89,9 +98,10 @@ impl MemorySet {
 
     /// 在当前地址空间插入一个 `Framed` 方式映射到物理内存的逻辑段
     pub fn insert_framed_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
-        self.push(MapArea::new(start_va, end_va, MapType::Framed, permission), None, 0);
+        self.push_area(MapArea::new(start_va, end_va, MapType::Framed, permission), None, 0);
     }
 
+    /// 通过起始虚拟页号删除对应的逻辑段（包括连续逻辑段和离散逻辑段）
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
         if let Some((idx, area)) = self
             .areas
@@ -107,17 +117,18 @@ impl MemorySet {
             .mmap_chunks
             .iter_mut()
             .enumerate()
-            .find(|(_, chunk)| chunk.mmap_start.floor() == start_vpn)
+            .find(|(_, chunk)| chunk.start_va.floor() == start_vpn)
         {
             chunk.unmap(&mut self.page_table);
             self.mmap_chunks.remove(idx);
         }
     }
 
-    /// ### 在当前地址空间插入一个新的逻辑段
-    /// 如果是以 Framed 方式映射到物理内存,
-    /// 还可以可选地在那些被映射到的物理页帧上写入一些初始化数据
-    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>, offset: usize) {
+    /// ### 在当前地址空间插入一个新的连续逻辑段
+    /// - 物理页号是随机分配的
+    /// - 如果是以 Framed 方式映射到物理内存,
+    /// 还可以可选性地在那些被映射到的物理页帧上写入一些初始化数据
+    fn push_area(&mut self, mut map_area: MapArea, data: Option<&[u8]>, offset: usize) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             // 写入初始化数据，如果数据存在
@@ -126,16 +137,31 @@ impl MemorySet {
         self.areas.push(map_area); // 将生成的数据段压入 areas 使其生命周期由areas控制
     }
 
-    fn push_mapped(&mut self, map_area: MapArea) {
+    /// ### 在当前地址空间插入一段已被分配空间的连续逻辑段
+    /// 主要用于 COW 创建时子进程空间连续逻辑段的插入，其要求指定物理页号
+    fn push_mapped_area(&mut self, map_area: MapArea) {
         self.areas.push(map_area);
     }
-    
+
     /// 映射跳板的虚拟页号和物理物理页号
     fn map_trampoline(&mut self) {
         self.page_table.map(
             VirtAddr::from(TRAMPOLINE).into(),
             PhysAddr::from(strampoline as usize).into(),
             PTEFlags::R | PTEFlags::X,
+        );
+    }
+
+    fn map_trap_context(&mut self) {
+        self.push_area(
+            MapArea::new(
+                TRAP_CONTEXT.into(),
+                TRAMPOLINE.into(),
+                MapType::Framed,
+                MapPermission::R | MapPermission::W,
+            ),
+            None,
+            0,
         );
     }
 
@@ -152,9 +178,9 @@ impl MemorySet {
         println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
         println!(".bss [{:#x}, {:#x})", sbss_with_stack as usize, ebss as usize);
         println!("boot_stack:{:#x}",boot_stack as usize);
-        println!("mapping .text section");
         // 总体思路：通过Linker.ld中的标签划分内核空间为不同的区块，为每个区块采用恒等映射的方式生成逻辑段，压入地址空间
-        memory_set.push(
+        println!("mapping .text section");
+        memory_set.push_area(
             MapArea::new(
                 (stext as usize).into(),
                 (etext as usize).into(),
@@ -165,7 +191,7 @@ impl MemorySet {
             0,
         );
         println!("mapping .rodata section");
-        memory_set.push(
+        memory_set.push_area(
             MapArea::new(
                 (srodata as usize).into(),
                 (erodata as usize).into(),
@@ -176,7 +202,7 @@ impl MemorySet {
             0,
         );
         println!("mapping .data section");
-        memory_set.push(
+        memory_set.push_area(
             MapArea::new(
                 (sdata as usize).into(),
                 (edata as usize).into(),
@@ -187,7 +213,7 @@ impl MemorySet {
             0,
         );
         println!("mapping .bss section");
-        memory_set.push(
+        memory_set.push_area(
             MapArea::new(
                 (sbss_with_stack as usize).into(),
                 (ebss as usize).into(),
@@ -198,7 +224,7 @@ impl MemorySet {
             0,
         );
         println!("mapping physical memory");
-        memory_set.push(
+        memory_set.push_area(
             MapArea::new(
                 (ekernel as usize).into(),
                 MEMORY_END.into(),
@@ -211,7 +237,7 @@ impl MemorySet {
         println!("mapping memory-mapped registers");
         for pair in MMIO {
             // 恒等映射 内存映射 I/O (MMIO, Memory-Mapped I/O) 地址到内核地址空间
-            memory_set.push(
+            memory_set.push_area(
                 MapArea::new(
                     (*pair).0.into(),
                     ((*pair).0 + (*pair).1).into(),
@@ -234,6 +260,9 @@ impl MemorySet {
         let mut memory_set = Self::new_bare();
         // 将跳板插入到应用地址空间
         memory_set.map_trampoline();
+        // 在应用地址空间中映射次高页面来存放 Trap 上下文
+        // 将 TRAP_CONTEXT 段尽量放前，以节省 cow 时寻找时间
+        memory_set.map_trap_context();
         // map program headers of elf, with U flag
         // 使用外部 crate xmas_elf 来解析传入的应用 ELF 数据并可以轻松取出各个部分
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
@@ -275,7 +304,7 @@ impl MemorySet {
                     // }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
                     max_end_vpn = map_area.vpn_range.get_end();
-                    memory_set.push(
+                    memory_set.push_area(
                         map_area,
                         Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
                         start_va.page_offset(),
@@ -288,7 +317,7 @@ impl MemorySet {
             // 动态链接
             let interp_elf = xmas_elf::ElfFile::new(LIBC_SO.as_slice()).unwrap();
             let interp_elf_header = interp_elf.header;
-            let base_address = 0x2000000000;
+            let base_address = 0x20_0000_0000;
             auxs.push(AuxEntry(AT_BASE, base_address));
             interp_entry_point = base_address + interp_elf_header.pt2.entry_point() as usize;
             // 获取 program header 的数目
@@ -299,7 +328,7 @@ impl MemorySet {
                     let start_va: VirtAddr = (ph.virtual_addr() as usize + base_address).into();
                     let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
                     let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
-                    memory_set.push(
+                    memory_set.push_area(
                         MapArea::new(start_va, end_va, MapType::Framed, map_perm),
                         Some(&interp_elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
                         start_va.page_offset(),
@@ -309,13 +338,20 @@ impl MemorySet {
         } else {
             auxs.push(AuxEntry(AT_BASE, 0));
         }
+
         // 分配用户栈
         let max_end_va: VirtAddr = max_end_vpn.into();
-        let mut user_stack_bottom: usize = max_end_va.into();
-        // 在已用最大虚拟页之上放置一个保护页
-        user_stack_bottom += PAGE_SIZE; // 栈底
+        let mut user_stack_bottom: usize = max_end_va.into(); // 栈底
+        user_stack_bottom += PAGE_SIZE; // 在已用最大虚拟页之上放置一个保护页
         let user_stack_top = user_stack_bottom + USER_STACK_SIZE; // 栈顶地址
-        memory_set.push(
+        // memory_set.stack_chunk = ChunkArea::new(
+        //     MapType::Framed, 
+        //     MapPermission::R | MapPermission::W | MapPermission::U,
+        //     user_stack_bottom.into(),
+        //     user_stack_top.into(),
+        // );
+
+        memory_set.push_area(
             MapArea::new(
                 user_stack_bottom.into(),
                 user_stack_top.into(),
@@ -325,33 +361,18 @@ impl MemorySet {
             None,
             0,
         );
-        // 在应用地址空间中映射次高页面来存放 Trap 上下文
-        memory_set.push(
-            MapArea::new(
-                TRAP_CONTEXT.into(),
-                TRAMPOLINE.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W,
-            ),
-            None,
-            0,
-        );
+
         // 分配用户堆
         let mut user_heap_bottom: usize = user_stack_top;
-        //放置一个保护页
-        user_heap_bottom += PAGE_SIZE;
+        user_heap_bottom += PAGE_SIZE; //放置一个保护页
         let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
-
-        memory_set.push(
-            MapArea::new(
-                user_heap_bottom.into(),
-                user_heap_top.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W | MapPermission::U,
-            ),
-            None,
-            0,
+        memory_set.heap_chunk = ChunkArea::new(
+            MapType::Framed,
+            MapPermission::R | MapPermission::W | MapPermission::U,
+            user_heap_bottom.into(),
+            user_heap_top.into(),
         );
+
         // memory_set.debug_show_layout();
         // memory_set.debug_show_data(VirtAddr::from(0x50610));
         if elf_interpreter {
@@ -362,7 +383,7 @@ impl MemorySet {
     }
 
     /// 以COW的方式复制一个地址空间
-    pub fn from_copy_on_write(user_space: &mut MemorySet, mmap_area: &MmapArea) -> MemorySet {
+    pub fn from_copy_on_write(user_space: &mut MemorySet) -> MemorySet {
         let mut new_memory_set = Self::new_bare();
 
         // This part is not for Copy on Write.
@@ -373,7 +394,7 @@ impl MemorySet {
             let start_vpn = area.vpn_range.get_start();
             if start_vpn == VirtAddr::from(TRAP_CONTEXT).floor()  {
                 let new_area = MapArea::from_another(area);
-                new_memory_set.push(new_area, None, 0);
+                new_memory_set.push_area(new_area, None, 0);
                 for vpn in area.vpn_range {
                     let src_ppn = user_space.translate(vpn).unwrap().ppn();
                     let dst_ppn = new_memory_set.translate(vpn).unwrap().ppn();
@@ -381,6 +402,7 @@ impl MemorySet {
                     dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
                 }
             }
+            break;
         }
         //This part is for copy on write
         let parent_areas = & user_space.areas;
@@ -405,24 +427,49 @@ impl MemorySet {
                     new_memory_set.page_table.set_cow(vpn);
                     new_area.insert_tracker(vpn, src_ppn);
                 }
-                new_memory_set.push_mapped(new_area);
+                new_memory_set.push_mapped_area(new_area);
             }
         }
         for chunk in user_space.mmap_chunks.iter() {
             let mut new_chunk = ChunkArea::from_another(chunk);
-            // println!("[kernel fork] push mmap_chunk start_va:{:x} end_va:{:x}",chunk.mmap_start.0, chunk.mmap_end.0);
-            if mmap_area.mmap_type_of(chunk.mmap_start.0).unwrap().contains(MmapFlags::MAP_ANONYMOUS) {
-                // println!("[Kernel mmap] copy MAP_ANONYMOUS data.");
-                for vpn in chunk.vpn_table.iter() {
-                    new_chunk.map_one(&mut new_memory_set.page_table, (*vpn).clone());
-                    let src_ppn = user_space.translate(*vpn).unwrap().ppn();
-                    let dst_ppn = new_memory_set.translate(*vpn).unwrap().ppn();
-                    dst_ppn.get_bytes_array().copy_from_slice(src_ppn.get_bytes_array());
-                }
+            for _vpn in chunk.vpn_table.iter() {
+                let vpn = (*_vpn).clone();
+                // change the map permission of both pagetable
+                // get the former flags and ppn
+                let pte = parent_page_table.translate(vpn).unwrap();
+                let pte_flags = pte.flags() & !PTEFlags::W;
+                let src_ppn = pte.ppn();
+                frame_add_ref(src_ppn);
+                // change the flags of the src_pte
+                parent_page_table.set_flags(vpn, pte_flags);
+                parent_page_table.set_cow(vpn);
+                // map the cow page table to src_ppn
+                new_memory_set.page_table.map(vpn, src_ppn, pte_flags);
+                new_memory_set.page_table.set_cow(vpn);
+                new_chunk.vpn_table.push(vpn);
+                new_chunk.insert_tracker(vpn, src_ppn);
             }
             new_memory_set.mmap_chunks.push(new_chunk);
         }
-        // new_memory_set.page_table.map_kernel_shared();
+        new_memory_set.heap_chunk = ChunkArea::from_another(&user_space.heap_chunk);
+        for _vpn in user_space.heap_chunk.vpn_table.iter() {
+            let vpn = (*_vpn).clone();
+            // change the map permission of both pagetable
+            // get the former flags and ppn
+            let pte = parent_page_table.translate(vpn).unwrap();
+            let pte_flags = pte.flags() & !PTEFlags::W;
+            let src_ppn = pte.ppn();
+            frame_add_ref(src_ppn);
+            // change the flags of the src_pte
+            parent_page_table.set_flags(vpn, pte_flags);
+            parent_page_table.set_cow(vpn);
+            // map the cow page table to src_ppn
+            new_memory_set.page_table.map(vpn, src_ppn, pte_flags);
+            new_memory_set.page_table.set_cow(vpn);
+            new_memory_set.heap_chunk.vpn_table.push(vpn);
+            new_memory_set.heap_chunk.insert_tracker(vpn, src_ppn);
+        }
+        // new_memory_set.debug_show_layout();
         new_memory_set
     }
 
@@ -445,8 +492,22 @@ impl MemorySet {
             let tail_vpn = area.vpn_range.get_end();
             if vpn <= tail_vpn && vpn >= head_vpn {
                 area.data_frames.insert(vpn, frame);
-                break;
+                return 0;
             }
+        }
+        for chunk in self.mmap_chunks.iter_mut() {
+            let head_vpn = VirtPageNum::from(chunk.start_va);
+            let tail_vpn = VirtPageNum::from(chunk.end_va);
+            if vpn <= tail_vpn && vpn >= head_vpn {
+                chunk.data_frames.insert(vpn, frame);
+                return 0;
+            }
+        }
+        let head_vpn = VirtPageNum::from(self.heap_chunk.start_va);
+        let tail_vpn = VirtPageNum::from(self.heap_chunk.end_va);
+        if vpn <= tail_vpn && vpn >= head_vpn {
+            self.heap_chunk.data_frames.insert(vpn, frame);
+            return 0;
         }
         0
     }
@@ -458,13 +519,23 @@ impl MemorySet {
     /// 为mmap缺页分配空页表
     pub fn lazy_mmap(&mut self, stval: VirtAddr) -> isize {
         for mmap_chunk in self.mmap_chunks.iter_mut() {
-            if stval >= mmap_chunk.mmap_start && stval < mmap_chunk.mmap_end {
+            if stval >= mmap_chunk.start_va && stval < mmap_chunk.end_va {
                 mmap_chunk.push_vpn(stval.floor(), &mut self.page_table);
                 return 0;
             }
         }
         -1
     }
+
+    pub fn lazy_alloc_heap (&mut self, vpn: VirtPageNum) -> isize {
+        self.heap_chunk.push_vpn(vpn, &mut self.page_table);
+        0
+    }
+
+    // pub fn lazy_alloc_stack (&mut self, vpn: VirtPageNum) -> isize {
+    //     self.stack_chunk.push_vpn(vpn, &mut self.page_table);
+    //     0
+    // }
 
     /// ### 激活当前虚拟地址空间
     /// 将多级页表的token（格式化后的root_ppn）写入satp
@@ -506,8 +577,7 @@ impl MemorySet {
     ///     - vpn_table
     ///     - data_frames
     pub fn insert_mmap_area(&mut self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
-        let mut new_chunk_area = ChunkArea::new(MapType::Framed, permission);
-        new_chunk_area.set_mmap_range(start_va, end_va);
+        let new_chunk_area = ChunkArea::new(MapType::Framed, permission, start_va, end_va);
         self.mmap_chunks.push(new_chunk_area);
     }
 
@@ -520,9 +590,11 @@ impl MemorySet {
             println!("VirtAddr 0x{:x} ", va.0);
             println!("ppn:     0x{:x}---", pte.ppn().0);
             println!("pte_raw: 0b{:b}", pte.bits);
+            println!("valid   :   {}", pte.is_valid());
             println!("executable: {}", pte.executable());
             println!("readable:   {}", pte.readable());
             println!("writable:   {}", pte.writable());
+            println!("COW     :   {}", pte.is_cow());
         } else {
             println!("VirtAddr 0x{:x} is not valied", va.0);
             println!("------------------------------------------------------");
@@ -530,21 +602,30 @@ impl MemorySet {
         }
         println!("------------------------------------------------------");
 
-        unsafe {
-            let pa = findpte.unwrap().ppn().0 << 12;
-            let raw_data = core::slice::from_raw_parts(pa as *const usize, 512);
-            let mut i = 0;
-            while i < 512 {
-                print!("offset:{:03x}\t0x{:016x}", (i) * 8, raw_data[i]);
-                print!("\t");
-                print!("offset:{:03x}\t0x{:016x}", (i + 1) * 8, raw_data[i + 1]);
-                print!("\t");
-                print!("offset:{:03x}\t0x{:016x}", (i + 2) * 8, raw_data[i + 2]);
-                print!("\t");
-                println!("offset:{:03x}\t0x{:016x}", (i + 3) * 8, raw_data[i + 3]);
-                i += 4;
+        if let Some(pte) = findpte{
+            if pte.is_valid() {
+                unsafe {
+                    let pa = findpte.unwrap().ppn().0 << 12;
+                    let raw_data = core::slice::from_raw_parts(pa as *const usize, 512);
+                    let mut i = 0;
+                    while i < 512 {
+                        print!("offset:{:03x}\t0x{:016x}", (i) * 8, raw_data[i]);
+                        print!("\t");
+                        print!("offset:{:03x}\t0x{:016x}", (i + 1) * 8, raw_data[i + 1]);
+                        print!("\t");
+                        print!("offset:{:03x}\t0x{:016x}", (i + 2) * 8, raw_data[i + 2]);
+                        print!("\t");
+                        println!("offset:{:03x}\t0x{:016x}", (i + 3) * 8, raw_data[i + 3]);
+                        i += 4;
+                    }
+                }
+            } else {
+                println!("VirtAddr 0x{:x} is not valied", va.0);
+                println!("------------------------------------------------------");
+                return;
             }
         }
+        
     }
 
     #[allow(unused)]
@@ -578,37 +659,62 @@ impl MemorySet {
                 println!("-");
             };
         }
-        for chunk in &self.mmap_chunks {
+        for mmap_chunk in &self.mmap_chunks {
             print!(
                 "ChunkArea: 0x{:010x}--0x{:010x} len:0x{:08x} ",
-                chunk.mmap_start.0,
-                chunk.mmap_end.0,
-                chunk.mmap_end.0 - chunk.mmap_start.0
+                mmap_chunk.start_va.0,
+                mmap_chunk.end_va.0,
+                mmap_chunk.end_va.0 - mmap_chunk.start_va.0
             );
-            if chunk.map_perm.is_user() {
+            if mmap_chunk.map_perm.is_user() {
                 print!("U");
             } else {
                 print!("-");
             };
-            if chunk.map_perm.is_read() {
+            if mmap_chunk.map_perm.is_read() {
                 print!("R");
             } else {
                 print!("-");
             };
-            if chunk.map_perm.is_write() {
+            if mmap_chunk.map_perm.is_write() {
                 print!("W");
             } else {
                 print!("-");
             };
-            if chunk.map_perm.is_execute() {
+            if mmap_chunk.map_perm.is_execute() {
                 println!("X");
             } else {
                 println!("-");
             };
         }
+        print!(
+            "HeapArea : 0x{:010x}--0x{:010x} len:0x{:08x} ",
+            self.heap_chunk.start_va.0,
+            self.heap_chunk.end_va.0,
+            self.heap_chunk.end_va.0 - self.heap_chunk.start_va.0
+        );
+        if self.heap_chunk.map_perm.is_user() {
+            print!("U");
+        } else {
+            print!("-");
+        };
+        if self.heap_chunk.map_perm.is_read() {
+            print!("R");
+        } else {
+            print!("-");
+        };
+        if self.heap_chunk.map_perm.is_write() {
+            print!("W");
+        } else {
+            print!("-");
+        };
+        if self.heap_chunk.map_perm.is_execute() {
+            println!("X");
+        } else {
+            println!("-");
+        };
         println!("-------------------------------------------------------");
     }
-
 }
 
 /// ### 离散逻辑段
@@ -617,24 +723,20 @@ pub struct ChunkArea {
     data_frames: BTreeMap<VirtPageNum, FrameTracker>,
     map_type: MapType,
     map_perm: MapPermission,
-    mmap_start: VirtAddr,
-    mmap_end: VirtAddr,
+    start_va: VirtAddr,
+    end_va: VirtAddr,
 }
 
 impl ChunkArea {
-    pub fn new(map_type: MapType, map_perm: MapPermission) -> Self {
+    pub fn new(map_type: MapType, map_perm: MapPermission, start: VirtAddr, end: VirtAddr) -> Self {
         Self {
             vpn_table: Vec::new(),
             data_frames: BTreeMap::new(),
             map_type,
             map_perm,
-            mmap_start: 0.into(),
-            mmap_end: 0.into(),
+            start_va: start,
+            end_va: end,
         }
-    }
-    pub fn set_mmap_range(&mut self, start: VirtAddr, end: VirtAddr) {
-        self.mmap_start = start;
-        self.mmap_end = end;
     }
     pub fn push_vpn(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
         self.vpn_table.push(vpn);
@@ -642,12 +744,12 @@ impl ChunkArea {
     }
     pub fn from_another(another: &ChunkArea) -> Self {
         Self {
-            vpn_table: another.vpn_table.clone(),
+            vpn_table: Vec::new(),
             data_frames: BTreeMap::new(),
             map_type: another.map_type,
             map_perm: another.map_perm,
-            mmap_start: another.mmap_start,
-            mmap_end: another.mmap_end,
+            start_va: another.start_va,
+            end_va: another.end_va,
         }
     }
     // Alloc and map one page
@@ -667,7 +769,6 @@ impl ChunkArea {
             }
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
-        // [WARNING]:因为没有map，所以不能使用
         page_table.map(vpn, ppn, pte_flags);
     }
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
@@ -690,6 +791,10 @@ impl ChunkArea {
         for vpn in self.vpn_table.clone() {
             self.unmap_one(page_table, vpn);
         }
+    }
+
+    pub fn insert_tracker(&mut self, vpn: VirtPageNum, ppn: PhysPageNum) {
+        self.data_frames.insert(vpn, FrameTracker::from_ppn(ppn));
     }
 }
 

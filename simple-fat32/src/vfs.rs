@@ -385,7 +385,7 @@ impl VFile {
                 let (_name, _ext) = short_name_format(".");
                 let mut self_dir = ShortDirEntry::new();
                 self_dir.initialize(&_name, &_ext, ATTR_DIRECTORY);
-                self_dir.set_first_cluster(self.first_cluster());
+                self_dir.set_first_cluster(vfile.first_cluster());
                 vfile.write_at(0, self_dir.as_bytes_mut());
 
                 let (_name, _ext) = short_name_format("..");

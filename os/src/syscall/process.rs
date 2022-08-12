@@ -1,5 +1,5 @@
 use crate::fs::{open, OpenFlags};
-use crate::mm::{memory_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags, RUsage,
 };
@@ -173,12 +173,12 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
     if path == "./busybox" || path == "//busybox" {
         task.exec(BUSYBOX.as_slice(), args_vec, envs_vec);
-        // memory_usage();
+        // crate::mm::memory_usage();
         return 0 as isize;
     }
     if path == "./lua" || path == "//lua" {
         task.exec(LUA.as_slice(), args_vec, envs_vec);
-        // memory_usage();
+        // crate::mm::memory_usage();
         return 0 as isize;
     }
 
@@ -191,7 +191,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         }
         // println!("new_args:{:?}",new_args);
         task.exec(BUSYBOX.as_slice(), new_args, envs_vec);
-        // memory_usage();
+        // crate::mm::memory_usage();
         return 0 as isize;
     }
 
@@ -201,7 +201,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
         drop(inner);
         task.exec(all_data.as_slice(), args_vec, envs_vec);
         drop(all_data);
-        // memory_usage();
+        // crate::mm::memory_usage();
         0 as isize
     } else {
         -1
@@ -471,7 +471,6 @@ const RUSAGE_SELF:isize = 0;
 pub fn sys_getrusage(who: isize, usage: *mut u8) -> isize {
     if who != RUSAGE_SELF {
         panic!("sys_getrusage: \"who\" not supported!");
-        return -1;
     }
     let token = current_user_token();
     let mut userbuf = UserBuffer::new(translated_byte_buffer(token, usage, core::mem::size_of::<RUsage>()));

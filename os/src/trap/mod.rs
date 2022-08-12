@@ -80,8 +80,7 @@ pub fn trap_handler() -> ! {
             let mut cx = current_trap_cx();
             // frame_usage();
             // heap_usage();
-            // let pid = current_task().unwrap().getpid();
-            // println!("pid:{}, syscall_id: {}",pid, cx.x[17]);
+            // println!("pid:{}, syscall_id: {}",current_task().unwrap().getpid(), cx.x[17]);
             cx.sepc += 4;
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);
             // cx is changed during sys_exec, so we have to call it again
@@ -92,7 +91,7 @@ pub fn trap_handler() -> ! {
         | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            // println!("[Kernel trap] Mem Fault");
+            // println!("[Kernel trap] pid:{}, Mem Fault trapped, {:?}, {:?}", current_task().unwrap().getpid(), VirtAddr::from(stval as usize), VirtAddr::from(stval as usize).floor());
             let is_load: bool;
             if scause.cause() == Trap::Exception(Exception::LoadFault) || scause.cause() == Trap::Exception(Exception::LoadPageFault) {
                 is_load = true;
@@ -101,7 +100,7 @@ pub fn trap_handler() -> ! {
             }
             let va: VirtAddr = (stval as usize).into();
             if va > TRAMPOLINE.into() {
-                // println!("[kernel] VirtAddr out of range!");
+                println!("[kernel trap] VirtAddr out of range!");
                 current_add_signal(SignalFlags::SIGSEGV);
             }
             let task = current_task().unwrap();

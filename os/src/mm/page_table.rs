@@ -10,8 +10,11 @@
 /// ```
 //
 
+use crate::config::PAGE_SIZE;
+
 use super::{frame_alloc, FrameTracker};
 use super::address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use _core::mem::size_of;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -212,7 +215,7 @@ impl PageTable {
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_create(vpn).unwrap();
         // 断言，保证新获取到的PTE是无效的（不是已分配的）
-        assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
+        assert!(!pte.is_valid(), "{:?} is mapped before mapping", vpn);
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
     }
 
@@ -220,7 +223,7 @@ impl PageTable {
     /// 只需根据虚拟页号找到页表项，然后修改或者直接清空其内容即可
     pub fn unmap(&mut self, vpn: VirtPageNum) {
         let pte = self.find_pte(vpn).unwrap();
-        assert!(pte.is_valid(), "vpn {:?} is invalid before unmapping", vpn);
+        assert!(pte.is_valid(), "{:?} is invalid before unmapping", vpn);
         *pte = PageTableEntry::empty();
     }
 
@@ -342,12 +345,16 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
 
 /// 根据 多级页表token (satp) 和 虚拟地址 获取大小为 T 的空间的不可变切片
 pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
+    let offset = ptr as usize % PAGE_SIZE;
+    assert!(PAGE_SIZE - offset >= size_of::<T>(), "cross-page access");
     let page_table = PageTable::from_token(token);
     page_table.translate_va(VirtAddr::from(ptr as usize)).unwrap().get_ref()
 }
 
 /// 根据 多级页表token (satp) 和 虚拟地址 获取大小为 T 的空间的切片
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
+    let offset = ptr as usize % PAGE_SIZE;
+    assert!(PAGE_SIZE - offset >= size_of::<T>(), "cross-page access");
     //println!("into translated_refmut!");
     let page_table = PageTable::from_token(token);
     let va = ptr as usize;
