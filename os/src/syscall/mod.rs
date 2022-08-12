@@ -128,7 +128,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_FUTEX =>    sys_futex(),
         SYSCALL_NANOSLEEP=> sys_nanosleep(args[0] as *const u8),
         SYSCALL_SETITIMER=> 0,
-        SYSCALL_CLOCK_GETTIME=> sys_clock_gettime(args[0],args[1] as *mut usize),
+        SYSCALL_CLOCK_GETTIME=> sys_clock_gettime(args[0],args[1] as *mut u64),
         SYSCALL_SYSLOG =>   0,
         SYSCALL_YIELD =>    sys_yield(),
         SYSCALL_KILL =>     sys_kill(args[0], args[1] as u32),

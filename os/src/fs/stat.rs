@@ -74,11 +74,6 @@ impl Kstat {
     }
 }
 
-pub struct Timespec {
-    pub tv_sec: u64,
-    pub tv_nsec: u64,
-}
-
 #[repr(C)]
 pub struct Statfs {
     f_type: u64,

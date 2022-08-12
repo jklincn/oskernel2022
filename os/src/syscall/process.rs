@@ -1,9 +1,11 @@
+use crate::config::CLOCK_FREQ;
 use crate::fs::{open, OpenFlags};
 use crate::mm::{memory_usage, translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, SignalFlags, RUsage,
+    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, RUsage,
+    SignalFlags,
 };
-use crate::timer::{get_TimeVal, get_time_ms, tms, TimeVal};
+use crate::timer::{get_time_ms, get_timeval, tms, TimeVal, get_time, NSEC_PER_SEC};
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -59,7 +61,7 @@ pub fn sys_get_time(buf: *const u8) -> isize {
     let token = current_user_token();
     let buffers = translated_byte_buffer(token, buf, core::mem::size_of::<TimeVal>());
     let mut userbuf = UserBuffer::new(buffers);
-    userbuf.write(get_TimeVal().as_bytes());
+    userbuf.write(get_timeval().as_bytes());
     0
 }
 
@@ -171,7 +173,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     // memory_usage();
     // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
 
-    if path.ends_with(".sh"){
+    if path.ends_with(".sh") {
         let mut new_args = Vec::new();
         new_args.push("./busybox".to_string());
         new_args.push("sh".to_string());
@@ -250,7 +252,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 }
 
 pub fn sys_kill(pid: usize, signal: u32) -> isize {
-    println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}",pid,signal);
+    println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}", pid, signal);
     if signal == 0 {
         return 0;
     }
@@ -377,9 +379,16 @@ pub fn sys_prlimit64(_pid: usize, resource: usize, new_limit: *const u8, old_lim
     0
 }
 
-pub fn sys_clock_gettime(_clk_id: usize, ts: *mut usize) -> isize {
+pub fn sys_clock_gettime(_clk_id: usize, ts: *mut u64) -> isize {
+    if ts as usize == 0 {
+        return 0;
+    }
     let token = current_user_token();
-    *translated_refmut(token, ts) = get_time_ms() as usize;
+    let ticks = get_time();
+    let sec = (ticks / CLOCK_FREQ) as u64;
+    let nsec = ((ticks % CLOCK_FREQ) * (NSEC_PER_SEC / CLOCK_FREQ)) as u64;
+    *translated_refmut(token, ts) = sec;
+    *translated_refmut(token, unsafe { ts.add(1) }) = nsec;
     0
 }
 
@@ -433,7 +442,7 @@ pub fn sys_madvise(_addr: *const u8, _length: usize, _advice: usize) -> isize {
     0
 }
 
-const RUSAGE_SELF:isize = 0;
+const RUSAGE_SELF: isize = 0;
 pub fn sys_getrusage(who: isize, usage: *mut u8) -> isize {
     if who != RUSAGE_SELF {
         panic!("sys_getrusage: \"who\" not supported!");

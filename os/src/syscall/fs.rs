@@ -1,8 +1,8 @@
 use super::errno::*;
-use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, Timespec, MNT_TABLE};
+use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token, suspend_current_and_run_next, RLIMIT_NOFILE};
-use crate::timer::{get_TimeVal, TimeVal};
+use crate::timer::{get_timeval, TimeVal, Timespec};
 use alloc::{sync::Arc, vec::Vec};
 use core::mem::size_of;
 
@@ -60,7 +60,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         drop(inner);
         let file_size = file.file_size();
         if file_size == 0 {
-            println!("[WARNING] sys_read: file_size is zero!");
+            // println!("[WARNING] sys_read: file_size is zero!");
         }
         let len = file_size.min(len);
         file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
@@ -887,7 +887,7 @@ pub fn sys_pselect(nfds: usize, readfds: *mut u8, writefds: *mut u8, exceptfds: 
         timer_interval.sec = *sec;
         timer_interval.usec = *usec;
     }
-    let timer = timer_interval + get_TimeVal();
+    let timer = timer_interval + get_timeval();
 
     let mut rfd_set = FdSet::new();
     let mut wfd_set = FdSet::new();
@@ -1014,7 +1014,7 @@ pub fn sys_pselect(nfds: usize, readfds: *mut u8, writefds: *mut u8, exceptfds: 
         if r_has_nready || w_has_nready {
             r_has_nready = false;
             w_has_nready = false;
-            let time_remain = get_TimeVal() - timer;
+            let time_remain = get_timeval() - timer;
             if time_remain.is_zero() {
                 // not reach timer (now < timer)
                 drop(fd_table);

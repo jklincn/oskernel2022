@@ -5,7 +5,7 @@
 /// pub struct  TimeVal
 /// pub fn get_time() -> usize
 /// pub fn get_time_ms() -> usize
-/// pub fn get_TimeVal() -> TimeVal
+/// pub fn get_timeval() -> TimeVal
 /// pub fn set_next_trigger()
 /// ```
 //
@@ -126,17 +126,38 @@ pub fn get_time_ms() -> usize {
     time::read() / (CLOCK_FREQ / MSEC_PER_SEC)
 }
 
+#[allow(unused)]
+pub fn get_time_ns() -> usize {
+    (get_time() / (CLOCK_FREQ / USEC_PER_SEC)) * MSEC_PER_SEC
+}
+
+#[allow(unused)]
+pub fn get_time_us() -> usize {
+    get_time() / (CLOCK_FREQ / USEC_PER_SEC) 
+}
+
+#[allow(unused)]
+pub fn get_time_s() -> usize {
+    get_time() / CLOCK_FREQ
+}
+
 /// 获取 `TimeVal` 格式的时间信息
-#[allow(non_snake_case)]
-pub fn get_TimeVal() -> TimeVal{
-    let time_ms = get_time_ms();
-    TimeVal {
-        sec: time_ms / 1000,
-        usec: (time_ms % 1000) * 1000,
+pub fn get_timeval() -> TimeVal {
+    let ticks = get_time();
+    let sec = ticks/CLOCK_FREQ;
+    let usec = (ticks%CLOCK_FREQ) * USEC_PER_SEC / CLOCK_FREQ;
+    TimeVal{
+        sec:sec,
+        usec:usec
     }
 }
 
 /// ### 设置下次触发时钟中断的时间
 pub fn set_next_trigger() {
     set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
+}
+
+pub struct Timespec {
+    pub tv_sec: u64,  // 秒
+    pub tv_nsec: u64, // 纳秒
 }

@@ -7,7 +7,7 @@ mod dirent;
 mod fdset;
 
 
-use crate::mm::UserBuffer;
+use crate::{mm::UserBuffer, timer::Timespec};
 use alloc::{string::String, vec::Vec};
 
 pub trait File: Send + Sync {
