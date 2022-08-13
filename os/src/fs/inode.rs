@@ -289,12 +289,6 @@ impl File for OSInode {
     
     fn read(&self, mut buf: UserBuffer) -> usize {
         // println!("osinode read, current offset:{}",self.inner.lock().offset);
-        // 对 /dev/zero 的处理，暂时先加在这里
-        if self.name() == "zero" {
-            let zero: Vec<u8> = (0..buf.buffers.len()).map(|_| 0).collect();
-            buf.write(zero.as_slice());
-            return buf.buffers.len();
-        }
         let offset = self.inner.lock().offset;
         let file_size = self.file_size();
         if file_size == 0 {

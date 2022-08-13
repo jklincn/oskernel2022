@@ -1,7 +1,7 @@
 use super::{Dirent, File, Kstat, Timespec};
 use crate::mm::UserBuffer;
 use alloc::{
-    string::String,
+    string::{String, ToString},
     sync::{Arc, Weak},
     vec::Vec,
 };
@@ -148,7 +148,9 @@ impl File for Pipe {
                     return read_size;
                 }
                 drop(ring_buffer);
-                suspend_current_and_run_next();
+                if suspend_current_and_run_next() < 0{
+                    return read_size;
+                }
                 continue;
             }
             // read at most loop_read bytes
@@ -174,7 +176,9 @@ impl File for Pipe {
             let loop_write = ring_buffer.available_write();
             if loop_write == 0 {
                 drop(ring_buffer);
-                suspend_current_and_run_next();
+                if suspend_current_and_run_next() < 0{
+                    return write_size;
+                }
                 continue;
             }
 
@@ -188,33 +192,29 @@ impl File for Pipe {
             }
         }
     }
-    #[allow(unused_variables)]
-    fn get_fstat(&self, kstat: &mut Kstat) {
+
+    fn get_fstat(&self, _kstat: &mut Kstat) {
         panic!("pipe not implement get_fstat");
     }
 
-    #[allow(unused_variables)]
-    fn set_time(&self, timespec: &Timespec) {
+    fn set_time(&self, _timespec: &Timespec) {
         panic!("pipe not implement set_time");
     }
 
-    #[allow(unused_variables)]
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
+    fn get_dirent(&self, _dirent: &mut Dirent) -> isize {
         panic!("pipe not implement get_dirent");
     }
 
     fn get_name(&self) -> String {
-        panic!("pipe not implement get_name");
+        return "pipe".to_string();
     }
 
     fn get_offset(&self) -> usize {
-        return 0; // just for pass
-                  // panic!("pipe not implement get_offset");
+        return 0;
     }
 
     fn set_offset(&self, _offset: usize) {
-        return; // just for pass
-                // panic!("pipe not implement set_offset");
+        return;
     }
 
     fn set_flags(&self, _flag: OpenFlags) {
@@ -235,7 +235,9 @@ impl File for Pipe {
                     return buf;
                 }
                 drop(ring_buffer);
-                suspend_current_and_run_next();
+                if suspend_current_and_run_next() < 0{
+                    return buf;
+                }
                 continue;
             }
             for _ in 0..loop_read {
@@ -253,7 +255,9 @@ impl File for Pipe {
             let loop_write = ring_buffer.available_write();
             if loop_write == 0 {
                 drop(ring_buffer);
-                suspend_current_and_run_next();
+                if suspend_current_and_run_next() < 0{
+                    return write_size;
+                }
                 continue;
             }
             for _ in 0..loop_write {

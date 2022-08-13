@@ -2,7 +2,7 @@ use super::{Dirent, File, Kstat, Timespec};
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
-use alloc::{string::String, vec::Vec};
+use alloc::{string::{String, ToString}, vec::Vec};
 
 use super::OpenFlags;
 
@@ -60,11 +60,11 @@ impl File for Stdin {
     }
 
     fn get_name(&self) -> String {
-        panic!("Stdin not implement get_name");
+        return "Stdin".to_string();
     }
 
     fn get_offset(&self) -> usize {
-        return 0; // just for pass
+        return 0;
     }
 
     fn set_offset(&self, _offset: usize) {
@@ -127,7 +127,7 @@ impl File for Stdout {
     }
 
     fn get_name(&self) -> String {
-        panic!("Stdout not implement get_name");
+        return "Stdout".to_string();
     }
 
     fn get_offset(&self) -> usize {
