@@ -191,9 +191,9 @@ pub fn enquire_refcount(ppn: PhysPageNum) -> usize {
 
 pub fn frame_usage() {
     let (current, recycled, end, base_num) = FRAME_ALLOCATOR.lock().usage();
-    let usage = (current - base_num - recycled) * 100 / (end - base_num);
+    let usage = (current - base_num - recycled) as f64 * 100.0 / (end - base_num) as f64;
     println!(
-        "[kernel] page usage: {}% ({}/{} pages)",
+        "[kernel] page usage: {:.2}% ({}/{} pages)",
         usage,
         current - base_num - recycled,
         end - base_num

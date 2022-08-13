@@ -2,7 +2,7 @@ use super::{
     stat::{S_IFCHR, S_IFDIR, S_IFREG},
     Dirent, File, Kstat, Timespec,
 };
-use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
+use crate::{drivers::BLOCK_DEVICE, mm::{UserBuffer, memory_usage}};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
@@ -83,7 +83,6 @@ impl OSInode {
         v
     }
 
-    #[allow(unused)]
     pub fn write_all(&self, str_vec:&Vec<u8>)->usize{
         let mut inner = self.inner.lock();
         let mut remain = str_vec.len();

@@ -102,19 +102,16 @@ lazy_static! {
         let app_start = unsafe { core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1) };
         let inode = open("/", "initproc", OpenFlags::O_CREATE).expect("initproc create failed!");
         let mut data = Vec::new();
+        let initproc_data = unsafe { core::slice::from_raw_parts(app_start[0] as *const u8, app_start[1] - app_start[0]) };
         data.resize(app_start[1] - app_start[0], 0);
-        data.clone_from_slice(unsafe { core::slice::from_raw_parts(app_start[0] as *const u8, app_start[1] - app_start[0]) });
+        data.clone_from_slice(initproc_data);
         inode.write_all(&data);
+        drop(data);
         TaskControlBlock::new(inode)
     });
 }
 
-fn add_initproc_into_fs() {
-
-}
-
 /// 将初始进程 `initproc` 加入任务管理器
 pub fn add_initproc() {
-    add_initproc_into_fs();
     add_task(INITPROC.clone());
 }

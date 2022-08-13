@@ -135,7 +135,7 @@ impl BlockCacheManager {
     }
 }
 
-// 1024个缓存块，即 512KB
+// 64个缓存块，即 32KB
 lazy_static! {
     pub static ref BLOCK_CACHE_MANAGER: RwLock<BlockCacheManager> = RwLock::new(BlockCacheManager::new(64));
 }
