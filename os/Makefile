@@ -54,9 +54,6 @@ copy-to-fs:
 dump:
 	@riscv64-unknown-elf-objdump -S $(KERNEL_ELF) > os_dump
 
-
-FULLSCORE = 62
-TESTSCORE = $(shell grep -o success output | wc -l )
 test: copy-to-fs 
 	@rm -f output
 	@make build > output
@@ -69,7 +66,7 @@ test: copy-to-fs
 		-drive file=../simple-fat32/fat32.img,if=none,format=raw,id=x0 \
         -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		> output
-	@echo "Test score: $(TESTSCORE)/$(FULLSCORE)"
+	@sh auto_test.sh
 
 
 .PHONY: dump run submit build-custom-test
