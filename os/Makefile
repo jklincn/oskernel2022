@@ -4,11 +4,6 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 
-# BOARD
-BOOTLOADER := ../bootloader/rustsbi-k210.bin.old
-# BOOTLOADER := ../bootloader/rustsbi-k210.bin
-K210_BOOTLOADER_SIZE := 131072
-
 BOARD ?= qemu
 
 # Binutils

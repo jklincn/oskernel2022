@@ -252,7 +252,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 }
 
 pub fn sys_kill(pid: usize, signal: u32) -> isize {
-    println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}", pid, signal);
+    // println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}", pid, signal);
     if signal == 0 {
         return 0;
     }
