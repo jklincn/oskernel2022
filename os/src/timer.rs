@@ -1,3 +1,4 @@
+use core::arch::asm;
 /// # 时间模块
 /// `os/src/timer.rs`
 /// ## 实现功能
@@ -112,8 +113,19 @@ impl tms {
 
 /// ### 取得当前 `mtime` 计数器的值
 /// - `mtime`: 统计处理器自上电以来经过了多少个内置时钟的时钟周期,64bit
+// pub fn get_time() -> usize {
+//     time::read()
+// }
+
 pub fn get_time() -> usize {
-    time::read()
+    let mut time:usize = 0;
+    unsafe{
+        asm!(
+            "rdtime a0",
+            inout("a0") time
+        );
+    }
+    time
 }
 
 /// 获取CPU上电时间（单位：ms）
