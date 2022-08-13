@@ -130,7 +130,7 @@ pub fn get_time() -> usize {
 
 /// 获取CPU上电时间（单位：ms）
 pub fn get_time_ms() -> usize {
-    time::read() / (CLOCK_FREQ / MSEC_PER_SEC)
+    get_time() / (CLOCK_FREQ / MSEC_PER_SEC)
 }
 
 #[allow(unused)]
