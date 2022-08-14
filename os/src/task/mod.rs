@@ -41,11 +41,17 @@ pub use signal::*;
 use crate::fs::{OpenFlags, open};
 
 /// 将当前任务置为就绪态，放回到进程管理器中的就绪队列中，重新选择一个进程运行
-pub fn suspend_current_and_run_next() {
+pub fn suspend_current_and_run_next() -> isize{
     // There must be an application running.
     // 取出当前正在执行的任务
     let task = take_current_task().unwrap();
     let mut task_inner = task.inner_exclusive_access();
+    // if task_inner.signals.contains(SignalFlags::SIGKILL){
+    //     // println!("pid:{},kill!",task.getpid());
+    //     // drop(task_inner);
+    //     // add_task(task);
+    //     return -1;
+    // }
     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
     // 修改其进程控制块内的状态为就绪状态
     task_inner.task_status = TaskStatus::Ready;
@@ -54,6 +60,7 @@ pub fn suspend_current_and_run_next() {
     add_task(task);
     // 开启一轮新的调度
     schedule(task_cx_ptr);
+    0
 }
 
 pub fn exit_current_and_run_next(exit_code: i32) {
@@ -70,9 +77,10 @@ pub fn exit_current_and_run_next(exit_code: i32) {
         panic!("initproc return!");
     }
 
+    // println!("pid:{} exit!",task.getpid());
+
     {
         // 将这个进程的子进程转移到 initproc 进程的子进程中
-
         let mut initproc_inner = INITPROC.inner_exclusive_access();
         for child in inner.children.iter() {
             child.inner_exclusive_access().parent = Some(Arc::downgrade(&INITPROC));

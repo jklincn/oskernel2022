@@ -15,23 +15,32 @@ pub const FD_LIMIT: usize = 128;
 /// - `len` 表示内存中缓冲区的长度。
 /// - 返回值：成功写入的长度。
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
+    // println!(
+    //     "[DEBUG] enter sys_write: fd:{}, buffer address:0x{:x}, len:{}",
+    //     fd, buf as usize, len
+    // );
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     // 文件描述符不合法
     if fd >= inner.fd_table.len() {
+        println!("[WARNING] sys_write: return -1");
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
         // 文件不可写
         if !file.writable() {
+            println!("[WARNING] sys_write: return -1");
             return -1;
         }
         let file = file.clone();
         // 释放 taskinner 以避免多次借用
         drop(inner);
-        file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
+        let write_size = file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize;
+        // println!("[DEBUG] sys_write: return write_size: {}",write_size);
+        write_size
     } else {
+        println!("[WARNING] sys_write: return -1");
         -1
     }
 }
@@ -42,30 +51,46 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 /// - `len` 表示读取字符个数。
 /// - 返回值：读出的字符。
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
-    // println!("[DEBUG] enter sys_read: fd:{}, buffer address:0x{:x}, len:{}", fd, buf as usize, len);
+    // println!(
+    //     "[DEBUG] enter sys_read: fd:{}, buffer address:0x{:x}, len:{}",
+    //     fd, buf as usize, len
+    // );
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     // 文件描述符不合法
     if fd >= inner.fd_table.len() {
+        println!("[WARNING] sys_read: return -1");
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
         // 文件不可读
         if !file.readable() {
+            println!("[WARNING] sys_read: return -1");
             return -1;
         }
         let file = file.clone();
         // 释放 taskinner 以避免多次借用
         drop(inner);
+
+        // 对 /dev/zero 的处理，暂时先加在这里
+        if file.get_name() == "zero" {
+            let mut userbuffer = UserBuffer::new(translated_byte_buffer(token, buf, len));
+            let zero: Vec<u8> = (0..userbuffer.buffers.len()).map(|_| 0).collect();
+            userbuffer.write(zero.as_slice());
+            return userbuffer.buffers.len() as isize;
+        }
+
         let file_size = file.file_size();
         if file_size == 0 {
-            // println!("[WARNING] sys_read: file_size is zero!");
+            println!("[WARNING] sys_read: file_size is zero!");
         }
         let len = file_size.min(len);
-        file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
+        let readsize = file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize;
+        // println!("[DEBUG] sys_read: return readsize: {}",readsize);
+        readsize
     } else {
-        panic!();
+        println!("[WARNING] sys_read: return -1");
         -1
     }
 }
@@ -92,10 +117,10 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 return -EMFILE;
             }
             inner.fd_table[fd] = Some(inode);
-            // println!("sys_openat return new fd:{}", fd);
+            // println!("[DEBUG] sys_openat return new fd:{}", fd);
             fd as isize
         } else {
-            // println!("[WARNING] sys_openat return -1, path:{}",path);
+            println!("[WARNING] sys_openat return -1, path:{}",path);
             -1
         }
     } else {
@@ -111,15 +136,15 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                     return -EMFILE;
                 }
                 inner.fd_table[fd] = Some(tar_f);
-                // println!("sys_openat return new fd:{}", fd);
+                // println!("[DEBUG] sys_openat return new fd:{}", fd);
                 fd as isize
             } else {
-                // println!("[WARNING] sys_openat return -1, path:{}",path);
+                println!("[WARNING] sys_openat return -1, path:{}",path);
                 -1
             }
         } else {
             // dirfd 对应条目为 None
-            // println!("[WARNING] sys_openat return -1, path:{}",path);
+            println!("[WARNING] sys_openat return -1, path:{}",path);
             -1
         }
     }
