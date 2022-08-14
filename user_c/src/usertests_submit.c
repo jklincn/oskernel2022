@@ -45,28 +45,29 @@ char *argv_lmbench30[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "96
 const int lmbench_test_num = 6;
 char **argv_lmbench[] =
     {
-        argv_lmbench0,
-        argv_lmbench1,
-        argv_lmbench2,
-        argv_lmbench3,
-        argv_lmbench5,
-        argv_lmbench6,
-        argv_lmbench7,
-        argv_lmbench8,
-        argv_lmbench9,
-        argv_lmbench10,
-        argv_lmbench11,
-        argv_lmbench12,
-        argv_lmbench13,
-        argv_lmbench14,
-        argv_lmbench15,
-        argv_lmbench16,
-        argv_lmbench17,
-        argv_lmbench18,
-        argv_lmbench19,
-        argv_lmbench20,
-        argv_lmbench21,
-        argv_lmbench22,
+        // argv_lmbench0,
+        // argv_lmbench1,
+        // argv_lmbench2,
+        // argv_lmbench3,
+        // argv_lmbench4,
+        // argv_lmbench5,
+        // argv_lmbench6,
+        // argv_lmbench7,
+        // argv_lmbench8,
+        // argv_lmbench9,
+        // argv_lmbench10,
+        // argv_lmbench11,
+        // argv_lmbench12,
+        // argv_lmbench13,
+        // argv_lmbench14,
+        // argv_lmbench15,
+        // argv_lmbench16,
+        // argv_lmbench17,
+        // argv_lmbench18,
+        // argv_lmbench19,
+        // argv_lmbench20,
+        // argv_lmbench21,
+        // argv_lmbench22,
         argv_lmbench23,
         argv_lmbench24,
         argv_lmbench25,
@@ -96,9 +97,8 @@ int main()
 #ifdef TEST
     printf("[TEST] start busybox test!\n");
 
-    int npid = fork();
+    npid = fork();
     assert(npid >= 0);
-    int child_return;
     if (npid == 0)
         execve("./busybox", argv_busybox, NULL);
     else
