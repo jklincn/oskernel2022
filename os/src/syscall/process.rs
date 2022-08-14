@@ -1,6 +1,6 @@
 use crate::config::CLOCK_FREQ;
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, heap_usage, frame_usage};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, RUsage,
     SignalFlags,
@@ -98,7 +98,7 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
     //     "[DEBUG] enter sys_fork: flags:{}, stack_ptr:{}, ptid:{}, ctid:{}, newtls:{}",
     //     flags, stack_ptr, _ptid, _ctid, _newtls
     // );
-    let current_task = current_task().unwrap();
+    let current_task = current_task().unwrap();  
     let new_task = current_task.fork(false);
 
     // let tid = new_task.getpid();
@@ -171,7 +171,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
 
     let task = current_task().unwrap();
     // memory_usage();
-    // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
+    println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
 
     if path.ends_with(".sh") {
         let mut new_args = Vec::new();

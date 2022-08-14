@@ -3,7 +3,7 @@ use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout, OSInode};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry, heap_usage, frame_usage};
 use spin::{Mutex, MutexGuard};
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -294,7 +294,7 @@ impl TaskControlBlock {
         let mmap_area = parent_inner.mmap_area.clone();
         // mmap_area.debug_show();
         // 拷贝用户地址空间
-        let memory_set = MemorySet::from_copy_on_write(&mut parent_inner.memory_set);
+        let memory_set = MemorySet::from_copy_on_write(&mut parent_inner.memory_set);  // use 4 pages
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 分配一个 PID
         let pid_handle = pid_alloc();
@@ -306,9 +306,8 @@ impl TaskControlBlock {
             tgid = pid_handle.0;
         }
         // 根据 PID 创建一个应用内核栈
-        let kernel_stack = KernelStack::new(&pid_handle);
+        let kernel_stack = KernelStack::new(&pid_handle);  // use 2 pages
         let kernel_stack_top = kernel_stack.get_top();
-
         // copy fd table
         let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
         for fd in parent_inner.fd_table.iter() {
@@ -318,7 +317,6 @@ impl TaskControlBlock {
                 new_fd_table.push(None);
             }
         }
-
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             tgid,
