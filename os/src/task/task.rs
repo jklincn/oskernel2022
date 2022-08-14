@@ -89,8 +89,8 @@ impl TaskControlBlockInner {
         }
     }
 
-    pub fn get_work_path(&self) -> String {
-        self.current_path.clone()
+    pub fn get_work_path(&self) -> &str {
+        self.current_path.as_str()
     }
     
     pub fn enquire_pte_via_vpn(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {

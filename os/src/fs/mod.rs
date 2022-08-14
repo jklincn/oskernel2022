@@ -7,7 +7,7 @@ mod stat;
 mod stdio;
 
 use crate::{mm::UserBuffer, timer::Timespec};
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 use core::fmt::{self, Debug, Formatter};
 
 pub trait File: Send + Sync {
@@ -19,28 +19,52 @@ pub trait File: Send + Sync {
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
 
-    fn get_fstat(&self, kstat: &mut Kstat);
+    fn get_name(&self) -> &str;
 
-    fn set_time(&self, timespec: &Timespec);
+    fn get_fstat(&self, _kstat: &mut Kstat) {
+        panic!("{} not implement get_fstat", self.get_name());
+    }
 
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize;
+    fn set_time(&self, _timespec: &Timespec) {
+        panic!("{} not implement set_time", self.get_name());
+    }
 
-    fn get_name(&self) -> String;
+    fn get_dirent(&self, _dirent: &mut Dirent) -> isize {
+        panic!("{} not implement get_dirent", self.get_name());
+    }
 
-    fn get_offset(&self) -> usize;
+    fn get_path(&self) -> &str {
+        panic!("{} not implement get_path", self.get_name());
+    }
 
-    fn set_offset(&self, offset: usize);
+    fn get_offset(&self) -> usize {
+        panic!("{} not implement get_offset", self.get_name());
+    }
 
-    fn set_flags(&self, flag: OpenFlags);
+    fn set_offset(&self, _offset: usize) {
+        panic!("{} not implement set_offset", self.get_name());
+    }
 
-    fn set_cloexec(&self);
+    fn set_flags(&self, _flag: OpenFlags) {
+        panic!("{} not implement set_flags", self.get_name());
+    }
 
-    fn read_kernel_space(&self) -> Vec<u8>;
+    fn set_cloexec(&self) {
+        panic!("{} not implement set_cloexec", self.get_name());
+    }
 
-    fn write_kernel_space(&self, data: Vec<u8>) -> usize;
+    fn read_kernel_space(&self) -> Vec<u8> {
+        panic!("{} not implement read_kernel_space", self.get_name());
+    }
 
-    fn file_size(&self) -> usize;
-    
+    fn write_kernel_space(&self, _data: Vec<u8>) -> usize {
+        panic!("{} not implement write_kernel_space", self.get_name());
+    }
+
+    fn file_size(&self) -> usize {
+        panic!("{} not implement file_size", self.get_name());
+    }
+
     fn r_ready(&self) -> bool {
         true
     }
@@ -57,7 +81,7 @@ pub trait File: Send + Sync {
 
 impl Debug for dyn File + Send + Sync {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("name:{}",self.get_name()))
+        f.write_fmt(format_args!("name:{}", self.get_name()))
     }
 }
 

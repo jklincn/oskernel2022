@@ -1,7 +1,6 @@
-use super::{Dirent, File, Kstat, Timespec};
+use super::File;
 use crate::mm::UserBuffer;
 use alloc::{
-    string::{String, ToString},
     sync::{Arc, Weak},
     vec::Vec,
 };
@@ -148,7 +147,7 @@ impl File for Pipe {
                     return read_size;
                 }
                 drop(ring_buffer);
-                if suspend_current_and_run_next() < 0{
+                if suspend_current_and_run_next() < 0 {
                     return read_size;
                 }
                 continue;
@@ -176,7 +175,7 @@ impl File for Pipe {
             let loop_write = ring_buffer.available_write();
             if loop_write == 0 {
                 drop(ring_buffer);
-                if suspend_current_and_run_next() < 0{
+                if suspend_current_and_run_next() < 0 {
                     return write_size;
                 }
                 continue;
@@ -193,20 +192,8 @@ impl File for Pipe {
         }
     }
 
-    fn get_fstat(&self, _kstat: &mut Kstat) {
-        panic!("pipe not implement get_fstat");
-    }
-
-    fn set_time(&self, _timespec: &Timespec) {
-        panic!("pipe not implement set_time");
-    }
-
-    fn get_dirent(&self, _dirent: &mut Dirent) -> isize {
-        panic!("pipe not implement get_dirent");
-    }
-
-    fn get_name(&self) -> String {
-        return "pipe".to_string();
+    fn get_name(&self) -> &str {
+        "pipe"
     }
 
     fn get_offset(&self) -> usize {
@@ -217,13 +204,6 @@ impl File for Pipe {
         return;
     }
 
-    fn set_flags(&self, _flag: OpenFlags) {
-        panic!("pipe not implement set_flags");
-    }
-
-    fn set_cloexec(&self) {
-        panic!("pipe not implement set_cloexec");
-    }
     fn read_kernel_space(&self) -> Vec<u8> {
         assert_eq!(self.readable(), true);
         let mut buf: Vec<u8> = Vec::new();
@@ -235,7 +215,7 @@ impl File for Pipe {
                     return buf;
                 }
                 drop(ring_buffer);
-                if suspend_current_and_run_next() < 0{
+                if suspend_current_and_run_next() < 0 {
                     return buf;
                 }
                 continue;
@@ -255,7 +235,7 @@ impl File for Pipe {
             let loop_write = ring_buffer.available_write();
             if loop_write == 0 {
                 drop(ring_buffer);
-                if suspend_current_and_run_next() < 0{
+                if suspend_current_and_run_next() < 0 {
                     return write_size;
                 }
                 continue;
@@ -266,7 +246,7 @@ impl File for Pipe {
                     write_size += 1;
                 } else {
                     return write_size;
-                }   
+                }
             }
         }
     }
@@ -274,14 +254,14 @@ impl File for Pipe {
     fn file_size(&self) -> usize {
         core::usize::MAX
     }
-    
-    fn r_ready(&self) ->bool {
+
+    fn r_ready(&self) -> bool {
         let ring_buffer = self.buffer.lock();
         let loop_read = ring_buffer.available_read();
         loop_read > 0
     }
 
-    fn w_ready(&self) ->bool {
+    fn w_ready(&self) -> bool {
         let ring_buffer = self.buffer.lock();
         let loop_write = ring_buffer.available_write();
         loop_write > 0

@@ -16,8 +16,8 @@ pub const FD_LIMIT: usize = 128;
 /// - 返回值：成功写入的长度。
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     // println!(
-    //     "[DEBUG] enter sys_write: fd:{}, buffer address:0x{:x}, len:{}",
-    //     fd, buf as usize, len
+    //     "[DEBUG] pid {} enter sys_write: fd:{}, buffer address:0x{:x}, len:{}",
+    //     current_task().unwrap().getpid(),fd, buf as usize, len
     // );
     let token = current_user_token();
     let task = current_task().unwrap();
@@ -113,7 +113,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     // );
     if dirfd == AT_FDCWD {
         // 如果是当前工作目录
-        if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), oflags) {
+        if let Some(inode) = open(inner.get_work_path(), path.as_str(), oflags) {
             let fd = inner.alloc_fd();
             if fd == 999 {
                 return -EMFILE;
@@ -132,7 +132,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-            if let Some(tar_f) = open(file.get_name().as_str(), path.as_str(), oflags) {
+            if let Some(tar_f) = open(file.get_name(), path.as_str(), oflags) {
                 let fd = inner.alloc_fd();
                 if fd == 999 {
                     return -EMFILE;
@@ -274,7 +274,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
     // println!("[DEBUG] enter sys_mkdirat: dirfd:{}, path:{}. mode:{:o}",dirfd,path,mode);
     if dirfd == AT_FDCWD {
         if let Some(_) = open(
-            inner.get_work_path().as_str(),
+            inner.get_work_path(),
             path.as_str(),
             OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE,
         ) {
@@ -289,7 +289,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
         }
         if let Some(file) = &inner.fd_table[dirfd] {
             if let Some(_) = open(
-                file.get_name().as_str(),
+                file.get_name(),
                 path.as_str(),
                 OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE,
             ) {
@@ -349,7 +349,7 @@ pub fn sys_unlinkat(fd: isize, path: *const u8, flags: u32) -> isize {
     let path = translated_str(token, path);
     // println!("[DEBUG] enter sys_unlinkat: fd:{}, path:{}, flags:{}",fd,path,flags);
     if fd == AT_FDCWD {
-        if let Some(file) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_RDWR) {
+        if let Some(file) = open(inner.get_work_path(), path.as_str(), OpenFlags::O_RDWR) {
             file.delete();
             0
         } else {
@@ -479,8 +479,8 @@ pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
             }
             SeekFlags::SEEK_END => {
                 let inode = open(
-                    inner.get_work_path().clone().as_str(),
-                    file.get_name().as_str(),
+                    file.get_path(),
+                    file.get_name(),
                     OpenFlags::O_RDONLY,
                 )
                 .unwrap();
@@ -584,7 +584,7 @@ pub fn sys_newfstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, 
     let mut kstat = Kstat::new();
 
     if dirfd == AT_FDCWD {
-        if let Some(inode) = open(inner.get_work_path().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+        if let Some(inode) = open(inner.get_work_path(), path.as_str(), OpenFlags::O_RDONLY) {
             inode.get_fstat(&mut kstat);
             userbuf.write(kstat.as_bytes());
             // panic!();
@@ -598,7 +598,7 @@ pub fn sys_newfstatat(dirfd: isize, pathname: *const u8, satabuf: *const usize, 
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-            if let Some(inode) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+            if let Some(inode) = open(file.get_name(), path.as_str(), OpenFlags::O_RDONLY) {
                 inode.get_fstat(&mut kstat);
                 userbuf.write(kstat.as_bytes());
                 0
@@ -627,7 +627,7 @@ pub fn sys_utimensat(dirfd: isize, pathname: *const u8, time: *const usize, flag
             unimplemented!();
         } else {
             let pathname = translated_str(token, pathname);
-            if let Some(_file) = open(inner.get_work_path().as_str(), pathname.as_str(), OpenFlags::O_RDWR) {
+            if let Some(_file) = open(inner.get_work_path(), pathname.as_str(), OpenFlags::O_RDWR) {
                 unimplemented!(); // 记得重新制作文件镜像
             } else {
                 -ENOENT
@@ -852,7 +852,7 @@ pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, ne
     //     old_dirfd, old_path, new_dirfd, new_path, _flags
     // );
     if old_dirfd == AT_FDCWD {
-        if let Some(old_file) = open(inner.get_work_path().as_str(), old_path.as_str(), OpenFlags::O_RDWR) {
+        if let Some(old_file) = open(inner.get_work_path(), old_path.as_str(), OpenFlags::O_RDWR) {
             let flag = {
                 if old_file.is_dir() {
                     OpenFlags::O_RDWR | OpenFlags::O_CREATE | OpenFlags::O_DIRECTROY
@@ -861,7 +861,7 @@ pub fn sys_renameat2(old_dirfd: isize, old_path: *const u8, new_dirfd: isize, ne
                 }
             };
             if new_dirfd == AT_FDCWD {
-                if let Some(new_file) = open(inner.get_work_path().as_str(), new_path.as_str(), flag) {
+                if let Some(new_file) = open(inner.get_work_path(), new_path.as_str(), flag) {
                     let first_cluster = old_file.get_head_cluster();
                     new_file.set_head_cluster(first_cluster);
                     old_file.delete();
