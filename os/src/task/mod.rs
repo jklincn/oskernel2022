@@ -37,6 +37,7 @@ pub use pid::{pid_alloc, KernelStack, PidHandle};
 pub use processor::{current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task};
 pub use resource::*;
 pub use signal::*;
+pub use task::FD_LIMIT;
 
 use crate::fs::{OpenFlags, open};
 

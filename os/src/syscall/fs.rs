@@ -1,13 +1,12 @@
 use super::errno::*;
 use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr};
-use crate::task::{current_task, current_user_token, suspend_current_and_run_next, RLIMIT_NOFILE};
+use crate::task::{current_task, current_user_token, suspend_current_and_run_next, RLIMIT_NOFILE, FD_LIMIT};
 use crate::timer::{get_timeval, TimeVal, Timespec};
 use alloc::{sync::Arc, vec::Vec};
 use core::mem::size_of;
 
 const AT_FDCWD: isize = -100;
-pub const FD_LIMIT: usize = 128;
 
 /// ### 写文件函数
 /// - `fd` 表示待写入文件的文件描述符；
@@ -39,8 +38,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
             return -1;
         }
         let file = file.clone();
-        // 释放 taskinner 以避免多次借用
-        drop(inner);
+        drop(inner); // 防止pipe挂起时死锁
         let write_size = file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize;
         // println!("[DEBUG] sys_write: return write_size: {}",write_size);
         write_size
@@ -118,7 +116,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
         // 如果是当前工作目录
         if let Some(inode) = open(inner.get_work_path(), path.as_str(), oflags) {
             let fd = inner.alloc_fd();
-            if fd == 999 {
+            if fd == FD_LIMIT {
                 return -EMFILE;
             }
             inner.fd_table[fd] = Some(inode);
@@ -137,7 +135,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
         if let Some(file) = &inner.fd_table[dirfd] {
             if let Some(tar_f) = open(file.get_name(), path.as_str(), oflags) {
                 let fd = inner.alloc_fd();
-                if fd == 999 {
+                if fd == FD_LIMIT {
                     return -EMFILE;
                 }
                 inner.fd_table[fd] = Some(tar_f);
@@ -190,6 +188,10 @@ pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
 
     let (pipe_read, pipe_write) = make_pipe();
     let read_fd = inner.alloc_fd();
+    if read_fd == FD_LIMIT{
+        return -EMFILE;
+    }
+    
     inner.fd_table[read_fd] = Some(pipe_read);
     let write_fd = inner.alloc_fd();
     inner.fd_table[write_fd] = Some(pipe_write);
