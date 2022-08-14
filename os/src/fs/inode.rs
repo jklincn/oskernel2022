@@ -151,15 +151,18 @@ lazy_static! {
 }
 
 pub fn list_apps() {
+    // 预创建文件/文件夹
     open("/", "proc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/", "dev", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/dev", "misc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
+    open("/var", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE); // sd卡中已有var文件夹
     open("/dev", "null", OpenFlags::O_CREATE);
     open("/dev", "zero", OpenFlags::O_CREATE);
     open("/proc", "mounts", OpenFlags::O_CREATE);
     open("/proc", "meminfo", OpenFlags::O_CREATE);
     open("/dev/misc", "rtc", OpenFlags::O_CREATE);
+    open("/var/tmp", "lmbench", OpenFlags::O_CREATE);
 
     println!("/**** All Files  ****");
     for app in ROOT_INODE.ls().unwrap() {
