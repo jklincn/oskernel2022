@@ -9,6 +9,7 @@
 //
 
 use super::frame_allocator::{frame_alloc, FrameTracker, frame_add_ref, enquire_refcount};
+use super::{heap_usage, frame_usage};
 use super::page_table::{PTEFlags, PageTable, PageTableEntry};
 use super::address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum, VPNRange};
 use crate::config::*;
@@ -367,13 +368,13 @@ impl MemorySet {
 
     /// 以COW的方式复制一个地址空间
     pub fn from_copy_on_write(user_space: &mut MemorySet) -> MemorySet {
-        let mut new_memory_set = Self::new_bare();
+        let mut new_memory_set = Self::new_bare();    // use 1 page (page_table root)
 
         // This part is not for Copy on Write.
         // Including:   Trampoline
         //              Trap_Context
-        new_memory_set.map_trampoline();
-        for area in user_space.areas.iter() {
+        new_memory_set.map_trampoline();  // use 2 pages (page_table create ptes)
+        for area in user_space.areas.iter() {   // use 1 page
             let start_vpn = area.vpn_range.get_start();
             if start_vpn == VirtAddr::from(TRAP_CONTEXT).floor()  {
                 let new_area = MapArea::from_another(area);
@@ -387,7 +388,7 @@ impl MemorySet {
             }
             break;
         }
-        //This part is for copy on write
+        // This part is for copy on write
         let parent_areas = & user_space.areas;
         let parent_page_table = &mut user_space.page_table;
         for area in parent_areas.iter() {
@@ -408,7 +409,7 @@ impl MemorySet {
                     // map the cow page table to src_ppn
                     new_memory_set.page_table.map(vpn, src_ppn, pte_flags);
                     new_memory_set.page_table.set_cow(vpn);
-                    new_area.insert_tracker(vpn, src_ppn);
+                    new_area.data_frames.push(FrameTracker::from_ppn(src_ppn));
                 }
                 new_memory_set.push_mapped_area(new_area);
             }
@@ -430,7 +431,7 @@ impl MemorySet {
                 new_memory_set.page_table.map(vpn, src_ppn, pte_flags);
                 new_memory_set.page_table.set_cow(vpn);
                 new_chunk.vpn_table.push(vpn);
-                new_chunk.insert_tracker(vpn, src_ppn);
+                new_chunk.data_frames.push(FrameTracker::from_ppn(src_ppn));
             }
             new_memory_set.mmap_chunks.push(new_chunk);
         }
@@ -450,7 +451,7 @@ impl MemorySet {
             new_memory_set.page_table.map(vpn, src_ppn, pte_flags);
             new_memory_set.page_table.set_cow(vpn);
             new_memory_set.heap_chunk.vpn_table.push(vpn);
-            new_memory_set.heap_chunk.insert_tracker(vpn, src_ppn);
+            new_memory_set.heap_chunk.data_frames.push(FrameTracker::from_ppn(src_ppn));
         }
         // new_memory_set.debug_show_layout();
         new_memory_set
@@ -474,7 +475,7 @@ impl MemorySet {
             let head_vpn = area.vpn_range.get_start();
             let tail_vpn = area.vpn_range.get_end();
             if vpn <= tail_vpn && vpn >= head_vpn {
-                area.data_frames.insert(vpn, frame);
+                area.data_frames.push(frame);
                 return 0;
             }
         }
@@ -482,14 +483,14 @@ impl MemorySet {
             let head_vpn = VirtPageNum::from(chunk.start_va);
             let tail_vpn = VirtPageNum::from(chunk.end_va);
             if vpn <= tail_vpn && vpn >= head_vpn {
-                chunk.data_frames.insert(vpn, frame);
+                chunk.data_frames.push(frame);
                 return 0;
             }
         }
         let head_vpn = VirtPageNum::from(self.heap_chunk.start_va);
         let tail_vpn = VirtPageNum::from(self.heap_chunk.end_va);
         if vpn <= tail_vpn && vpn >= head_vpn {
-            self.heap_chunk.data_frames.insert(vpn, frame);
+            self.heap_chunk.data_frames.push(frame);
             return 0;
         }
         0
@@ -718,7 +719,7 @@ impl MemorySet {
 /// ### 离散逻辑段
 pub struct ChunkArea {
     vpn_table: Vec<VirtPageNum>,
-    data_frames: BTreeMap<VirtPageNum, FrameTracker>,
+    data_frames: Vec<FrameTracker>,
     map_type: MapType,
     map_perm: MapPermission,
     start_va: VirtAddr,
@@ -729,7 +730,7 @@ impl ChunkArea {
     pub fn new(map_type: MapType, map_perm: MapPermission, start: VirtAddr, end: VirtAddr) -> Self {
         Self {
             vpn_table: Vec::new(),
-            data_frames: BTreeMap::new(),
+            data_frames: Vec::new(),
             map_type,
             map_perm,
             start_va: start,
@@ -743,7 +744,7 @@ impl ChunkArea {
     pub fn from_another(another: &ChunkArea) -> Self {
         Self {
             vpn_table: Vec::new(),
-            data_frames: BTreeMap::new(),
+            data_frames: Vec::new(),
             map_type: another.map_type,
             map_perm: another.map_perm,
             start_va: another.start_va,
@@ -760,7 +761,7 @@ impl ChunkArea {
             MapType::Framed => {
                 if let Some(frame) = frame_alloc() {
                     ppn = frame.ppn;
-                    self.data_frames.insert(vpn, frame);
+                    self.data_frames.push(frame);
                 } else {
                     panic!("No more memory!");
                 }
@@ -768,15 +769,6 @@ impl ChunkArea {
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, pte_flags);
-    }
-    pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
-        match self.map_type {
-            MapType::Framed => {
-                self.data_frames.remove(&vpn);
-            }
-            _ => {}
-        }
-        page_table.unmap(vpn);
     }
 
     // Alloc and map all pages
@@ -787,12 +779,8 @@ impl ChunkArea {
     // }
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_table.clone() {
-            self.unmap_one(page_table, vpn);
+            page_table.unmap(vpn);
         }
-    }
-
-    pub fn insert_tracker(&mut self, vpn: VirtPageNum, ppn: PhysPageNum) {
-        self.data_frames.insert(vpn, FrameTracker::from_ppn(ppn));
     }
 }
 
@@ -848,7 +836,7 @@ pub struct MapArea {
     vpn_range: VPNRange,
     /// 键值对容器 BTreeMap ,保存了该逻辑段内的每个虚拟页面的 VPN 和被映射到的物理页帧<br>
     /// 这些物理页帧被用来存放实际内存数据而不是作为多级页表中的中间节点
-    data_frames: BTreeMap<VirtPageNum, FrameTracker>,
+    data_frames: Vec<FrameTracker>,
     /// 描述该逻辑段内的所有虚拟页面映射到物理页帧的方式
     map_type: MapType,
     /// 控制该逻辑段的访问方式，它是页表项标志位 PTEFlags 的一个子集，仅保留 `U` `R` `W` `X` 四个标志位
@@ -867,7 +855,7 @@ impl MapArea {
         let end_vpn: VirtPageNum = end_va.ceil();
         Self {
             vpn_range: VPNRange::new(start_vpn, end_vpn),
-            data_frames: BTreeMap::new(),
+            data_frames: Vec::new(),
             map_type,
             map_perm,
             start_va,
@@ -880,7 +868,7 @@ impl MapArea {
     pub fn from_another(another: &MapArea) -> Self {
         Self {
             vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
-            data_frames: BTreeMap::new(),
+            data_frames: Vec::new(),
             map_type: another.map_type,
             map_perm: another.map_perm,
             start_va: another.start_va,
@@ -902,21 +890,12 @@ impl MapArea {
                 ppn = frame.ppn;
                 // println!("current vpn:0x{:x},get ppn:0x{:x}",vpn.0,ppn.0);
                 // 将vpn和分配到的物理页帧配对
-                self.data_frames.insert(vpn, frame);
+                self.data_frames.push(frame);
             }
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         // 在多级页表中建立映射
         page_table.map(vpn, ppn, pte_flags);
-    }
-
-    /// 在多级页表中删除指定vpn对应的映射
-    #[allow(unused)]
-    pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
-        if self.map_type == MapType::Framed {
-            self.data_frames.remove(&vpn);
-        }
-        page_table.unmap(vpn);
     }
 
     /// 在多级页表中为逻辑块分配空间
@@ -928,10 +907,9 @@ impl MapArea {
     }
 
     /// 将当前逻辑段到物理内存的映射从传入的该逻辑段所属的地址空间的多级页表中删除
-    #[allow(unused)]
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
-            self.unmap_one(page_table, vpn);
+            page_table.unmap(vpn);
         }
     }
 
@@ -960,9 +938,5 @@ impl MapArea {
             }
             current_vpn.step();
         }
-    }
-
-    pub fn insert_tracker(&mut self, vpn: VirtPageNum, ppn: PhysPageNum) {
-        self.data_frames.insert(vpn, FrameTracker::from_ppn(ppn));
     }
 }
