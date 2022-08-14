@@ -22,15 +22,17 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
+
+    // println!("buffer content:{:?}", UserBuffer::new(translated_byte_buffer(token, buf, len)));
     // 文件描述符不合法
     if fd >= inner.fd_table.len() {
-        println!("[WARNING] sys_write: return -1");
+        println!("[WARNING] sys_write: fd >= inner.fd_table.len, return -1");
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
         // 文件不可写
         if !file.writable() {
-            println!("[WARNING] sys_write: return -1");
+            println!("[WARNING] sys_write: file can't write, return -1");
             return -1;
         }
         let file = file.clone();
@@ -40,7 +42,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
         // println!("[DEBUG] sys_write: return write_size: {}",write_size);
         write_size
     } else {
-        println!("[WARNING] sys_write: return -1");
+        println!("[WARNING] sys_write: fd {} is none, return -1", fd);
         -1
     }
 }
@@ -60,13 +62,13 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     let inner = task.inner_exclusive_access();
     // 文件描述符不合法
     if fd >= inner.fd_table.len() {
-        println!("[WARNING] sys_read: return -1");
+        println!("[WARNING] sys_read: fd >= inner.fd_table.len, return -1");
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
         // 文件不可读
         if !file.readable() {
-            println!("[WARNING] sys_read: return -1");
+            println!("[WARNING] sys_read: file can't read, return -1");
             return -1;
         }
         let file = file.clone();
@@ -90,7 +92,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         // println!("[DEBUG] sys_read: return readsize: {}",readsize);
         readsize
     } else {
-        println!("[WARNING] sys_read: return -1");
+        println!("[WARNING] sys_read: fd {} is none, return -1", fd);
         -1
     }
 }
@@ -104,7 +106,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
 
     // todo
     _ = mode;
-    let oflags = OpenFlags::from_bits(flags).expect("unsupported open flag!");
+    let oflags = OpenFlags::from_bits(flags).expect("[DEBUG] sys_openat: unsupported open flag!");
     // println!(
     //     "[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:{:?}, mode:{:o}",
     //     dirfd, path, oflags, mode
@@ -120,7 +122,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
             // println!("[DEBUG] sys_openat return new fd:{}", fd);
             fd as isize
         } else {
-            println!("[WARNING] sys_openat return -1, path:{}",path);
+            println!("[WARNING] sys_openat: can't open file:{}, return -1", path);
             -1
         }
     } else {
@@ -139,12 +141,12 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 // println!("[DEBUG] sys_openat return new fd:{}", fd);
                 fd as isize
             } else {
-                println!("[WARNING] sys_openat return -1, path:{}",path);
+                println!("[WARNING] sys_openat: can't open file:{}, return -1", path);
                 -1
             }
         } else {
             // dirfd 对应条目为 None
-            println!("[WARNING] sys_openat return -1, path:{}",path);
+            println!("[WARNING] sys_read: fd {} is none, return -1", dirfd);
             -1
         }
     }
@@ -156,6 +158,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
 ///     - 成功关闭：0
 ///     - 失败：-1
 pub fn sys_close(fd: usize) -> isize {
+    // println!("[DEBUG] enter sys_close: fd:{}",fd);
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
     if fd >= inner.fd_table.len() {

@@ -81,6 +81,7 @@ pub fn trap_handler() -> ! {
             // frame_usage();
             // heap_usage();
             // println!("pid:{}, syscall_id: {}",current_task().unwrap().getpid(), cx.x[17]);
+            // println!("fd_table:{:?}",current_task().unwrap().inner_exclusive_access().fd_table);
             cx.sepc += 4;
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]]);
             // cx is changed during sys_exec, so we have to call it again

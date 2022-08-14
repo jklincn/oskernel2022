@@ -265,7 +265,11 @@ impl TaskControlBlock {
         inner
             .fd_table
             .iter_mut()
-            .find(|fd| fd.is_some() && fd.as_ref().unwrap().available())
+            .find(|fd| {
+                // if fd.is_some(){
+                //     println!("fd name:{}, available:{}",fd.as_ref().unwrap().get_name(),fd.as_ref().unwrap().available());
+                // }
+                fd.is_some() && !fd.as_ref().unwrap().available()})
             .take();
 
         // 修改新的地址空间中的 Trap 上下文，将解析得到的应用入口点、用户栈位置以及一些内核的信息进行初始化

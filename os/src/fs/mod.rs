@@ -8,6 +8,7 @@ mod stdio;
 
 use crate::{mm::UserBuffer, timer::Timespec};
 use alloc::{string::String, vec::Vec};
+use core::fmt::{self, Debug, Formatter};
 
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
@@ -45,6 +46,18 @@ pub trait File: Send + Sync {
     }
     fn w_ready(&self) -> bool {
         true
+    }
+}
+
+// impl Debug for dyn File {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+//         f.write_fmt(format_args!("File trait"))
+//     }
+// }
+
+impl Debug for dyn File + Send + Sync {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("name:{}",self.get_name()))
     }
 }
 
