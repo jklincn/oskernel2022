@@ -515,11 +515,6 @@ impl MemorySet {
         0
     }
 
-    // pub fn lazy_alloc_stack (&mut self, vpn: VirtPageNum) -> isize {
-    //     self.stack_chunk.push_vpn(vpn, &mut self.page_table);
-    //     0
-    // }
-
     /// ### 激活当前虚拟地址空间
     /// 将多级页表的token（格式化后的root_ppn）写入satp
     pub fn activate(&self) {
@@ -564,6 +559,26 @@ impl MemorySet {
         self.mmap_chunks.push(new_chunk_area);
     }
 
+    pub fn check_va_range(& self, start_va:VirtAddr, len:usize) -> bool{
+        // println!("[check_va_range] {:?}", start_va);
+        let end_va = VirtAddr::from(start_va.0 + len);
+        for area in self.areas.iter() {
+            if area.start_va <= start_va && end_va <= area.end_va {
+                return true;
+            }
+        }
+        for chunk in self.mmap_chunks.iter() {
+            if start_va <= chunk.start_va && end_va <= chunk.start_va {
+                return true;
+            }
+        }
+        if self.heap_chunk.start_va <= start_va && end_va <= self.heap_chunk.end_va {
+            return true;
+        }
+        // println!("[WARNING] {:?} not valid", start_va);
+        // self.debug_show_layout();
+        return false;
+    }
     #[allow(unused)]
     pub fn debug_show_data(&self, va: VirtAddr) {
         println!("-----------------------PTE Data-----------------------");

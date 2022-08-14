@@ -364,8 +364,6 @@ impl TaskControlBlock {
         let inner = self.inner_exclusive_access();
         let mmap_start = inner.mmap_area.mmap_start;
         let mmap_end = inner.mmap_area.mmap_top;
-        let stack_start = VirtAddr::from(inner.stack_top - USER_STACK_SIZE);
-        let stack_end = VirtAddr::from(inner.stack_top);
         let heap_start = VirtAddr::from(inner.heap_start);
         let heap_end = VirtAddr::from(inner.heap_start + USER_HEAP_SIZE);
         drop(inner);
@@ -382,11 +380,7 @@ impl TaskControlBlock {
                 }
             }
         }
-        
-        if va >= stack_start && va <= stack_end {
-            // self.inner_exclusive_access().lazy_alloc_stack(va.floor())
-            -3
-        } else if va >= heap_start && va <= heap_end {
+        if va >= heap_start && va <= heap_end {
             self.inner_exclusive_access().lazy_alloc_heap(va.floor())
         } else if va >= mmap_start && va < mmap_end {
             self.lazy_mmap(va, is_load)
@@ -413,7 +407,7 @@ impl TaskControlBlock {
         let token = inner.get_user_token();
         let lazy_result = inner.memory_set.lazy_mmap(va.into());
 
-        if lazy_result == 0 || is_load {
+        if lazy_result == 0 && is_load {
             inner.mmap_area.lazy_map_page(va, fd_table, token);
         }
         return lazy_result;

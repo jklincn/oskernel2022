@@ -1,6 +1,6 @@
 use super::errno::*;
 use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, MNT_TABLE};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr};
 use crate::task::{current_task, current_user_token, suspend_current_and_run_next, RLIMIT_NOFILE, FD_LIMIT};
 use crate::timer::{get_timeval, TimeVal, Timespec};
 use alloc::{sync::Arc, vec::Vec};
@@ -27,6 +27,9 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     if fd >= inner.fd_table.len() {
         println!("[WARNING] sys_write: fd >= inner.fd_table.len, return -1");
         return -1;
+    }
+    if inner.memory_set.check_va_range(VirtAddr::from(buf as usize), len) == false {
+        return -EFAULT;
     }
     if let Some(file) = &inner.fd_table[fd] {
         // 文件不可写

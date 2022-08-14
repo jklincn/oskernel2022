@@ -11,6 +11,7 @@
 //
 
 use crate::config::PAGE_SIZE;
+use crate::task::current_task;
 
 use super::{frame_alloc, FrameTracker};
 use super::address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
@@ -198,12 +199,12 @@ impl PageTable {
         let mut result: Option<&mut PageTableEntry> = None;
         for (i, idx) in idxs.iter().enumerate() {
             let pte = &mut ppn.get_pte_array()[*idx];
+            if !pte.is_valid() {
+                return None;
+            }
             if i == 2 {
                 result = Some(pte);
                 break;
-            }
-            if !pte.is_valid() {
-                return None;
             }
             ppn = pte.ppn();
         }
@@ -303,7 +304,16 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
-        let ppn = page_table.translate(vpn).expect("[kernel] translated_byte_buffer: page not mapped!").ppn();
+        let ppn:PhysPageNum;
+        match page_table.translate(vpn) {
+            Some(_ppn) => ppn = _ppn.ppn(),
+            None => {
+                if current_task().unwrap().check_lazy(start_va, true) != 0 {
+                    panic!("check lazy error");
+                }
+                ppn = page_table.translate(vpn).unwrap().ppn();
+            }
+        }
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();
         end_va = end_va.min(VirtAddr::from(end));
