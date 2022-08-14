@@ -1,4 +1,3 @@
-mod aux;
 /// # 任务管理模块
 /// `os/src/task/mod.rs`
 /// ## 实现功能
@@ -10,6 +9,8 @@ mod aux;
 /// pub fn current_add_signal()
 /// ```
 //
+
+mod aux;
 mod context; // 任务上下文模块
 mod info; // 系统信息模块
 mod manager; // 进程管理器
@@ -32,7 +33,7 @@ use task::{TaskControlBlock, TaskStatus};
 pub use aux::*;
 pub use context::TaskContext;
 pub use info::{CloneFlags, RUsage, Utsname, UTSNAME};
-pub use manager::{add_task, pid2task};
+pub use manager::{add_task, pid2task, debug_show_ready_queue};
 pub use pid::{pid_alloc, KernelStack, PidHandle};
 pub use processor::{current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task};
 pub use resource::*;
@@ -45,14 +46,16 @@ use crate::fs::{OpenFlags, open};
 pub fn suspend_current_and_run_next() -> isize{
     // There must be an application running.
     // 取出当前正在执行的任务
+    let task_cp = current_task().unwrap();
+    let mut task_inner = task_cp.inner_exclusive_access();
+    if task_inner.signals.contains(SignalFlags::SIGKILL){
+        let exit_code = task_inner.exit_code;
+        drop(task_inner);
+        drop(task_cp);
+        exit_current_and_run_next(exit_code);
+        return 0;
+    }
     let task = take_current_task().unwrap();
-    let mut task_inner = task.inner_exclusive_access();
-    // if task_inner.signals.contains(SignalFlags::SIGKILL){
-    //     // println!("pid:{},kill!",task.getpid());
-    //     // drop(task_inner);
-    //     // add_task(task);
-    //     return -1;
-    // }
     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
     // 修改其进程控制块内的状态为就绪状态
     task_inner.task_status = TaskStatus::Ready;
@@ -65,6 +68,8 @@ pub fn suspend_current_and_run_next() -> isize{
 }
 
 pub fn exit_current_and_run_next(exit_code: i32) {
+    println!("[KERNEL] pid:{} exited", current_task().unwrap().pid.0);
+
     // 获取访问权限，修改进程状态
     let task = take_current_task().unwrap();
     remove_from_pid2task(task.getpid());

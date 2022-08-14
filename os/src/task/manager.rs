@@ -59,3 +59,11 @@ pub fn remove_from_pid2task(pid: usize) {
         panic!("cannot find pid {} in pid2task!", pid);
     }
 }
+
+#[allow(unused)]
+pub fn debug_show_ready_queue() {
+    for task in TASK_MANAGER.lock().ready_queue.iter() {
+        let inner = task.inner_exclusive_access();
+        println!("pid = {}, signals: {:?}", task.pid.0, inner.signals);
+    }
+}

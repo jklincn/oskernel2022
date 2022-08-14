@@ -206,6 +206,8 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
 ///     - 否则返回结束的子进程的进程 ID。
 /// - syscall ID：260
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
+    println!("[KERNEL] pid {} waitpid {}",current_task().unwrap().pid.0, pid);
+    // crate::task::debug_show_ready_queue();
     let task = current_task().unwrap();
     // ---- access current TCB exclusively
     let inner = task.inner_exclusive_access();
@@ -231,6 +233,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
             // 更不会出现在处理器监控器或者任务管理器中。当它所在的代码块结束，这次引用变量的生命周期结束，
             // 将导致该子进程进程控制块的引用计数变为 0 ，彻底回收掉它占用的所有资源，
             // 包括：内核栈和它的 PID 还有它的应用地址空间存放页表的那些物理页帧等等
+            println!("[KERNEL] pid {} waitpid {}",current_task().unwrap().pid.0, pid);
             assert_eq!(Arc::strong_count(&child), 1);
             // 收集的子进程信息返回
             let found_pid = child.getpid();
@@ -252,7 +255,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 }
 
 pub fn sys_kill(pid: usize, signal: u32) -> isize {
-    // println!("[DEBUG] enter sys_kill: pid:{}, signal:0x{:x}", pid, signal);
+    println!("[KERNEL] enter sys_kill: pid:{} send to pid:{}, signal:0x{:x}",current_task().unwrap().pid.0, pid, signal);
     if signal == 0 {
         return 0;
     }

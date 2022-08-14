@@ -38,7 +38,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
             return -1;
         }
         let file = file.clone();
-        drop(inner); // 防止pipe挂起时死锁
+        drop(inner); drop(task);// 防止pipe挂起时死锁
         let write_size = file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize;
         // println!("[DEBUG] sys_write: return write_size: {}",write_size);
         write_size
@@ -74,7 +74,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         }
         let file = file.clone();
         // 释放 taskinner 以避免多次借用
-        drop(inner);
+        drop(inner); drop(task);
 
         // 对 /dev/zero 的处理，暂时先加在这里
         if file.get_name() == "zero" {
