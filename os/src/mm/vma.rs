@@ -189,7 +189,7 @@ impl MmapSpace{
             if !f.readable() { return -1; }
             // println!{"The va_start is 0x{:X}, offset of file is {}", va_start.0, offset};
             let _read_len = f.read(UserBuffer::new(translated_byte_buffer(token, va_start.0 as *const u8, len)));
-            println!{"[kernel map_file] read {} bytes", _read_len};
+            // println!{"[kernel map_file] read {} bytes", _read_len};
             // println!("[kernel] {:?}",va_start);
         } else { return -1 };
         return 1;
