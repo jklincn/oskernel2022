@@ -309,13 +309,13 @@ pub fn sys_uname(buf: *const u8) -> isize {
 /// - syscall_id:222
 pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
     let task = current_task().unwrap();
-    // println!("[DEBUG] enter mmap:start:{},len:{},prot:{},flags:0b{:b},fd:{},off:{}", start, len, prot, flags, fd, off);
+    // println!("[KERNEL syscall] enter mmap:start:0x{:x},len:{},prot:{},flags:0b{:b},fd:{},off:{}", start, len, prot, flags, fd, off);
     if len == 0 {
         panic!("mmap:len == 0");
     }
     let result_addr = task.mmap(start, len, prot, flags, fd, off);
-    // let inner = task.inner_exclusive_access();
-    // inner.memory_set.debug_show_layout();
+    
+    // task.inner_exclusive_access().memory_set.debug_show_layout();
 
     return result_addr as isize;
 }
