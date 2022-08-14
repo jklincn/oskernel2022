@@ -11,6 +11,8 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 
+pub const FD_LIMIT: usize = 128;
+
 pub struct TaskControlBlock {
     /// 进程标识符
     pub pid: PidHandle,
@@ -81,8 +83,8 @@ impl TaskControlBlockInner {
         if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
             fd
         } else {
-            if self.fd_table.len() == 128 {
-                return 999;
+            if self.fd_table.len() == FD_LIMIT {
+                return FD_LIMIT;
             }
             self.fd_table.push(None);
             self.fd_table.len() - 1
