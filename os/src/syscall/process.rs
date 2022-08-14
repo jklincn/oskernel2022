@@ -171,7 +171,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
 
     let task = current_task().unwrap();
     // memory_usage();
-    println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
+    // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
 
     if path.ends_with(".sh") {
         let mut new_args = Vec::new();
