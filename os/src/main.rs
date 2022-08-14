@@ -56,7 +56,6 @@ pub fn id() -> u64 {
 pub fn rust_main() -> ! {
     clear_bss();
     if id() == 0 {
-        println!("[kernel] Hello, world!");
         unsafe {
             set_fs(FS::Dirty);
         }
@@ -66,8 +65,8 @@ pub fn rust_main() -> ! {
         timer::set_next_trigger();
         fs::list_apps();
         task::add_initproc();
+        println!("[kernel] Initialization succeeded");
         memory_usage();
-        println!("[kernel] initproc runing!");
         task::run_tasks();
         panic!("Unreachable in rust_main!");
     } else {

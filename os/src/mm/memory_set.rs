@@ -166,12 +166,12 @@ impl MemorySet {
         // map trampoline
         memory_set.map_trampoline();
         // map kernel sections
-        println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
-        println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
-        println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
-        println!(".bss [{:#x}, {:#x})", sbss_with_stack as usize, ebss as usize);
-        // 总体思路：通过Linker.ld中的标签划分内核空间为不同的区块，为每个区块采用恒等映射的方式生成逻辑段，压入地址空间
-        println!("mapping .text section");
+        // println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
+        // println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
+        // println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
+        // println!(".bss [{:#x}, {:#x})", sbss_with_stack as usize, ebss as usize);
+        // // 总体思路：通过Linker.ld中的标签划分内核空间为不同的区块，为每个区块采用恒等映射的方式生成逻辑段，压入地址空间
+        // println!("mapping .text section");
         memory_set.push(
             MapArea::new(
                 (stext as usize).into(),
@@ -181,7 +181,7 @@ impl MemorySet {
             ),
             None,
         );
-        println!("mapping .rodata section");
+        // println!("mapping .rodata section");
         memory_set.push(
             MapArea::new(
                 (srodata as usize).into(),
@@ -191,7 +191,7 @@ impl MemorySet {
             ),
             None,
         );
-        println!("mapping .data section");
+        // println!("mapping .data section");
         memory_set.push(
             MapArea::new(
                 (sdata as usize).into(),
@@ -201,7 +201,7 @@ impl MemorySet {
             ),
             None,
         );
-        println!("mapping .bss section");
+        // println!("mapping .bss section");
         memory_set.push(
             MapArea::new(
                 (sbss_with_stack as usize).into(),
@@ -211,7 +211,7 @@ impl MemorySet {
             ),
             None,
         );
-        println!("mapping physical memory");
+        // println!("mapping physical memory");
         memory_set.push(
             MapArea::new(
                 (ekernel as usize).into(),
@@ -221,7 +221,7 @@ impl MemorySet {
             ),
             None,
         );
-        println!("mapping memory-mapped registers");
+        // println!("mapping memory-mapped registers");
         for pair in MMIO {
             // 恒等映射 内存映射 I/O (MMIO, Memory-Mapped I/O) 地址到内核地址空间
             memory_set.push(
