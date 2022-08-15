@@ -4,7 +4,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::RwLock;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VFile {
     name: String,                       // 文件名
     short_sector: usize,                // 文件短目录项所在扇区
@@ -98,8 +98,8 @@ impl VFile {
         (section, offset)
     }
 
-    pub fn set_first_cluster(&self, clu:u32){
-        self.modify_short_dirent(|se:&mut ShortDirEntry|{
+    pub fn set_first_cluster(&self, clu: u32) {
+        self.modify_short_dirent(|se: &mut ShortDirEntry| {
             se.set_first_cluster(clu);
         })
     }
@@ -109,13 +109,13 @@ impl VFile {
 
     fn find_long_name(&self, name: &str, dir_ent: &ShortDirEntry) -> Option<VFile> {
         // 拆分长文件名
-        let mut name_vec = long_name_split(name);
+        let name_vec = long_name_split(name);
         let long_ent_num = name_vec.len();
         let mut offset: usize = 0;
         let mut long_entry = LongDirEntry::new();
 
         let mut long_pos_vec: Vec<(usize, usize)> = Vec::new();
-        let name_last = name_vec.pop().unwrap();
+        let name_last = name_vec[long_ent_num - 1].clone();
 
         loop {
             long_pos_vec.clear();
@@ -131,7 +131,7 @@ impl VFile {
                 return None;
             }
             // 先匹配最后一个长文件名目录项，即长文件名的最后一块
-            if long_entry.get_name_raw() == name_last && long_entry.attr() == ATTR_LONG_NAME {
+            if long_entry.attr() == ATTR_LONG_NAME && long_entry.get_name_raw() == name_last{
                 // 如果名称一致，则获取 order进行下一步校验
                 let mut order = long_entry.order();
                 // 校验 order的合法性，不合法则跳过继续搜索
@@ -196,6 +196,8 @@ impl VFile {
                             self.fs.clone(),
                             self.block_device.clone(),
                         ));
+                    } else {
+                        panic!("Simple-Fat32: short_entry is not valid or checksum wrong")
                     }
                 }
             }
@@ -220,6 +222,7 @@ impl VFile {
                 return None;
             } else {
                 // 判断名字是否一样
+                // println!("name_upper:{}, entry name:{}",name_upper,short_entry.get_name_uppercase());
                 if short_entry.is_valid() && name_upper == short_entry.get_name_uppercase() {
                     let (short_sector, short_offset) = self.get_pos(offset);
                     let long_pos_vec: Vec<(usize, usize)> = Vec::new();
@@ -245,7 +248,6 @@ impl VFile {
         // 不是目录则退出
         assert!(self.is_dir());
         let (name_, ext_) = split_name_ext(name);
-        // FAT32目录没有大小，只能搜，read_at已经做了完善的适配
         self.read_short_dirent(|short_entry: &ShortDirEntry| {
             if name_.len() > 8 || ext_.len() > 3 {
                 //长文件名
@@ -374,7 +376,7 @@ impl VFile {
             // todo: 短文件名也会生成一个长文件名目录项，用于存储大小写
             let (_name, _ext) = short_name_format(name);
             tmp_short_ent.initialize(&_name, &_ext, attribute);
-            tmp_short_ent.set_case(0x8);  // 全部小写
+            tmp_short_ent.set_case(0x8); // 全部小写
         }
         // 写短目录项（长文件名也是有短文件名目录项的）
         assert_eq!(self.write_at(dirent_offset, tmp_short_ent.as_bytes_mut()), DIRENT_SZ);

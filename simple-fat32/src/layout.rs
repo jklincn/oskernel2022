@@ -341,13 +341,13 @@ impl ShortDirEntry {
         let mut read_size = 0usize;
         let mut rest = buf.len();
 
-        while current_cluster <= END_CLUSTER && rest > 0 {
+        while current_cluster < END_CLUSTER && rest > 0 {
             if offset >= bytes_per_cluster {
                 offset -= bytes_per_cluster;
                 current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
                 continue;
             }
-            // println!("current_cluster:{},rest:{}", current_cluster,rest);
+            // println!("current_cluster:0x{:x},rest:{}", current_cluster,rest);
             let nth_sect = offset / bytes_per_sector;
             let sect = manager_reader.first_sector_of_cluster(current_cluster);
             offset %= bytes_per_sector;
@@ -401,7 +401,7 @@ impl ShortDirEntry {
         let mut write_size = 0usize;
         let mut rest = buf.len();
 
-        while current_cluster <= END_CLUSTER && rest > 0 {
+        while current_cluster < END_CLUSTER && rest > 0 {
             if offset >= bytes_per_cluster {
                 offset -= bytes_per_cluster;
                 current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
