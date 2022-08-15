@@ -172,7 +172,7 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     let task = current_task().unwrap();
     // memory_usage();
     // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
-
+    // println!("time start!{}",get_time_ms());
     if path.ends_with(".sh") {
         let mut new_args = Vec::new();
         new_args.push("./busybox".to_string());

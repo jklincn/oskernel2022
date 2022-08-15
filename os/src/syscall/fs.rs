@@ -2,7 +2,7 @@ use super::errno::*;
 use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr};
 use crate::task::{current_task, current_user_token, suspend_current_and_run_next, FD_LIMIT, RLIMIT_NOFILE};
-use crate::timer::{get_timeval, TimeVal, Timespec};
+use crate::timer::{get_timeval, TimeVal, Timespec, get_time_ms};
 use alloc::{sync::Arc, vec::Vec};
 use core::mem::size_of;
 
@@ -529,6 +529,7 @@ pub struct Iovec {
 
 pub fn sys_writev(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
     // println!("[DEBUG] enter sys_writev: fd:{}, iovp:0x{:x}, iovcnt:{}",fd,iovp as usize,iovcnt);
+    // println!("time:{}",get_time_ms());
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
