@@ -43,7 +43,7 @@ char *argv_lmbench27[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "24
 char *argv_lmbench28[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "32", 0};
 char *argv_lmbench29[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "64", 0};
 char *argv_lmbench30[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "96", 0};
-const int lmbench_test_num = 20;
+const int lmbench_test_num = 21;
 char **argv_lmbench[] =
     {
         argv_lmbench0,
@@ -64,7 +64,7 @@ char **argv_lmbench[] =
         argv_lmbench15,
         argv_lmbench16,
         argv_lmbench17,
-        // argv_lmbench18,
+        argv_lmbench18,
         argv_lmbench19,
         argv_lmbench20,
         argv_lmbench21,
