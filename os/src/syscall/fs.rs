@@ -44,7 +44,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
         // println!("[DEBUG] sys_write: return write_size: {}",write_size);
         write_size
     } else {
-        println!("[WARNING] sys_write: fd {} is none, return -1", fd);
+        // println!("[WARNING] sys_write: fd {} is none, return -1", fd);
         -1
     }
 }
@@ -125,7 +125,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
             // println!("[DEBUG] sys_openat return new fd:{}", fd);
             fd as isize
         } else {
-            println!("[WARNING] sys_openat: can't open file:{}, return -1", path);
+            // println!("[WARNING] sys_openat: can't open file:{}, return -1", path);
             -1
         }
     } else {

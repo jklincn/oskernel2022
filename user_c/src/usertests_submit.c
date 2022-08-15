@@ -1,9 +1,10 @@
 #include "stdio.h"
 #include "unistd.h"
 #include "stdlib.h"
+#include "stddef.h"
 
 // #define SHELL
-#define TEST
+// #define TEST
 #define LMBENCH
 
 char *argv_sh[] = {"./busybox", "sh", 0};
@@ -82,6 +83,9 @@ char **argv_lmbench[] =
 int main()
 {
     int npid = 0, child_return = 0;
+    TimeVal start_tv, end_tv;
+    sys_get_time(&start_tv, 0);
+
 #ifdef SHELL
     npid = fork();
     assert(npid >= 0);
@@ -136,6 +140,8 @@ int main()
         }
     }
 #endif
+    sys_get_time(&end_tv, 0);
+    printf("[TEST] spend time: %ds %dus\n", end_tv.sec - start_tv.sec, end_tv.usec - start_tv.usec);
     printf("[TEST] test finish!\n");
     return 0;
 }
