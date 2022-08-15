@@ -4,8 +4,8 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::RwLock;
+use core::fmt::{self, Debug, Formatter};
 
-#[derive(Debug)]
 pub struct FAT32Manager {
     block_device: Arc<dyn BlockDevice>,       // 块设备的引用
     fsinfo: Arc<RwLock<FSInfo>>,              // 文件系统信息扇区的引用
@@ -16,6 +16,13 @@ pub struct FAT32Manager {
     root_sec: u32,                            // 根目录所在簇号
     vroot_dirent: Arc<RwLock<ShortDirEntry>>, // 虚拟根目录项。根目录无目录项，引入以与其他文件一致
 }
+
+impl Debug for FAT32Manager {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("todo"))
+    }
+}
+
 
 impl FAT32Manager {
     pub fn sectors_per_cluster(&self) -> u32 {

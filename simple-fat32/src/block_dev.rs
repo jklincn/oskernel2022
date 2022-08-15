@@ -9,6 +9,6 @@ pub trait BlockDevice: Send + Sync + Any {
 
 impl Debug for dyn BlockDevice {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("BlockDevice debug!"))
+        f.write_fmt(format_args!("todo"))
     }
 }
