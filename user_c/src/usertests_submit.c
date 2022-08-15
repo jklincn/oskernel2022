@@ -59,7 +59,7 @@ char **argv_lmbench[] =
         argv_lmbench10,
         argv_lmbench11,
         argv_lmbench12,
-        argv_lmbench13,
+        // argv_lmbench13,
         argv_lmbench14,
         argv_lmbench15,
         argv_lmbench16,
