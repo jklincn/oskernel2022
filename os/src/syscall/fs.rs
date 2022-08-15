@@ -1,7 +1,7 @@
 use super::errno::*;
 use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr};
-use crate::task::{current_task, current_user_token, suspend_current_and_run_next, RLIMIT_NOFILE, FD_LIMIT};
+use crate::task::{current_task, current_user_token, suspend_current_and_run_next, FD_LIMIT, RLIMIT_NOFILE};
 use crate::timer::{get_timeval, TimeVal, Timespec};
 use alloc::{sync::Arc, vec::Vec};
 use core::mem::size_of;
@@ -38,7 +38,8 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
             return -1;
         }
         let file = file.clone();
-        drop(inner); drop(task);// 防止pipe挂起时死锁
+        drop(inner);
+        drop(task); // 需要及时释放减少引用数
         let write_size = file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize;
         // println!("[DEBUG] sys_write: return write_size: {}",write_size);
         write_size
@@ -73,8 +74,9 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
             return -1;
         }
         let file = file.clone();
-        // 释放 taskinner 以避免多次借用
-        drop(inner); drop(task);
+
+        drop(inner); // 释放以避免死锁
+        drop(task); // 需要及时释放减少引用数
 
         // 对 /dev/zero 的处理，暂时先加在这里
         if file.get_name() == "zero" {
@@ -188,10 +190,10 @@ pub fn sys_pipe(pipe: *mut u32, flag: usize) -> isize {
 
     let (pipe_read, pipe_write) = make_pipe();
     let read_fd = inner.alloc_fd();
-    if read_fd == FD_LIMIT{
+    if read_fd == FD_LIMIT {
         return -EMFILE;
     }
-    
+
     inner.fd_table[read_fd] = Some(pipe_read);
     let write_fd = inner.alloc_fd();
     inner.fd_table[write_fd] = Some(pipe_write);
@@ -278,11 +280,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
     _ = mode;
     // println!("[DEBUG] enter sys_mkdirat: dirfd:{}, path:{}. mode:{:o}",dirfd,path,mode);
     if dirfd == AT_FDCWD {
-        if let Some(_) = open(
-            inner.get_work_path(),
-            path.as_str(),
-            OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE,
-        ) {
+        if let Some(_) = open(inner.get_work_path(), path.as_str(), OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE) {
             0
         } else {
             -1
@@ -293,11 +291,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
             return -1;
         }
         if let Some(file) = &inner.fd_table[dirfd] {
-            if let Some(_) = open(
-                file.get_name(),
-                path.as_str(),
-                OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE,
-            ) {
+            if let Some(_) = open(file.get_name(), path.as_str(), OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE) {
                 0
             } else {
                 -1
@@ -369,8 +363,10 @@ pub fn sys_chdir(path: *const u8) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
-
     let path = translated_str(token, path);
+
+    // println!("[DEBUG] enter sys_chdir: path:{}",path);
+
     if let Some(new_cwd) = chdir(inner.current_path.as_str(), &path) {
         inner.current_path = new_cwd;
         0
@@ -483,13 +479,7 @@ pub fn sys_lseek(fd: usize, off_t: usize, whence: usize) -> isize {
                 (off_t + current_offset) as isize
             }
             SeekFlags::SEEK_END => {
-                let inode = open(
-                    file.get_path(),
-                    file.get_name(),
-                    OpenFlags::O_RDONLY,
-                )
-                .unwrap();
-                let end = inode.file_size();
+                let end = file.file_size();
                 file.set_offset(end + off_t);
                 (end + off_t) as isize
             }

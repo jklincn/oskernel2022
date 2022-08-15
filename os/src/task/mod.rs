@@ -68,7 +68,7 @@ pub fn suspend_current_and_run_next() -> isize{
 }
 
 pub fn exit_current_and_run_next(exit_code: i32) {
-    println!("[KERNEL] pid:{} exited", current_task().unwrap().pid.0);
+    // println!("[KERNEL] pid:{} exited", current_task().unwrap().pid.0);
 
     // 获取访问权限，修改进程状态
     let task = take_current_task().unwrap();
@@ -82,8 +82,6 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     if task.getpid() == 0 {
         panic!("initproc return!");
     }
-
-    // println!("pid:{} exit!",task.getpid());
 
     {
         // 将这个进程的子进程转移到 initproc 进程的子进程中

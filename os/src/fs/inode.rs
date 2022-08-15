@@ -22,7 +22,7 @@ pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     inner: Mutex<OSInodeInner>,
-    path: String,
+    path: String,   // todo
     name: String,
 }
 
