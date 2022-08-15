@@ -2,7 +2,7 @@ use super::errno::*;
 use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr};
 use crate::task::{current_task, current_user_token, suspend_current_and_run_next, FD_LIMIT, RLIMIT_NOFILE};
-use crate::timer::{get_timeval, TimeVal, Timespec, get_time_ms};
+use crate::timer::{get_time_ms, get_timeval, TimeVal, Timespec};
 use alloc::{sync::Arc, vec::Vec};
 use core::mem::size_of;
 
@@ -16,13 +16,18 @@ const AT_FDCWD: isize = -100;
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     // println!(
     //     "[DEBUG] pid {} enter sys_write: fd:{}, buffer address:0x{:x}, len:{}",
-    //     current_task().unwrap().getpid(),fd, buf as usize, len
+    //     current_task().unwrap().getpid(),
+    //     fd,
+    //     buf as usize,
+    //     len
     // );
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
+    // if len != 8192 {
+    //     println!("buffer content:{:?}", UserBuffer::new(translated_byte_buffer(token, buf, len)));
+    // }
 
-    // println!("buffer content:{:?}", UserBuffer::new(translated_byte_buffer(token, buf, len)));
     // 文件描述符不合法
     if fd >= inner.fd_table.len() {
         println!("[WARNING] sys_write: fd >= inner.fd_table.len, return -1");

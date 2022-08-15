@@ -61,11 +61,6 @@ impl Kstat {
         self.st_blksize = st_blksize;
         self.st_blocks = st_blocks;
         self.st_mode = st_mode;
-        // 参见 simple-fat32 中注释
-        if time == 12345 {
-            self.st_atime_sec = 1 << 32;
-            self.st_mtime_sec = 1 << 32;
-        }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
