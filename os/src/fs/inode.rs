@@ -267,6 +267,7 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
     }
 }
 
+// display debug todo
 pub fn chdir(work_path: &str, path: &str) -> Option<String> {
     let current_inode = {
         if path.chars().nth(0).unwrap() == '/' {
