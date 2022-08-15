@@ -22,7 +22,7 @@ pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     inner: Mutex<OSInodeInner>,
-    path: String,   // todo
+    path: String, // todo
     name: String,
 }
 
@@ -150,7 +150,7 @@ lazy_static! {
     };
 }
 
-pub fn list_apps() {
+pub fn init() {
     // 预创建文件/文件夹
     open("/", "proc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
@@ -163,25 +163,42 @@ pub fn list_apps() {
     open("/proc", "meminfo", OpenFlags::O_CREATE);
     open("/dev/misc", "rtc", OpenFlags::O_CREATE);
     open("/var/tmp", "lmbench", OpenFlags::O_CREATE);
-
     println!("/**** All Files  ****");
-    for app in ROOT_INODE.ls().unwrap() {
+    list_apps(ROOT_INODE.clone());
+    println!("**********************/");
+}
+
+static mut LAYER: usize = 0;
+
+pub fn list_apps(dir: Arc<VFile>) {
+    for app in dir.ls().unwrap() {
         if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
-            println!("{}", app.0);
-        } else {
-            // 暂不考虑二级目录，待改写
-            println!("{}/", app.0);
-            let dir = open("/", app.0.as_str(), OpenFlags::O_RDONLY).unwrap();
-            let inner = dir.inner.lock();
-            for file in inner.inode.ls().unwrap() {
-                if file.1 & ATTR_DIRECTORY == 0 {
-                    println!("{}/{}", app.0, file.0);
+            unsafe {
+                for _ in 0..LAYER {
+                    print!("----");
                 }
             }
+            println!("{}", app.0);
+        } else if app.0 != "." && app.0 != ".." {
+            unsafe {
+                for _ in 0..LAYER {
+                    print!("----");
+                }
+            }
+            println!("{}/", app.0);
+            let dir = open(dir.name(), app.0.as_str(), OpenFlags::O_RDONLY).unwrap();
+            let inner = dir.inner.lock();
+            let inode = inner.inode.clone();
+            unsafe {
+                LAYER += 1;
+            }
+            list_apps(inode);
         }
     }
-    println!("**********************/");
+    unsafe {
+        LAYER -= 1;
+    }
 }
 
 // 定义一份打开文件的标志
@@ -216,6 +233,7 @@ impl OpenFlags {
 
 pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     // println!("[DEBUG] enter open: work_path:{}, path:{}, flags:{:?}", work_path, path, flags);
+    let mut pathv: Vec<&str> = path.split('/').collect();
     let cur_inode = {
         if work_path == "/" {
             ROOT_INODE.clone()
@@ -224,7 +242,7 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
             ROOT_INODE.find_vfile_bypath(wpath).unwrap()
         }
     };
-    let mut pathv: Vec<&str> = path.split('/').collect();
+
     let (readable, writable) = flags.read_write();
 
     if flags.contains(OpenFlags::O_CREATE) {

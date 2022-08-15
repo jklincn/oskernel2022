@@ -63,7 +63,7 @@ pub fn rust_main() -> ! {
         trap::init();
         trap::enable_timer_interrupt();
         timer::set_next_trigger();
-        fs::list_apps();
+        fs::init();
         task::add_initproc();
         println!("[kernel] Initialization succeeded");
         memory_usage();

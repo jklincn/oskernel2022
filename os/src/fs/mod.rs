@@ -87,7 +87,7 @@ impl Debug for dyn File + Send + Sync {
 
 pub use dirent::Dirent;
 pub use fdset::*;
-pub use inode::{chdir, list_apps, open, OSInode, OpenFlags};
+pub use inode::{chdir, init, open, OSInode, OpenFlags};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::*;

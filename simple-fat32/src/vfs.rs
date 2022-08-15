@@ -410,8 +410,6 @@ impl VFile {
             return None;
         }
         let mut list: Vec<(String, u8)> = Vec::new();
-        // （待修改）这里先默认为长文件名，由于 addr 字段在两种目录项中的偏移量相同，所以下面可以进行正确判断
-        // 应该要做结构体映射，然后先根据固定偏移量判断长还是短再做处理
         let mut file_entry = LongDirEntry::new();
         let mut offset = 0;
         loop {

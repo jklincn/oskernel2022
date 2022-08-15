@@ -6,7 +6,6 @@ use alloc::{
 };
 use spin::Mutex;
 
-pub use super::{list_apps, open, OSInode, OpenFlags};
 use crate::task::suspend_current_and_run_next;
 
 pub struct Pipe {
