@@ -4,7 +4,7 @@
 #include "stddef.h"
 
 // #define SHELL
-// #define TEST
+#define TEST
 #define LMBENCH
 
 char *argv_sh[] = {"./busybox", "sh", 0};
