@@ -13,9 +13,8 @@ use super::{heap_usage, frame_usage};
 use super::page_table::{PTEFlags, PageTable, PageTableEntry};
 use super::address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum, VPNRange};
 use crate::config::*;
-use crate::fs::OSInode;
-use crate::task::{AuxEntry, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
-use alloc::collections::BTreeMap;
+use crate::fs::{OSInode, OpenFlags, open};
+use crate::task::{AuxEntry, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM, AT_BASE};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
@@ -306,32 +305,38 @@ impl MemorySet {
                 _ => continue,
             }
         }
-        // if elf_interpreter {
-        //     // 动态链接
-        //     let interp_elf = xmas_elf::ElfFile::new(LIBC_SO.as_slice()).unwrap();
-        //     let interp_elf_header = interp_elf.header;
-        //     let base_address = 0x2000000000;
-        //     auxs.push(AuxEntry(AT_BASE, base_address));
-        //     interp_entry_point = base_address + interp_elf_header.pt2.entry_point() as usize;
-        //     // 获取 program header 的数目
-        //     let ph_count = interp_elf_header.pt2.ph_count();
-        //     for i in 0..ph_count {
-        //         let ph = interp_elf.program_header(i).unwrap();
-        //         if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
-        //             let start_va: VirtAddr = (ph.virtual_addr() as usize + base_address).into();
-        //             let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
-        //             let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
-        //             unimplemented!("[Kernel] elf_interpreter data loading needs rewrite");
-        //             // memory_set.push(
-        //             //     MapArea::new(start_va, end_va, MapType::Framed, map_perm),
-        //             //     Some(&interp_elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
-        //             //     start_va.page_offset(),
-        //             // );
-        //         }
-        //     }
-        // } else {
-        //     auxs.push(AuxEntry(AT_BASE, 0));
-        // }
+        if elf_interpreter {
+            // 动态链接
+            let interpreter_file = open("/", "ld-musl-riscv64.so.1", OpenFlags::O_RDONLY).expect("can't find interpreter file");
+            // 第一次读取前64字节确定程序表的位置与大小
+            let interpreter_head_data = interpreter_file.read_vec(0, 64);
+            let interp_elf = xmas_elf::ElfFile::new(interpreter_head_data.as_slice()).unwrap();
+
+            let ph_entry_size = interp_elf.header.pt2.ph_entry_size() as usize;
+            let ph_offset = interp_elf.header.pt2.ph_offset() as usize;
+            let ph_count = interp_elf.header.pt2.ph_count() as usize;
+
+            // 进行第二次读取，这样的elf对象才能正确解析程序段头的信息
+            let interpreter_head_data = interpreter_file.read_vec(0, ph_offset + ph_count * ph_entry_size);
+            let interp_elf = xmas_elf::ElfFile::new(interpreter_head_data.as_slice()).unwrap();
+            let base_address = 0x2000000000;
+            auxs.push(AuxEntry(AT_BASE, base_address));
+            interp_entry_point = base_address + interp_elf.header.pt2.entry_point() as usize;
+            // 获取 program header 的数目
+            let ph_count = interp_elf.header.pt2.ph_count();
+            for i in 0..ph_count {
+                let ph = interp_elf.program_header(i).unwrap();
+                if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
+                    let start_va: VirtAddr = (ph.virtual_addr() as usize + base_address).into();
+                    let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
+                    let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
+                    let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
+                    memory_set.push(map_area, Some((interpreter_file.clone(), ph.offset() as usize, ph.file_size() as usize, start_va.page_offset())));
+                }
+            }
+        } else {
+            auxs.push(AuxEntry(AT_BASE, 0));
+        }
 
         // 分配用户栈
         let max_end_va: VirtAddr = max_end_vpn.into();

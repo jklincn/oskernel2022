@@ -3,11 +3,11 @@
 #include "stdlib.h"
 #include "stddef.h"
 
-// #define SHELL
-#define TEST
-#define LMBENCH
+#define SHELL
+// #define TEST
+// #define LMBENCH
 
-char *argv_sh[] = {"./busybox", "sh", 0};
+char *argv_sh[] = {"./busybox","sh", 0};
 char *argv_busybox[] = {"./busybox", "sh", "busybox_testcode.sh", 0};
 char *argv_lua[] = {"./busybox", "sh", "lua_testcode.sh", 0};
 

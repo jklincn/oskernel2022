@@ -233,7 +233,16 @@ impl OpenFlags {
 
 pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     // println!("[DEBUG] enter open: work_path:{}, path:{}, flags:{:?}", work_path, path, flags);
-    let mut pathv: Vec<&str> = path.split('/').collect();
+    let mut pathv: Vec<&str> = {
+        if path == "libc.musl-riscv64.so.1" {
+            "ld-musl-riscv64.so.1".split("/").collect()
+        } else if path == "//libffi.so.8" {
+            "libffi.so".split("/").collect()
+        } else {
+            path.split('/').collect()
+        }
+    };
+    // println!("pathv:{:?}",pathv);
     let cur_inode = {
         if work_path == "/" {
             ROOT_INODE.clone()
@@ -246,7 +255,6 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
     let (readable, writable) = flags.read_write();
 
     if flags.contains(OpenFlags::O_CREATE) {
-        // println!("[DEBUG] flags contain O_CREATE");
         if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
             // 如果文件已存在则清空
             let name = pathv.pop().unwrap();
