@@ -4,24 +4,23 @@
 /// ```
 /// pub fn init()
 /// pub fn enable_timer_interrupt()
-/// pub fn trap_handler() -> ! 
+/// pub fn trap_handler() -> !
 /// pub fn trap_return() -> !
 /// pub fn trap_from_kernel() -> !
 /// ```
 //
-
 mod context;
 
 use crate::config::{TRAMPOLINE, TRAP_CONTEXT};
-use crate::syscall::syscall;
-use crate::task::{
-    check_signals_of_current, current_add_signal, current_trap_cx, current_user_token,
-    exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,current_task
-};
-use crate::timer::set_next_trigger;
 use crate::mm::VirtAddr;
 #[allow(unused)]
-use crate::mm::{frame_usage,heap_usage};
+use crate::mm::{frame_usage, heap_usage};
+use crate::syscall::syscall;
+use crate::task::{
+    check_signals_of_current, current_add_signal, current_task, current_trap_cx, current_user_token, exit_current_and_run_next,
+    suspend_current_and_run_next, Signals,
+};
+use crate::timer::set_next_trigger;
 use core::arch::{asm, global_asm};
 use riscv::register::{
     mtvec::TrapMode,
@@ -52,7 +51,7 @@ fn set_kernel_trap_entry() {
 }
 
 /// ### 设置用户态下的 Trap 入口
-/// 我们把 stvec 设置为内核和应用地址空间共享的跳板页面的起始地址 TRAMPOLINE 
+/// 我们把 stvec 设置为内核和应用地址空间共享的跳板页面的起始地址 TRAMPOLINE
 /// 而不是编译器在链接时看到的 __alltraps 的地址。这是因为启用分页模式之后，
 /// 内核只能通过跳板页面上的虚拟地址来实际取得 __alltraps 和 __restore 的汇编代码
 fn set_user_trap_entry() {
@@ -73,8 +72,8 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 pub fn trap_handler() -> ! {
     set_kernel_trap_entry();
-    let scause = scause::read();    // 用于描述 Trap 的原因
-    let stval = stval::read();       // 给出 Trap 附加信息
+    let scause = scause::read(); // 用于描述 Trap 的原因
+    let stval = stval::read(); // 给出 Trap 附加信息
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
             let mut cx = current_trap_cx();
@@ -102,25 +101,23 @@ pub fn trap_handler() -> ! {
             let va: VirtAddr = (stval as usize).into();
             if va > TRAMPOLINE.into() {
                 println!("[kernel trap] VirtAddr out of range!");
-                current_add_signal(SignalFlags::SIGSEGV);
+                current_add_signal(Signals::SIGSEGV);
             }
             let task = current_task().unwrap();
             let lazy = task.check_lazy(va, is_load);
 
-            if lazy != 0 { 
-                current_add_signal(SignalFlags::SIGSEGV);
+            if lazy != 0 {
+                current_add_signal(Signals::SIGSEGV);
                 current_task().unwrap().inner_exclusive_access().memory_set.debug_show_layout();
                 // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(0x0060000000usize.into());
                 // panic!("lazy != 0: va:0x{:x}",va.0);
             }
 
-            
             // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
             // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());
         }
 
-        Trap::Exception(Exception::InstructionFault)
-        | Trap::Exception(Exception::InstructionPageFault) => {
+        Trap::Exception(Exception::InstructionFault) | Trap::Exception(Exception::InstructionPageFault) => {
             let task = current_task().unwrap();
             println!(
                 "[kernel] {:?} in application {}, bad addr = {:#x}, bad instruction = {:#x}.",
@@ -133,44 +130,43 @@ pub fn trap_handler() -> ! {
 
             current_trap_cx().debug_show();
             // current_task().unwrap().inner_exclusive_access().task_cx.debug_show();
-            
+
             //current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(TRAP_CONTEXT.into());
 
-            current_add_signal(SignalFlags::SIGSEGV);
+            current_add_signal(Signals::SIGSEGV);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             // println!("[kernel] IllegalInstruction in application, kernel killed it.");
             // // illegal instruction exit code
             // exit_current_and_run_next(-3);
-            println!("stval:{}",stval);
-            let sepc =riscv::register::sepc::read();
-            println!("sepc:0x{:x}",sepc);
+            println!("stval:{}", stval);
+            let sepc = riscv::register::sepc::read();
+            println!("sepc:0x{:x}", sepc);
             // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(sepc.into());
-            current_add_signal(SignalFlags::SIGILL);
+            current_add_signal(Signals::SIGILL);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
             suspend_current_and_run_next();
         }
         _ => {
-            panic!(
-                "Unsupported trap {:?}, stval = {:#x}!",
-                scause.cause(),
-                stval
-            );
+            panic!("Unsupported trap {:?}, stval = {:#x}!", scause.cause(), stval);
         }
     }
-    // check signals
-    if let Some((errno, msg)) = check_signals_of_current() {
-        // println!("[kernel] {}", msg);
-        exit_current_and_run_next(errno);
-    }
+
     trap_return();
 }
 
 /// 通过在Rust语言中加入宏命令调用 `__restore` 汇编函数
 #[no_mangle]
 pub fn trap_return() -> ! {
+
+    // check signals
+    if let Some((errno, msg)) = check_signals_of_current() {
+        // println!("[kernel] {}", msg);
+        exit_current_and_run_next(errno);
+    }
+
     set_user_trap_entry();
     // println!("[trap retrun]");
     let trap_cx_ptr = TRAP_CONTEXT;
@@ -178,6 +174,7 @@ pub fn trap_return() -> ! {
     extern "C" {
         fn __alltraps();
         fn __restore();
+        fn __signal_trampoline();
     }
     // __restore 在虚拟地址空间的地址
     let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
@@ -188,6 +185,7 @@ pub fn trap_return() -> ! {
             restore_va = in(reg) restore_va,
             in("a0") trap_cx_ptr,   // Trap 上下文在应用地址空间中的位置
             in("a1") user_satp,     // 即将回到的应用的地址空间的 token
+            // in("a2") __signal_trampoline as usize,
             options(noreturn)
         );
     }

@@ -1,15 +1,18 @@
 use super::signal::SigSet;
-use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
-use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
+use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER, SigAction};
+use super::{pid_alloc, KernelStack, PidHandle, Signals};
 use crate::config::*;
-use crate::fs::{File, Stdin, Stdout, OSInode};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry, heap_usage, frame_usage};
-use spin::{Mutex, MutexGuard};
+use crate::fs::{File, OSInode, Stdin, Stdout};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PageTableEntry, PhysPageNum, VirtAddr, VirtPageNum, KERNEL_SPACE};
 use crate::trap::{trap_handler, TrapContext};
-use alloc::string::String;
-use alloc::sync::{Arc, Weak};
+use alloc::collections::BTreeMap;
+use alloc::{
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 use alloc::vec;
-use alloc::vec::Vec;
+use spin::{Mutex, MutexGuard};
 
 pub const FD_LIMIT: usize = 128;
 
@@ -54,11 +57,15 @@ pub struct TaskControlBlockInner {
     /// 文件描述符表
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
 
-    // 状态信息
-    pub signals: SignalFlags,
+    // 信号
+    pub signals: Signals,
+    pub sigaction: BTreeMap<Signals,SigAction>,
+    pub trapcx_backup: TrapContext,
+
+    // 当前工作路径
     pub current_path: String,
 
-    // 决赛添加：信号集
+    // 信号集
     pub sigset: SigSet,
     pub resource: [RLimit; RESOURCE_KIND_NUMBER],
 }
@@ -94,7 +101,7 @@ impl TaskControlBlockInner {
     pub fn get_work_path(&self) -> &str {
         self.current_path.as_str()
     }
-    
+
     pub fn enquire_pte_via_vpn(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.memory_set.translate(vpn)
     }
@@ -133,33 +140,40 @@ impl TaskControlBlock {
             pid: pid_handle,
             tgid,
             kernel_stack,
-            inner:Mutex::new(TaskControlBlockInner {
-                    trap_cx_ppn,
-                    base_size: user_sp,
-                    heap_start: user_heap,
-                    heap_pt: user_heap,
-                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
-                    task_status: TaskStatus::Ready,
-                    memory_set,
-                    parent: None,
-                    children: Vec::new(),
-                    exit_code: 0,
-                    fd_table: vec![
-                        // 0 -> stdin
-                        Some(Arc::new(Stdin)),
-                        // 1 -> stdout
-                        Some(Arc::new(Stdout)),
-                        // 2 -> stderr
-                        Some(Arc::new(Stdout)),
-                    ],
-                    signals: SignalFlags::empty(),
-                    current_path: String::from("/"),
-                    mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
-                    sigset: SigSet::new(),
-                    resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
-                    stack_top: user_sp,
-                })
-            ,
+            inner: Mutex::new(TaskControlBlockInner {
+                trap_cx_ppn,
+                base_size: user_sp,
+                heap_start: user_heap,
+                heap_pt: user_heap,
+                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set,
+                parent: None,
+                children: Vec::new(),
+                exit_code: 0,
+                fd_table: vec![
+                    // 0 -> stdin
+                    Some(Arc::new(Stdin)),
+                    // 1 -> stdout
+                    Some(Arc::new(Stdout)),
+                    // 2 -> stderr
+                    Some(Arc::new(Stdout)),
+                ],
+                signals: Signals::empty(),
+                sigaction: BTreeMap::new(),
+                trapcx_backup: TrapContext::app_init_context(
+                    entry_point,
+                    user_sp,
+                    KERNEL_SPACE.lock().token(),
+                    kernel_stack_top,
+                    trap_handler as usize,
+                ),
+                current_path: String::from("/"),
+                mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
+                sigset: SigSet::new(),
+                resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
+                stack_top: user_sp,
+            }),
         };
         // 初始化位于该进程应用地址空间中的 Trap 上下文，使得第一次进入用户态的时候时候能正
         // 确跳转到应用入口点并设置好用户栈，同时也保证在 Trap 的时候用户态能正确进入内核态
@@ -271,7 +285,8 @@ impl TaskControlBlock {
                 // if fd.is_some(){
                 //     println!("fd name:{}, available:{}",fd.as_ref().unwrap().get_name(),fd.as_ref().unwrap().available());
                 // }
-                fd.is_some() && !fd.as_ref().unwrap().available()})
+                fd.is_some() && !fd.as_ref().unwrap().available()
+            })
             .take();
 
         // 修改新的地址空间中的 Trap 上下文，将解析得到的应用入口点、用户栈位置以及一些内核的信息进行初始化
@@ -284,7 +299,7 @@ impl TaskControlBlock {
         );
         // 修改 Trap 上下文中的 a0/a1 寄存器
         trap_cx.x[10] = 0; // a0 表示命令行参数的个数
-        // trap_cx.x[11] = argv_base; // a1 则表示 参数字符串首地址数组 的起始地址
+                           // trap_cx.x[11] = argv_base; // a1 则表示 参数字符串首地址数组 的起始地址
     }
 
     /// 用来实现 fork 系统调用，即当前进程 fork 出来一个与之几乎相同的子进程
@@ -294,7 +309,7 @@ impl TaskControlBlock {
         let mmap_area = parent_inner.mmap_area.clone();
         // mmap_area.debug_show();
         // 拷贝用户地址空间
-        let memory_set = MemorySet::from_copy_on_write(&mut parent_inner.memory_set);  // use 4 pages
+        let memory_set = MemorySet::from_copy_on_write(&mut parent_inner.memory_set); // use 4 pages
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 分配一个 PID
         let pid_handle = pid_alloc();
@@ -306,7 +321,7 @@ impl TaskControlBlock {
             tgid = pid_handle.0;
         }
         // 根据 PID 创建一个应用内核栈
-        let kernel_stack = KernelStack::new(&pid_handle);  // use 2 pages
+        let kernel_stack = KernelStack::new(&pid_handle); // use 2 pages
         let kernel_stack_top = kernel_stack.get_top();
         // copy fd table
         let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
@@ -322,25 +337,26 @@ impl TaskControlBlock {
             tgid,
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
-                    trap_cx_ppn,
-                    base_size: parent_inner.base_size,
-                    heap_start: parent_inner.heap_start,
-                    heap_pt: parent_inner.heap_pt,
-                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
-                    task_status: TaskStatus::Ready,
-                    memory_set,
-                    parent: Some(Arc::downgrade(self)),
-                    children: Vec::new(),
-                    exit_code: 0,
-                    fd_table: new_fd_table,
-                    signals: SignalFlags::empty(),
-                    current_path: parent_inner.current_path.clone(),
-                    mmap_area,
-                    sigset: SigSet::new(),
-                    resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
-                    stack_top: parent_inner.stack_top,
-                })
-            ,
+                trap_cx_ppn,
+                base_size: parent_inner.base_size,
+                heap_start: parent_inner.heap_start,
+                heap_pt: parent_inner.heap_pt,
+                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set,
+                parent: Some(Arc::downgrade(self)),
+                children: Vec::new(),
+                exit_code: 0,
+                fd_table: new_fd_table,
+                signals: parent_inner.signals.clone(),
+                sigaction: parent_inner.sigaction.clone(),
+                trapcx_backup: parent_inner.get_trap_cx().clone(),
+                current_path: parent_inner.current_path.clone(),
+                mmap_area,
+                sigset: SigSet::new(),
+                resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
+                stack_top: parent_inner.stack_top,
+            }),
         });
         // 把新生成的进程加入到子进程向量中
         parent_inner.children.push(task_control_block.clone());
@@ -374,7 +390,7 @@ impl TaskControlBlock {
         } else {
             if let Some(pte1) = pte {
                 if pte1.is_valid() {
-                    return -4
+                    return -4;
                 }
             }
         }
@@ -465,7 +481,7 @@ impl TaskControlBlock {
                 .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
 
             // println!("[mmap] push mmap_area start {:?}, writeable:{}", VirtAddr::from(va_top), prot & 0b0010);
-            
+
             inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
             // println!("[DEBUG] mmap: va:{}, len:{}",va_top.0,len);
             // inner.memory_set.debug_show_layout();
@@ -486,7 +502,7 @@ impl TaskControlBlock {
 
         // println!("[Kernel munmap] start munmap start: 0x{:x} len: 0x{:x};", start, len);
         // inner.memory_set.debug_show_layout();
-        
+
         inner.memory_set.remove_area_with_start_vpn(VirtAddr::from(start).into());
 
         // println!("[Kernel munmap] after munmap;");

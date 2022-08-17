@@ -48,7 +48,7 @@ pub fn suspend_current_and_run_next() -> isize{
     // 取出当前正在执行的任务
     let task_cp = current_task().unwrap();
     let mut task_inner = task_cp.inner_exclusive_access();
-    if task_inner.signals.contains(SignalFlags::SIGKILL){
+    if task_inner.signals.contains(Signals::SIGKILL){
         let exit_code = task_inner.exit_code;
         drop(task_inner);
         drop(task_cp);

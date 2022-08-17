@@ -81,14 +81,14 @@ const SYSCALL_RENAMEAT2: usize = 276;
 mod fs;
 mod process;
 mod thread;
-mod sigset;
+mod signal;
 mod socket;
 mod errno;
 
 use fs::*;
 use process::*;
 use thread::*;
-use sigset::*;
+use signal::*;
 use socket::*;
 
 
@@ -128,7 +128,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_EXIT =>     sys_exit(args[0] as i32),
         SYSCALL_EXIT_GROUP=>sys_exit_group(args[0] as i32),
         SYSCALL_SET_TID_ADDRESS=>sys_set_tid_address(args[0] as *mut usize),
-        SYSCALL_FUTEX =>    sys_futex(),
+        SYSCALL_FUTEX =>    0,
         SYSCALL_NANOSLEEP=> sys_nanosleep(args[0] as *const u8),
         SYSCALL_SETITIMER=> 0,
         SYSCALL_CLOCK_GETTIME=> sys_clock_gettime(args[0],args[1] as *mut u64),
@@ -136,7 +136,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_YIELD =>    sys_yield(),
         SYSCALL_KILL =>     sys_kill(args[0], args[1] as u32),
         SYSCALL_TGKILL=>    0,
-        SYSCALL_RT_SIGACTION => sys_rt_sigaction(),
+        SYSCALL_RT_SIGACTION => sys_rt_sigaction(args[0] as isize,args[1] as *mut usize,args[2] as *mut usize),
         SYSCALL_RT_SIGPROCMASK=>sys_rt_sigprocmask(args[0] as i32,args[1] as *const usize,args[2] as *const usize,args[3]),
         SYSCALL_RT_SIGTIMEDWAIT=>sys_rt_sigtimedwait(),
         SYSCALL_RT_SIGRETURN => sys_rt_sigreturn(args[0] as *mut usize),

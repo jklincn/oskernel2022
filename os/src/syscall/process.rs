@@ -1,18 +1,15 @@
 use crate::config::CLOCK_FREQ;
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, heap_usage, frame_usage};
-use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, RUsage,
-    SignalFlags,
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::task::{add_task, current_task, current_user_token, exit_current_and_run_next, suspend_current_and_run_next, RLimit, RUsage};
+use crate::timer::{get_time, get_time_ms, get_timeval, tms, TimeVal, NSEC_PER_SEC};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+    vec::Vec,
 };
-use crate::timer::{get_time_ms, get_timeval, tms, TimeVal, get_time, NSEC_PER_SEC};
-use alloc::string::{String, ToString};
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-use core::arch::asm;
-use core::mem::size_of;
 // use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
-pub use crate::task::{CloneFlags, Utsname, UTSNAME};
+use crate::task::{CloneFlags, Utsname, UTSNAME};
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -98,7 +95,7 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
     //     "[DEBUG] enter sys_fork: flags:{}, stack_ptr:{}, ptid:{}, ctid:{}, newtls:{}",
     //     flags, stack_ptr, _ptid, _ctid, _newtls
     // );
-    let current_task = current_task().unwrap();  
+    let current_task = current_task().unwrap();
     let new_task = current_task.fork(false);
 
     // let tid = new_task.getpid();
@@ -129,8 +126,8 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
     trap_cx.x[10] = 0; // 对于子进程，返回值是0
     add_task(new_task); // 将 fork 到的进程加入任务调度器
     unsafe {
-        asm!("sfence.vma");
-        asm!("fence.i");
+        core::arch::asm!("sfence.vma");
+        core::arch::asm!("fence.i");
     }
     new_pid as isize // 对于父进程，返回值是子进程的 PID
 }
@@ -254,24 +251,6 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     }
 }
 
-pub fn sys_kill(pid: usize, signal: u32) -> isize {
-    // println!("[KERNEL] enter sys_kill: pid:{} send to pid:{}, signal:0x{:x}",current_task().unwrap().pid.0, pid, signal);
-    if signal == 0 {
-        return 0;
-    }
-    let signal = 1 << signal;
-    if let Some(task) = pid2task(pid) {
-        if let Some(flag) = SignalFlags::from_bits(signal) {
-            task.inner_exclusive_access().signals |= flag;
-            0
-        } else {
-            panic!("[DEBUG] sys_kill: unsupported signal");
-        }
-    } else {
-        1
-    }
-}
-
 /// ### 获取系统utsname参数
 /// - 参数
 ///     - `buf`：用户空间存放utsname结构体的缓冲区
@@ -317,7 +296,7 @@ pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, 
         panic!("mmap:len == 0");
     }
     let result_addr = task.mmap(start, len, prot, flags, fd, off);
-    
+
     // task.inner_exclusive_access().memory_set.debug_show_layout();
 
     return result_addr as isize;
@@ -354,7 +333,11 @@ pub fn sys_prlimit64(_pid: usize, resource: usize, new_limit: *const u8, old_lim
     let token = current_user_token();
     // println!("[DEBUG] enter sys_prlimit64: pid:{},resource:{},new_limit:{},old_limit:{}",pid,resource,new_limit as usize,old_limit as usize);
     if old_limit as usize != 0 {
-        let mut buf = UserBuffer::new(translated_byte_buffer(token, old_limit as *const u8, size_of::<RLimit>()));
+        let mut buf = UserBuffer::new(translated_byte_buffer(
+            token,
+            old_limit as *const u8,
+            core::mem::size_of::<RLimit>(),
+        ));
         let task = current_task().unwrap();
         let inner = task.inner_exclusive_access();
         let old_resource = inner.resource[resource];
@@ -366,7 +349,7 @@ pub fn sys_prlimit64(_pid: usize, resource: usize, new_limit: *const u8, old_lim
     }
 
     if new_limit as usize != 0 {
-        let buf = translated_byte_buffer(token, new_limit as *const u8, size_of::<RLimit>())
+        let buf = translated_byte_buffer(token, new_limit as *const u8, core::mem::size_of::<RLimit>())
             .pop()
             .unwrap();
         let addr = buf.as_ptr() as *const _ as usize;
