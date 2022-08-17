@@ -80,14 +80,12 @@ const SYSCALL_RENAMEAT2: usize = 276;
 
 mod fs;
 mod process;
-mod thread;
 mod sigset;
 mod socket;
 mod errno;
 
 use fs::*;
 use process::*;
-use thread::*;
 use sigset::*;
 use socket::*;
 
