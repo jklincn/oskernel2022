@@ -31,6 +31,9 @@ __alltraps:
     # read user stack from sscratch and save it in TrapContext
     csrr t2, sscratch
     sd t2, 2*8(sp)
+    # fsd fs1, 34*8(sp)
+    .half 0xba22
+    .half 0xbe26
     # load kernel_satp into t0
     ld t0, 34*8(sp)
     # load trap_handler into t1
@@ -54,6 +57,9 @@ __restore:
     # restore sstatus/sepc
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)
+    # fld fs1, 34*8(sp)
+    .half 0x3452
+    .half 0x34f2
     csrw sstatus, t0
     csrw sepc, t1
     # restore general purpose registers except x0/sp/tp

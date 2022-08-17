@@ -3,9 +3,9 @@
 #include "stdlib.h"
 #include "stddef.h"
 
-#define SHELL
-// #define TEST
-// #define LMBENCH
+// #define SHELL
+#define TEST
+#define LMBENCH
 
 char *argv_sh[] = {"./busybox","sh", 0};
 char *argv_busybox[] = {"./busybox", "sh", "busybox_testcode.sh", 0};
@@ -43,7 +43,7 @@ char *argv_lmbench27[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "24
 char *argv_lmbench28[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "32", 0};
 char *argv_lmbench29[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "64", 0};
 char *argv_lmbench30[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "96", 0};
-const int lmbench_test_num = 21;
+const int lmbench_test_num = 25;
 char **argv_lmbench[] =
     {
         argv_lmbench0,
@@ -58,23 +58,23 @@ char **argv_lmbench[] =
         // argv_lmbench9,
         argv_lmbench10,
         argv_lmbench11,
-        argv_lmbench12,
+        // argv_lmbench12,
         // argv_lmbench13,
         argv_lmbench14,
         argv_lmbench15,
         argv_lmbench16,
         argv_lmbench17,
-        argv_lmbench18,
+        // argv_lmbench18,
         argv_lmbench19,
         argv_lmbench20,
         argv_lmbench21,
         argv_lmbench22,
-        // argv_lmbench23,
-        // argv_lmbench24,
-        // argv_lmbench25,
-        // argv_lmbench26,
-        // argv_lmbench27,
-        // argv_lmbench28,
+        argv_lmbench23,
+        argv_lmbench24,
+        argv_lmbench25,
+        argv_lmbench26,
+        argv_lmbench27,
+        argv_lmbench28,
         // argv_lmbench29,
         // argv_lmbench30,
 };
