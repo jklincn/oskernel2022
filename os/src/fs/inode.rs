@@ -155,8 +155,9 @@ pub fn init() {
     open("/", "proc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/", "dev", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
+    open("/", "var", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/dev", "misc", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
-    open("/var", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE); // sd卡中已有var文件夹
+    open("/var", "tmp", OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE);
     open("/dev", "null", OpenFlags::O_CREATE);
     open("/dev", "zero", OpenFlags::O_CREATE);
     open("/proc", "mounts", OpenFlags::O_CREATE);

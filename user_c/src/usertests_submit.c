@@ -7,7 +7,7 @@
 #define TEST
 #define LMBENCH
 
-char *argv_sh[] = {"./busybox","sh", 0};
+char *argv_sh[] = {"./busybox", "sh", 0};
 char *argv_busybox[] = {"./busybox", "sh", "busybox_testcode.sh", 0};
 char *argv_lua[] = {"./busybox", "sh", "lua_testcode.sh", 0};
 
@@ -43,7 +43,7 @@ char *argv_lmbench27[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "24
 char *argv_lmbench28[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "32", 0};
 char *argv_lmbench29[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "64", 0};
 char *argv_lmbench30[] = {"./lmbench_all", "lat_ctx", "-P", "1", "-s", "32", "96", 0};
-const int lmbench_test_num = 25;
+const int lmbench_test_num = 28;
 char **argv_lmbench[] =
     {
         argv_lmbench0,
@@ -58,13 +58,13 @@ char **argv_lmbench[] =
         // argv_lmbench9,
         argv_lmbench10,
         argv_lmbench11,
-        // argv_lmbench12,
-        // argv_lmbench13,
+        argv_lmbench12,
+        argv_lmbench13,
         argv_lmbench14,
         argv_lmbench15,
         argv_lmbench16,
         argv_lmbench17,
-        // argv_lmbench18,
+        argv_lmbench18,
         argv_lmbench19,
         argv_lmbench20,
         argv_lmbench21,
@@ -124,6 +124,8 @@ int main()
     }
 #endif
 
+    sys_get_time(&end_tv, 0);
+    printf("[TEST] busybox + lua spend time: %ds %dus\n", end_tv.sec - start_tv.sec, end_tv.usec - start_tv.usec);
 #ifdef LMBENCH
     printf("[TEST] start lmbench test!\n");
 
@@ -137,6 +139,8 @@ int main()
         {
             child_return = -1;
             waitpid(npid, &child_return, 0);
+            sys_get_time(&end_tv, 0);
+            printf("[TEST] lmbench %d spend time: %ds %dus\n", i, end_tv.sec - start_tv.sec, end_tv.usec - start_tv.usec);
         }
     }
 #endif

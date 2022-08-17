@@ -1,5 +1,3 @@
-/// 从功利性角度上讲，做这么多只有1分，时间太不划算了
-/// jk记录于2020-07-23，离考研还有150天 :(
 use crate::mm::{translated_byte_buffer, UserBuffer};
 use crate::task::current_user_token;
 
