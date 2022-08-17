@@ -1,6 +1,6 @@
 use crate::config::CLOCK_FREQ;
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, heap_usage, frame_usage};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, heap_usage, frame_usage, memory_usage};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, RUsage,
     SignalFlags,
@@ -170,7 +170,6 @@ pub fn sys_exec(path: *const u8, mut args: *const usize, mut _envs: *const usize
     // envs_vec.push("LOOP_O=0.2".to_string());
 
     let task = current_task().unwrap();
-    // memory_usage();
     // println!("[kernel] exec name:{},argvs:{:?}", path, args_vec);
     // println!("time start!{}",get_time_ms());
     if path.ends_with(".sh") {
@@ -454,5 +453,11 @@ pub fn sys_getrusage(who: isize, usage: *mut u8) -> isize {
     let mut userbuf = UserBuffer::new(translated_byte_buffer(token, usage, core::mem::size_of::<RUsage>()));
     let rusage = RUsage::new();
     userbuf.write(rusage.as_bytes());
+    0
+}
+
+pub fn sys_set_tid_address(tidptr: *mut usize) -> isize{
+    let token = current_user_token();
+    *translated_refmut(token, tidptr) = 0 as usize;
     0
 }
