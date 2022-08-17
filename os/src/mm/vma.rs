@@ -97,15 +97,6 @@ impl MmapArea {
         }
     }
 
-    pub fn mmap_type_of(&self, addr: usize) -> core::option::Option<MmapFlags> {
-        for space in self.mmap_set.iter(){
-            if space.oaddr.0 <= addr && addr <= space.oaddr.0 + space.length {
-                return MmapFlags::from_bits(space.flags);
-            }
-        }
-        return None;
-    }
-
     #[allow(unused)]
     pub fn debug_show(&self) {
         println!("------------------MmapArea Layout-------------------");
@@ -116,7 +107,19 @@ impl MmapArea {
         println!("----------------------------------------------------");
     }
 
-    // pub fn copy_from_exist(src:&Self)->Self{}
+    pub fn reduce_mmap_range(&mut self, addr:usize, len:usize) {
+        for space in self.mmap_set.iter_mut() {
+            if addr == space.oaddr.0 + space.length - len {
+                // 缩减右边界
+                space.new_len(space.length - len);
+                if self.mmap_top.0 == space.oaddr.0 + space.length + len {
+                    self.mmap_top.0 -= len;
+                }
+                return;
+            }
+        }
+    }
+
 }
 
 /// ### mmap 块
@@ -160,6 +163,10 @@ impl MmapSpace{
         offset: usize,
     ) -> Self {
         Self {oaddr, length, prot, flags, valid, fd, offset}
+    }
+
+    pub fn new_len(&mut self, len:usize) {
+        self.length = len;
     }
 
     pub fn lazy_map_page(&mut self, page_start: VirtAddr, fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>, token: usize) {
