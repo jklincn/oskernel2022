@@ -5,7 +5,7 @@
 
 // #define SHELL
 #define TEST
-#define LMBENCH
+// #define LMBENCH
 
 char *argv_sh[] = {"./busybox", "sh", 0};
 char *argv_busybox[] = {"./busybox", "sh", "busybox_testcode.sh", 0};

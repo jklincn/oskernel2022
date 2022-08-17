@@ -926,12 +926,20 @@ impl MapArea {
         let mut data_len = data_len;
         // println!("data_len:{}, page_offset:{}",data_len,page_offset);
         loop {
+            let mut data = Vec::new();
+            let mut data_slice = data.as_slice();
+            if elf_file.name() == "busybox" && data_start == 0 && offset < 95 * PAGE_SIZE{
+                let busybox_slice = BUSYBOX.as_slice();
+                data_slice = &busybox_slice[data_start + offset..data_start + offset + PAGE_SIZE]
+            }else{
+                data = elf_file.read_vec((data_start + offset) as isize, data_len.min(PAGE_SIZE));
+                // println!("data:{:?}",data);
+                data_slice = data.as_slice();
+            }
             // println!("current_vpn:0x{:x}, offset:{}",current_vpn.0,offset);
             // println!("data_len.min(PAGE_SIZE): {}",data_len.min(PAGE_SIZE));
-            let data = elf_file.read_vec((data_start + offset) as isize, data_len.min(PAGE_SIZE));
-            // println!("data:{:?}",data);
-            let data_silce = data.as_slice();
-            let src = &data_silce[0..data_len.min(PAGE_SIZE - page_offset)];
+
+            let src = &data_slice[0..data_len.min(PAGE_SIZE - page_offset)];
             let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[page_offset..page_offset + src.len()];
             dst.copy_from_slice(src);
             offset += PAGE_SIZE - page_offset;
@@ -944,4 +952,14 @@ impl MapArea {
             current_vpn.step();
         }
     }
+}
+
+lazy_static! {
+    pub static ref BUSYBOX: Vec<u8> = {
+        if let Some(app_inode) = open("/", "busybox", OpenFlags::O_RDONLY) {
+            app_inode.read_vec(0,384*1024)
+        } else {
+            panic!("can't find busybox");
+        }
+    };
 }

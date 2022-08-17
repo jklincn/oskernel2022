@@ -75,6 +75,9 @@ impl OSInode {
         }
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
+        if len == 384*1024{
+            v.reserve(384*1024);
+        }
         loop {
             let read_size = inner.inode.read_at(inner.offset, &mut buffer);
             if read_size == 0 {
