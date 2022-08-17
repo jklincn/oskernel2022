@@ -954,8 +954,8 @@ impl MapArea {
             let mut data = Vec::new();
             let mut data_slice = data.as_slice();
 
-            if elf_file.name() == "lmbench_all" && data_start == 0 && offset < 95 * PAGE_SIZE{
-                let busybox_slice = LMBENCH_ALL.as_slice();
+            if elf_file.name() == "busybox" && data_start == 0 && offset < 95 * PAGE_SIZE{
+                let busybox_slice = BUSYBOX.as_slice();
                 data_slice = &busybox_slice[data_start + offset..data_start + offset + PAGE_SIZE]
             }else{
                 data = elf_file.read_vec((data_start + offset) as isize, data_len.min(PAGE_SIZE));
@@ -981,8 +981,8 @@ impl MapArea {
 }
 
 lazy_static! {
-    pub static ref LMBENCH_ALL: Vec<u8> = {
-        if let Some(app_inode) = open("/", "lmbench_all", OpenFlags::O_RDONLY) {
+    pub static ref BUSYBOX: Vec<u8> = {
+        if let Some(app_inode) = open("/", "busybox", OpenFlags::O_RDONLY) {
             app_inode.read_vec(0,384*1024)
         } else {
             panic!("can't find busybox");
