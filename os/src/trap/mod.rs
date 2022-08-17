@@ -109,7 +109,7 @@ pub fn trap_handler() -> ! {
 
             if lazy != 0 { 
                 current_add_signal(SignalFlags::SIGSEGV);
-                current_task().unwrap().inner_exclusive_access().memory_set.debug_show_layout();
+                // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_layout();
                 // current_task().unwrap().inner_exclusive_access().memory_set.debug_show_data(0x0060000000usize.into());
                 // panic!("lazy != 0: va:0x{:x}",va.0);
             }
@@ -162,7 +162,7 @@ pub fn trap_handler() -> ! {
     }
     // check signals
     if let Some((errno, msg)) = check_signals_of_current() {
-        // println!("[kernel] {}", msg);
+        println!("[kernel] {}", msg);
         exit_current_and_run_next(errno);
     }
     trap_return();

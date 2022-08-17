@@ -123,6 +123,7 @@ impl MemorySet {
     /// 还可以可选性地在那些被映射到的物理页帧上写入一些初始化数据
     /// - data:(osinode,offset,len,page_offset)
     fn push(&mut self, mut map_area: MapArea, data: Option<(Arc<OSInode>, usize,usize, usize)>) {
+        // println!("[KERNEL] push maparea start {:?}", map_area.start_va);
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             // 写入初始化数据，如果数据存在
@@ -566,7 +567,6 @@ impl MemorySet {
     }
 
     pub fn check_va_range(& self, start_va:VirtAddr, len:usize) -> bool{
-        // println!("[check_va_range] {:?}", start_va);
         let end_va = VirtAddr::from(start_va.0 + len);
         for area in self.areas.iter() {
             if area.start_va <= start_va && end_va <= area.end_va {
@@ -581,9 +581,17 @@ impl MemorySet {
         if self.heap_chunk.start_va <= start_va && end_va <= self.heap_chunk.end_va {
             return true;
         }
-        // println!("[WARNING] {:?} not valid", start_va);
-        // self.debug_show_layout();
         return false;
+    }
+
+    /// ### 缩减 mmap逻辑段范围
+    /// 注意：缩减的部分必须使逻辑段的边界(目前只支持右边界)
+    pub fn reduce_chunk_range (&mut self, addr:usize, new_len:usize) {
+        for chunk in self.mmap_chunks.iter_mut() {
+            if chunk.start_va.0 == addr || addr + new_len == chunk.end_va.0 {
+                chunk.set_mmap_range(chunk.start_va.into(), (chunk.end_va.0 - new_len).into());
+            }
+        }
     }
     #[allow(unused)]
     pub fn debug_show_data(&self, va: VirtAddr) {
@@ -635,6 +643,7 @@ impl MemorySet {
     #[allow(unused)]
     pub fn debug_show_layout(&self) {
         println!("-----------------------MM Layout-----------------------");
+        println!{"PID:{}",crate::task::current_task().unwrap().pid.0};
         for area in &self.areas {
             print!(
                 "MapArea  : 0x{:010x}--0x{:010x} len:0x{:08x} ",
@@ -742,10 +751,23 @@ impl ChunkArea {
             end_va: end,
         }
     }
+
+    pub fn set_mmap_range(&mut self, start: VirtAddr, end: VirtAddr) {
+        self.start_va = start;
+        self.end_va = end;
+        for (idx, vpn) in self.vpn_table.clone().iter_mut().enumerate() {
+            if VirtAddr::from(*vpn) >= self.end_va {
+                self.vpn_table.remove(idx);
+                // todo:删除 data_frame 中超范围的物理页帧
+            }
+        }
+    }
+
     pub fn push_vpn(&mut self, vpn: VirtPageNum, page_table: &mut PageTable) {
         self.vpn_table.push(vpn);
         self.map_one(page_table, vpn);
     }
+
     pub fn from_another(another: &ChunkArea) -> Self {
         Self {
             vpn_table: Vec::new(),
@@ -756,6 +778,7 @@ impl ChunkArea {
             end_va: another.end_va,
         }
     }
+
     // Alloc and map one page
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
@@ -782,6 +805,7 @@ impl ChunkArea {
     //         self.map_one(page_table, vpn);
     //     }
     // }
+
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_table.clone() {
             page_table.unmap(vpn);

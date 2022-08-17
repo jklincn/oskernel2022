@@ -1,5 +1,5 @@
 use super::signal::SigSet;
-use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
+use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER, current_task};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout, OSInode};
@@ -383,7 +383,7 @@ impl TaskControlBlock {
         } else if va >= mmap_start && va < mmap_end {
             self.lazy_mmap(va, is_load)
         } else {
-            println!("[check_lazy] va: 0x{:x}", va.0);
+            println!("[check_lazy] {:?}", va);
             println!("[check_lazy] mmap_start: 0x{:x}", mmap_start.0);
             println!("[check_lazy] mmap_end: 0x{:x}", mmap_end.0);
             println!("[check_lazy] current vma layout:");
@@ -433,6 +433,7 @@ impl TaskControlBlock {
     ///     - `off`: 偏移量
     /// - 返回值：从文件的哪个位置开始映射
     pub fn mmap(&self, start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> usize {
+        // println!("[DEBUG] mmap start: 0x{:x}, len: 0x{:x}, port: 0b{:b}, flags: 0x{:x}, fd:{}, off:0x{:x}", start, len, prot, flags, fd, off);
         if start % PAGE_SIZE != 0 {
             panic!("mmap: start_va not aligned");
         }
@@ -440,45 +441,26 @@ impl TaskControlBlock {
         let mut inner = self.inner_exclusive_access();
         let fd_table = inner.fd_table.clone();
         let token = inner.get_user_token();
+
+        // "prot<<1" 右移一位以符合 MapPermission 的权限定义
+        // "1<<4" 增加 MapPermission::U 权限
+        let map_flags = (((prot & 0b111) << 1) + (1 << 4)) as u8;
+        if flags & 0x10 == 0x10 { // 处理 MAP_FIXED
+            inner.memory_set.reduce_chunk_range(start, len);
+            inner.mmap_area.reduce_mmap_range(start, len);
+        }
+
         let va_top = inner.mmap_area.get_mmap_top();
         let end_va = VirtAddr::from(va_top.0 + len);
+        
+        inner
+            .memory_set
+            .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
+        
+        inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
+        drop(inner);
 
-        // "prot<<1" is equal to meaning of "MapPermission"
-        // "1<<4" means user
-        let map_flags = (((prot & 0b111) << 1) + (1 << 4)) as u8;
-
-        let mut startvpn = start / PAGE_SIZE;
-
-        if start != 0 {
-            // "Start" va Already mapped
-            while startvpn < (start + len) / PAGE_SIZE {
-                if inner.memory_set.set_pte_flags(startvpn.into(), map_flags as usize) == -1 {
-                    panic!("mmap: start_va not mmaped");
-                }
-                startvpn += 1;
-            }
-            return start;
-        } else {
-            // "Start" va not mapped
-            inner
-                .memory_set
-                .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
-
-            // println!("[mmap] push mmap_area start {:?}, writeable:{}", VirtAddr::from(va_top), prot & 0b0010);
-            
-            inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
-            // println!("[DEBUG] mmap: va:{}, len:{}",va_top.0,len);
-            // inner.memory_set.debug_show_layout();
-            // println!("ppn: 0x{:x}", inner.memory_set.translate(va_top.into()).unwrap().ppn().0);
-            // inner.memory_set.debug_show_data(va_top);
-            //-------------------------------------
-
-            drop(inner);
-            // super::processor::current_task().unwrap().check_lazy(va_top, true);
-            // self.check_lazy(va_top, true);
-
-            va_top.0
-        }
+        va_top.0
     }
 
     pub fn munmap(&self, start: usize, len: usize) -> isize {

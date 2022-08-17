@@ -3,7 +3,7 @@ use crate::fs::{open, OpenFlags};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, heap_usage, frame_usage, memory_usage};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, RUsage,
-    SignalFlags,
+    SignalFlags, current_add_signal,
 };
 use crate::timer::{get_time_ms, get_timeval, tms, TimeVal, get_time, NSEC_PER_SEC};
 use alloc::string::{String, ToString};
@@ -285,8 +285,6 @@ pub fn sys_uname(buf: *const u8) -> isize {
     0
 }
 
-// not support full flags: MAP_FIXED
-
 /// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
 /// - 参数
 ///     - `start`, `len`：映射空间起始地址及长度，起始地址必须4k对齐
@@ -316,13 +314,9 @@ pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, 
         panic!("mmap:len == 0");
     }
     let result_addr = task.mmap(start, len, prot, flags, fd, off);
-    
-    // task.inner_exclusive_access().memory_set.debug_show_layout();
-
     return result_addr as isize;
 }
 
-//use crate::mm::HEAP_ALLOCATOR;
 pub fn sys_munmap(start: usize, len: usize) -> isize {
     let task = current_task().unwrap();
     let ret = task.munmap(start, len);
