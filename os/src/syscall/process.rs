@@ -1,18 +1,19 @@
 use crate::config::CLOCK_FREQ;
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, heap_usage, frame_usage, memory_usage};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, RUsage,
-    SignalFlags, current_add_signal,
+    SignalFlags,
 };
-use crate::timer::{get_time_ms, get_timeval, tms, TimeVal, get_time, NSEC_PER_SEC};
-use alloc::string::{String, ToString};
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-use core::arch::asm;
+use crate::timer::{get_time, get_time_ms, get_timeval, tms, TimeVal, NSEC_PER_SEC};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+    vec::Vec,
+};
 use core::mem::size_of;
-// use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 pub use crate::task::{CloneFlags, Utsname, UTSNAME};
+// use simple_fat32::{CACHEGET_NUM,CACHEHIT_NUM};
 
 /// 结束进程运行然后运行下一程序
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -98,7 +99,7 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
     //     "[DEBUG] enter sys_fork: flags:{}, stack_ptr:{}, ptid:{}, ctid:{}, newtls:{}",
     //     flags, stack_ptr, _ptid, _ctid, _newtls
     // );
-    let current_task = current_task().unwrap();  
+    let current_task = current_task().unwrap();
     let new_task = current_task.fork(false);
 
     // let tid = new_task.getpid();
@@ -129,8 +130,8 @@ pub fn sys_fork(flags: usize, stack_ptr: usize, _ptid: usize, _ctid: usize, _new
     trap_cx.x[10] = 0; // 对于子进程，返回值是0
     add_task(new_task); // 将 fork 到的进程加入任务调度器
     unsafe {
-        asm!("sfence.vma");
-        asm!("fence.i");
+        core::arch::asm!("sfence.vma");
+        core::arch::asm!("fence.i");
     }
     new_pid as isize // 对于父进程，返回值是子进程的 PID
 }
@@ -450,7 +451,7 @@ pub fn sys_getrusage(who: isize, usage: *mut u8) -> isize {
     0
 }
 
-pub fn sys_set_tid_address(tidptr: *mut usize) -> isize{
+pub fn sys_set_tid_address(tidptr: *mut usize) -> isize {
     let token = current_user_token();
     *translated_refmut(token, tidptr) = 0 as usize;
     0

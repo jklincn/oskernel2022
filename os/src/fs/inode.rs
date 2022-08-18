@@ -75,8 +75,8 @@ impl OSInode {
         }
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
-        if len == 384*1024{
-            v.reserve(384*1024);
+        if len == 96 * 4096{    // 防止 v 占用空间过度扩大
+            v.reserve(96 * 4096); 
         }
         loop {
             let read_size = inner.inode.read_at(inner.offset, &mut buffer);
@@ -173,9 +173,14 @@ pub fn init() {
 }
 
 static mut LAYER: usize = 0;
-
 pub fn list_apps(dir: Arc<VFile>) {
     for app in dir.ls().unwrap() {
+        // 不打印initproc，事实上它也在task::new之后删除了
+        unsafe{
+            if LAYER == 0 && app.0 == "initproc"{
+                continue;
+            }
+        }
         if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
             unsafe {
@@ -190,7 +195,7 @@ pub fn list_apps(dir: Arc<VFile>) {
                     print!("----");
                 }
             }
-            println!("{}/", app.0);
+            info!("{}/", app.0);
             let dir = open(dir.name(), app.0.as_str(), OpenFlags::O_RDONLY).unwrap();
             let inner = dir.inner.lock();
             let inode = inner.inode.clone();

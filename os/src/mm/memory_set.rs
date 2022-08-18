@@ -1,28 +1,14 @@
-/// # 地址空间模块
-/// `os/src/mm/memory_set.rs`
-/// ## 实现功能
-/// ```
-/// pub static ref KERNEL_SPACE: Arc<UP&SafeCell<MemorySet>>
-/// pub struct MemorySet
-/// pub struct MapArea
-/// ```
-//
-
-use super::frame_allocator::{frame_alloc, FrameTracker, frame_add_ref, enquire_refcount};
-use super::{heap_usage, frame_usage};
+use super::address::{PhysAddr, PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum};
+use super::frame_allocator::{enquire_refcount, frame_add_ref, frame_alloc, FrameTracker};
 use super::page_table::{PTEFlags, PageTable, PageTableEntry};
-use super::address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum, VPNRange};
+#[allow(unused)]
+use super::{frame_usage, heap_usage};
 use crate::config::*;
-use crate::fs::{OSInode, OpenFlags, open};
-use crate::task::{AuxEntry, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM, AT_BASE};
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-use core::arch::asm;
+use crate::fs::{open, OSInode, OpenFlags};
+use crate::task::{AuxEntry, AT_BASE, AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
+use alloc::{sync::Arc, vec::Vec};
 use lazy_static::*;
-use riscv::register::satp;
 use spin::Mutex;
-
-// 动态链接部分
 
 extern "C" {
     fn stext();
@@ -79,7 +65,8 @@ impl MemorySet {
                 MapType::Framed,
                 MapPermission::R | MapPermission::W | MapPermission::U,
                 0.into(),
-                0.into()),
+                0.into(),
+            ),
             mmap_chunks: Vec::new(),
         }
     }
@@ -122,7 +109,7 @@ impl MemorySet {
     /// - 如果是以 Framed 方式映射到物理内存,
     /// 还可以可选性地在那些被映射到的物理页帧上写入一些初始化数据
     /// - data:(osinode,offset,len,page_offset)
-    fn push(&mut self, mut map_area: MapArea, data: Option<(Arc<OSInode>, usize,usize, usize)>) {
+    fn push(&mut self, mut map_area: MapArea, data: Option<(Arc<OSInode>, usize, usize, usize)>) {
         // println!("[KERNEL] push maparea start {:?}", map_area.start_va);
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
@@ -167,12 +154,6 @@ impl MemorySet {
         // map trampoline
         memory_set.map_trampoline();
         // map kernel sections
-        // println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
-        // println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
-        // println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
-        // println!(".bss [{:#x}, {:#x})", sbss_with_stack as usize, ebss as usize);
-        // // 总体思路：通过Linker.ld中的标签划分内核空间为不同的区块，为每个区块采用恒等映射的方式生成逻辑段，压入地址空间
-        // println!("mapping .text section");
         memory_set.push(
             MapArea::new(
                 (stext as usize).into(),
@@ -182,7 +163,6 @@ impl MemorySet {
             ),
             None,
         );
-        // println!("mapping .rodata section");
         memory_set.push(
             MapArea::new(
                 (srodata as usize).into(),
@@ -192,7 +172,6 @@ impl MemorySet {
             ),
             None,
         );
-        // println!("mapping .data section");
         memory_set.push(
             MapArea::new(
                 (sdata as usize).into(),
@@ -202,7 +181,6 @@ impl MemorySet {
             ),
             None,
         );
-        // println!("mapping .bss section");
         memory_set.push(
             MapArea::new(
                 (sbss_with_stack as usize).into(),
@@ -212,7 +190,6 @@ impl MemorySet {
             ),
             None,
         );
-        // println!("mapping physical memory");
         memory_set.push(
             MapArea::new(
                 (ekernel as usize).into(),
@@ -222,7 +199,6 @@ impl MemorySet {
             ),
             None,
         );
-        // println!("mapping memory-mapped registers");
         for pair in MMIO {
             // 恒等映射 内存映射 I/O (MMIO, Memory-Mapped I/O) 地址到内核地址空间
             memory_set.push(
@@ -239,10 +215,6 @@ impl MemorySet {
     }
 
     /// ### 从 ELF 格式可执行文件解析出各数据段并对应生成应用的地址空间
-    /// - 返回值
-    ///     - Self
-    ///     - 用户栈顶地址
-    ///     - 程序入口地址
     pub fn load_elf(elf_file: Arc<OSInode>, auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
         let mut memory_set = Self::new_bare();
         // 将跳板插入到应用地址空间
@@ -297,11 +269,16 @@ impl MemorySet {
                     //     map_perm |= MapPermission::X;
                     // }
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
-                    // println!("start va:0x{:x}, end va:0x{:x}",start_va.0,end_va.0);
-                    // println!("{:?}",map_area.vpn_range);
-
                     max_end_vpn = map_area.vpn_range.get_end();
-                    memory_set.push(map_area, Some((elf_file.clone(), ph.offset() as usize, ph.file_size() as usize, start_va.page_offset())));
+                    memory_set.push(
+                        map_area,
+                        Some((
+                            elf_file.clone(),
+                            ph.offset() as usize,
+                            ph.file_size() as usize,
+                            start_va.page_offset(),
+                        )),
+                    );
                 }
                 _ => continue,
             }
@@ -332,7 +309,15 @@ impl MemorySet {
                     let end_va: VirtAddr = (ph.virtual_addr() as usize + ph.mem_size() as usize + base_address).into();
                     let map_perm = MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X;
                     let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
-                    memory_set.push(map_area, Some((interpreter_file.clone(), ph.offset() as usize, ph.file_size() as usize, start_va.page_offset())));
+                    memory_set.push(
+                        map_area,
+                        Some((
+                            interpreter_file.clone(),
+                            ph.offset() as usize,
+                            ph.file_size() as usize,
+                            start_va.page_offset(),
+                        )),
+                    );
                 }
             }
         } else {
@@ -354,7 +339,7 @@ impl MemorySet {
             None,
         );
 
-        // 分配用户堆
+        // 分配用户堆，lazy加载
         let mut user_heap_bottom: usize = user_stack_top;
         user_heap_bottom += PAGE_SIZE; //放置一个保护页
         let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
@@ -364,7 +349,7 @@ impl MemorySet {
             user_heap_bottom.into(),
             user_heap_top.into(),
         );
-        
+
         if elf_interpreter {
             (memory_set, user_stack_top, user_heap_bottom, interp_entry_point)
         } else {
@@ -374,15 +359,16 @@ impl MemorySet {
 
     /// 以COW的方式复制一个地址空间
     pub fn from_copy_on_write(user_space: &mut MemorySet) -> MemorySet {
-        let mut new_memory_set = Self::new_bare();    // use 1 page (page_table root)
+        let mut new_memory_set = Self::new_bare(); // use 1 page (page_table root)
 
         // This part is not for Copy on Write.
         // Including:   Trampoline
         //              Trap_Context
-        new_memory_set.map_trampoline();  // use 2 pages (page_table create ptes)
-        for area in user_space.areas.iter() {   // use 1 page
+        new_memory_set.map_trampoline(); // use 2 pages (page_table create ptes)
+        for area in user_space.areas.iter() {
+            // use 1 page
             let start_vpn = area.vpn_range.get_start();
-            if start_vpn == VirtAddr::from(TRAP_CONTEXT).floor()  {
+            if start_vpn == VirtAddr::from(TRAP_CONTEXT).floor() {
                 let new_area = MapArea::from_another(area);
                 new_memory_set.push(new_area, None);
                 for vpn in area.vpn_range {
@@ -395,7 +381,7 @@ impl MemorySet {
             break;
         }
         // This part is for copy on write
-        let parent_areas = & user_space.areas;
+        let parent_areas = &user_space.areas;
         let parent_page_table = &mut user_space.page_table;
         for area in parent_areas.iter() {
             let start_vpn = area.vpn_range.get_start();
@@ -468,11 +454,9 @@ impl MemorySet {
         if enquire_refcount(former_ppn) == 1 {
             self.page_table.reset_cow(vpn);
             // change the flags of the src_pte
-            self.page_table.set_flags(
-                vpn, 
-                self.page_table.translate(vpn).unwrap().flags() | PTEFlags::W
-            );
-            return 0
+            self.page_table
+                .set_flags(vpn, self.page_table.translate(vpn).unwrap().flags() | PTEFlags::W);
+            return 0;
         }
         let frame = frame_alloc().unwrap();
         let ppn = frame.ppn;
@@ -517,7 +501,7 @@ impl MemorySet {
         -1
     }
 
-    pub fn lazy_alloc_heap (&mut self, vpn: VirtPageNum) -> isize {
+    pub fn lazy_alloc_heap(&mut self, vpn: VirtPageNum) -> isize {
         self.heap_chunk.push_vpn(vpn, &mut self.page_table);
         0
     }
@@ -527,8 +511,8 @@ impl MemorySet {
     pub fn activate(&self) {
         let satp = self.page_table.token();
         unsafe {
-            satp::write(satp);
-            asm!("sfence.vma"); // 将快表清空
+            riscv::register::satp::write(satp);
+            core::arch::asm!("sfence.vma"); // 将快表清空
         }
     }
 
@@ -540,9 +524,9 @@ impl MemorySet {
     // WARNING: This function causes inconsistency between pte flags and
     //          map_area flags.
     // return -1 if not found, 0 if found
-    pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: usize) -> isize {
-        self.page_table.set_pte_flags(vpn, flags)
-    }
+    // pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: usize) -> isize {
+    //     self.page_table.set_pte_flags(vpn, flags)
+    // }
 
     /// ### 回收应用地址空间
     /// 将地址空间中的逻辑段列表 areas 清空（即执行 Vec 向量清空），
@@ -566,7 +550,7 @@ impl MemorySet {
         self.mmap_chunks.push(new_chunk_area);
     }
 
-    pub fn check_va_range(& self, start_va:VirtAddr, len:usize) -> bool{
+    pub fn check_va_range(&self, start_va: VirtAddr, len: usize) -> bool {
         let end_va = VirtAddr::from(start_va.0 + len);
         for area in self.areas.iter() {
             if area.start_va <= start_va && end_va <= area.end_va {
@@ -586,147 +570,12 @@ impl MemorySet {
 
     /// ### 缩减 mmap逻辑段范围
     /// 注意：缩减的部分必须使逻辑段的边界(目前只支持右边界)
-    pub fn reduce_chunk_range (&mut self, addr:usize, new_len:usize) {
+    pub fn reduce_chunk_range(&mut self, addr: usize, new_len: usize) {
         for chunk in self.mmap_chunks.iter_mut() {
             if chunk.start_va.0 == addr || addr + new_len == chunk.end_va.0 {
                 chunk.set_mmap_range(chunk.start_va.into(), (chunk.end_va.0 - new_len).into());
             }
         }
-    }
-    #[allow(unused)]
-    pub fn debug_show_data(&self, va: VirtAddr) {
-        println!("-----------------------PTE Data-----------------------");
-        println!("MemorySet token: 0x{:x}", self.token());
-        let findpte = self.translate(va.floor());
-        if let Some(pte) = findpte {
-            println!("VirtAddr 0x{:x} ", va.0);
-            println!("ppn:     0x{:x}---", pte.ppn().0);
-            println!("pte_raw: 0b{:b}", pte.bits);
-            println!("valid   :   {}", pte.is_valid());
-            println!("executable: {}", pte.executable());
-            println!("readable:   {}", pte.readable());
-            println!("writable:   {}", pte.writable());
-            println!("COW     :   {}", pte.is_cow());
-        } else {
-            println!("VirtAddr 0x{:x} is not valied", va.0);
-            println!("------------------------------------------------------");
-            return;
-        }
-        println!("------------------------------------------------------");
-
-        if let Some(pte) = findpte{
-            if pte.is_valid() {
-                unsafe {
-                    let pa = findpte.unwrap().ppn().0 << 12;
-                    let raw_data = core::slice::from_raw_parts(pa as *const usize, 512);
-                    let mut i = 0;
-                    while i < 512 {
-                        print!("offset:{:03x}\t0x{:016x}", (i) * 8, raw_data[i]);
-                        print!("\t");
-                        print!("offset:{:03x}\t0x{:016x}", (i + 1) * 8, raw_data[i + 1]);
-                        print!("\t");
-                        print!("offset:{:03x}\t0x{:016x}", (i + 2) * 8, raw_data[i + 2]);
-                        print!("\t");
-                        println!("offset:{:03x}\t0x{:016x}", (i + 3) * 8, raw_data[i + 3]);
-                        i += 4;
-                    }
-                }
-            } else {
-                println!("VirtAddr 0x{:x} is not valied", va.0);
-                println!("------------------------------------------------------");
-                return;
-            }
-        }
-        
-    }
-
-    #[allow(unused)]
-    pub fn debug_show_layout(&self) {
-        println!("-----------------------MM Layout-----------------------");
-        println!{"PID:{}",crate::task::current_task().unwrap().pid.0};
-        for area in &self.areas {
-            print!(
-                "MapArea  : 0x{:010x}--0x{:010x} len:0x{:08x} ",
-                area.start_va.0,
-                area.end_va.0,
-                area.end_va.0 - area.start_va.0
-            );
-            if area.map_perm.is_user() {
-                print!("U");
-            } else {
-                print!("-");
-            };
-            if area.map_perm.is_read() {
-                print!("R");
-            } else {
-                print!("-");
-            };
-            if area.map_perm.is_write() {
-                print!("W");
-            } else {
-                print!("-");
-            };
-            if area.map_perm.is_execute() {
-                println!("X");
-            } else {
-                println!("-");
-            };
-        }
-        for mmap_chunk in &self.mmap_chunks {
-            print!(
-                "ChunkArea: 0x{:010x}--0x{:010x} len:0x{:08x} ",
-                mmap_chunk.start_va.0,
-                mmap_chunk.end_va.0,
-                mmap_chunk.end_va.0 - mmap_chunk.start_va.0
-            );
-            if mmap_chunk.map_perm.is_user() {
-                print!("U");
-            } else {
-                print!("-");
-            };
-            if mmap_chunk.map_perm.is_read() {
-                print!("R");
-            } else {
-                print!("-");
-            };
-            if mmap_chunk.map_perm.is_write() {
-                print!("W");
-            } else {
-                print!("-");
-            };
-            if mmap_chunk.map_perm.is_execute() {
-                println!("X");
-            } else {
-                println!("-");
-            };
-        }
-        print!(
-            "HeapArea : 0x{:010x}--0x{:010x} len:0x{:08x} ",
-            self.heap_chunk.start_va.0,
-            self.heap_chunk.end_va.0,
-            self.heap_chunk.end_va.0 - self.heap_chunk.start_va.0
-        );
-        if self.heap_chunk.map_perm.is_user() {
-            print!("U");
-        } else {
-            print!("-");
-        };
-        if self.heap_chunk.map_perm.is_read() {
-            print!("R");
-        } else {
-            print!("-");
-        };
-        if self.heap_chunk.map_perm.is_write() {
-            print!("W");
-        } else {
-            print!("-");
-        };
-        if self.heap_chunk.map_perm.is_execute() {
-            println!("X");
-        } else {
-            println!("-");
-        };
-        println!("-------------------------------------------------------");
     }
 }
 
@@ -817,7 +666,7 @@ impl ChunkArea {
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum MapType {
     Identical, // 恒等映射，一般用在内核空间（空间已分配）
-    Framed, // 对于每个虚拟页面都有一个新分配的物理页帧与之对应，虚地址与物理地址的映射关系是相对随机的
+    Framed,    // 对于每个虚拟页面都有一个新分配的物理页帧与之对应，虚地址与物理地址的映射关系是相对随机的
 }
 
 bitflags! {
@@ -914,11 +763,9 @@ impl MapArea {
             }
             MapType::Framed => {
                 // 获取一个物理页帧
-                // println!("map_one");
                 let frame = frame_alloc().expect("out of memory");
                 ppn = frame.ppn;
-                // println!("current vpn:0x{:x},get ppn:0x{:x}",vpn.0,ppn.0);
-                // 将vpn和分配到的物理页帧配对
+                // 将物理页帧生命周期捆绑到data_frames中，从而进程结束时可以自动释放
                 self.data_frames.push(frame);
             }
         }
@@ -930,7 +777,6 @@ impl MapArea {
     /// 在多级页表中为逻辑块分配空间
     pub fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
-            // println!("map vpm:0x{:x}",vpn.0);
             self.map_one(page_table, vpn);
         }
     }
@@ -942,28 +788,33 @@ impl MapArea {
         }
     }
 
-    pub fn copy_data(&mut self, page_table: &mut PageTable, elf_file: Arc<OSInode>, data_start:usize, data_len: usize, page_offset: usize) {
+    pub fn copy_data(
+        &mut self,
+        page_table: &mut PageTable,
+        elf_file: Arc<OSInode>,
+        data_start: usize,
+        data_len: usize,
+        page_offset: usize,
+    ) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut offset: usize = 0;
         let mut page_offset: usize = page_offset;
         let mut current_vpn = self.vpn_range.get_start();
         let mut data_len = data_len;
-        // println!("data_len:{}, page_offset:{}",data_len,page_offset);
-        // println!("elf_file.name:{}",elf_file.name());
         loop {
             let mut data = Vec::new();
             let mut data_slice = data.as_slice();
+            _ = data_slice; // 消除 value never read 警告
 
-            if elf_file.name() == "busybox" && data_start == 0 && offset < 95 * PAGE_SIZE{
+            // 利用部分堆空间对 busybox 做部分缓存加快读取速度
+            if elf_file.name() == "busybox" && data_start == 0 && offset < 95 * PAGE_SIZE {
                 let busybox_slice = BUSYBOX.as_slice();
                 data_slice = &busybox_slice[data_start + offset..data_start + offset + PAGE_SIZE]
-            }else{
+            } else {
+                // 正常读取
                 data = elf_file.read_vec((data_start + offset) as isize, data_len.min(PAGE_SIZE));
-                // println!("data:{:?}",data);
                 data_slice = data.as_slice();
             }
-            // println!("current_vpn:0x{:x}, offset:{}",current_vpn.0,offset);
-            // println!("data_len.min(PAGE_SIZE): {}",data_len.min(PAGE_SIZE));
 
             let src = &data_slice[0..data_len.min(PAGE_SIZE - page_offset)];
             let dst = &mut page_table.translate(current_vpn).unwrap().ppn().get_bytes_array()[page_offset..page_offset + src.len()];
@@ -983,9 +834,146 @@ impl MapArea {
 lazy_static! {
     pub static ref BUSYBOX: Vec<u8> = {
         if let Some(app_inode) = open("/", "busybox", OpenFlags::O_RDONLY) {
-            app_inode.read_vec(0,384*1024)
+            app_inode.read_vec(0, 96 * 4096)
         } else {
             panic!("can't find busybox");
         }
     };
+}
+
+impl MemorySet {
+    #[allow(unused)]
+    pub fn debug_show_data(&self, va: VirtAddr) {
+        println!("-----------------------PTE Data-----------------------");
+        println!("MemorySet token: 0x{:x}", self.token());
+        let findpte = self.translate(va.floor());
+        if let Some(pte) = findpte {
+            println!("VirtAddr 0x{:x} ", va.0);
+            println!("ppn:     0x{:x}---", pte.ppn().0);
+            println!("pte_raw: 0b{:b}", pte.bits);
+            println!("valid   :   {}", pte.is_valid());
+            println!("executable: {}", pte.executable());
+            println!("readable:   {}", pte.readable());
+            println!("writable:   {}", pte.writable());
+            println!("COW     :   {}", pte.is_cow());
+        } else {
+            println!("VirtAddr 0x{:x} is not valied", va.0);
+            println!("------------------------------------------------------");
+            return;
+        }
+        println!("------------------------------------------------------");
+
+        if let Some(pte) = findpte {
+            if pte.is_valid() {
+                unsafe {
+                    let pa = findpte.unwrap().ppn().0 << 12;
+                    let raw_data = core::slice::from_raw_parts(pa as *const usize, 512);
+                    let mut i = 0;
+                    while i < 512 {
+                        print!("offset:{:03x}\t0x{:016x}", (i) * 8, raw_data[i]);
+                        print!("\t");
+                        print!("offset:{:03x}\t0x{:016x}", (i + 1) * 8, raw_data[i + 1]);
+                        print!("\t");
+                        print!("offset:{:03x}\t0x{:016x}", (i + 2) * 8, raw_data[i + 2]);
+                        print!("\t");
+                        println!("offset:{:03x}\t0x{:016x}", (i + 3) * 8, raw_data[i + 3]);
+                        i += 4;
+                    }
+                }
+            } else {
+                println!("VirtAddr 0x{:x} is not valied", va.0);
+                println!("------------------------------------------------------");
+                return;
+            }
+        }
+    }
+
+    #[allow(unused)]
+    pub fn debug_show_layout(&self) {
+        println!("-----------------------MM Layout-----------------------");
+        println! {"PID:{}",crate::task::current_task().unwrap().pid.0};
+        for area in &self.areas {
+            print!(
+                "MapArea  : 0x{:010x}--0x{:010x} len:0x{:08x} ",
+                area.start_va.0,
+                area.end_va.0,
+                area.end_va.0 - area.start_va.0
+            );
+            if area.map_perm.is_user() {
+                print!("U");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_read() {
+                print!("R");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_write() {
+                print!("W");
+            } else {
+                print!("-");
+            };
+            if area.map_perm.is_execute() {
+                println!("X");
+            } else {
+                println!("-");
+            };
+        }
+        for mmap_chunk in &self.mmap_chunks {
+            print!(
+                "ChunkArea: 0x{:010x}--0x{:010x} len:0x{:08x} ",
+                mmap_chunk.start_va.0,
+                mmap_chunk.end_va.0,
+                mmap_chunk.end_va.0 - mmap_chunk.start_va.0
+            );
+            if mmap_chunk.map_perm.is_user() {
+                print!("U");
+            } else {
+                print!("-");
+            };
+            if mmap_chunk.map_perm.is_read() {
+                print!("R");
+            } else {
+                print!("-");
+            };
+            if mmap_chunk.map_perm.is_write() {
+                print!("W");
+            } else {
+                print!("-");
+            };
+            if mmap_chunk.map_perm.is_execute() {
+                println!("X");
+            } else {
+                println!("-");
+            };
+        }
+        print!(
+            "HeapArea : 0x{:010x}--0x{:010x} len:0x{:08x} ",
+            self.heap_chunk.start_va.0,
+            self.heap_chunk.end_va.0,
+            self.heap_chunk.end_va.0 - self.heap_chunk.start_va.0
+        );
+        if self.heap_chunk.map_perm.is_user() {
+            print!("U");
+        } else {
+            print!("-");
+        };
+        if self.heap_chunk.map_perm.is_read() {
+            print!("R");
+        } else {
+            print!("-");
+        };
+        if self.heap_chunk.map_perm.is_write() {
+            print!("W");
+        } else {
+            print!("-");
+        };
+        if self.heap_chunk.map_perm.is_execute() {
+            println!("X");
+        } else {
+            println!("-");
+        };
+        println!("-------------------------------------------------------");
+    }
 }

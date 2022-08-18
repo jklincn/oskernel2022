@@ -2,7 +2,7 @@ use super::errno::*;
 use crate::fs::{chdir, make_pipe, open, Dirent, FdSet, File, Kstat, OpenFlags, Statfs, Stdin, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr};
 use crate::task::{current_task, current_user_token, suspend_current_and_run_next, FD_LIMIT, RLIMIT_NOFILE};
-use crate::timer::{get_time_ms, get_timeval, TimeVal, Timespec};
+use crate::timer::{get_timeval, TimeVal, Timespec};
 use alloc::{sync::Arc, vec::Vec};
 use core::mem::size_of;
 

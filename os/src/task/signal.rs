@@ -1,15 +1,8 @@
-/// # 进程状态标志
-/// `os/src/task/signal.rs`
-/// ```
-/// pub struct SignalFlags
-/// ```
-//
 use bitflags::*;
-
 use super::current_task;
 
 bitflags! {
-    /// 进程状态标志
+    /// 进程信号
     pub struct SignalFlags: u32 {   /// - Killed
         const SIGINT    = 1 << 2;   /// - Illegal Instruction
         const SIGILL    = 1 << 4;   /// - Aborted
@@ -24,7 +17,6 @@ bitflags! {
 pub fn check_signals_of_current() -> Option<(i32, &'static str)> {
     let task = current_task().unwrap();
     let task_inner = task.inner_exclusive_access();
-    // println!("pid:{},signal:{:?}",task.getpid(),task_inner.signals);
     match task_inner.signals{
         SignalFlags::SIGINT => Some((-2, "Killed, SIGINT=2")),
         SignalFlags::SIGILL => Some((-4, "Illegal Instruction, SIGILL=4")),

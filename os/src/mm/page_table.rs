@@ -121,18 +121,7 @@ impl PageTableEntry {
     }
 }
 
-/// ### SV39多级页表
-/// - `root_ppn`:根节点的物理页号,作为页表唯一的区分标志
-/// - `frames`:以 FrameTracker 的形式保存了页表所有的节点（包括根节点）所在的物理页帧
-///
-/// 一个地址空间对应一个页表
-///
-/// ```
-/// PageTable::map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags)
-/// PageTable::unmap(&mut self, vpn: VirtPageNum)
-/// PageTable::translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry>
-/// PageTable::token(&self) -> usize
-/// ```
+// SV39 多级页表
 #[derive(Debug)]
 pub struct PageTable {
     /// 根节点的物理页号,作为页表唯一的区分标志
@@ -253,22 +242,22 @@ impl PageTable {
 
     // only X+W+R can be set
     // return -1 if find no such pte
-    pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: usize) -> isize {
-        let idxs = vpn.indexes();
-        let mut ppn = self.root_ppn;
-        for i in 0..3 {
-            let pte = &mut ppn.get_pte_array()[idxs[i]];
-            if i == 2 {
-                pte.set_pte_flags(flags);
-                break;
-            }
-            if !pte.is_valid() {
-                return -1;
-            }
-            ppn = pte.ppn();
-        }
-        0
-    }
+    // pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: usize) -> isize {
+    //     let idxs = vpn.indexes();
+    //     let mut ppn = self.root_ppn;
+    //     for i in 0..3 {
+    //         let pte = &mut ppn.get_pte_array()[idxs[i]];
+    //         if i == 2 {
+    //             pte.set_pte_flags(flags);
+    //             break;
+    //         }
+    //         if !pte.is_valid() {
+    //             return -1;
+    //         }
+    //         ppn = pte.ppn();
+    //     }
+    //     0
+    // }
 
     pub fn set_cow(&mut self, vpn: VirtPageNum) {
         self.find_pte_create(vpn).unwrap().set_cow();

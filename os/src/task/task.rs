@@ -1,9 +1,9 @@
 use super::signal::SigSet;
-use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER, current_task};
+use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout, OSInode};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry, heap_usage, frame_usage};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry};
 use spin::{Mutex, MutexGuard};
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -117,10 +117,11 @@ impl TaskControlBlock {
     }
 
     /// 通过 elf 数据新建一个任务控制块，目前仅用于内核中手动创建唯一一个初始进程 initproc
-    pub fn new(elf_file: Arc<OSInode>) -> Self {
+    pub fn new(initproc: Arc<OSInode>) -> Self {
         let mut auxs = aux::new();
         // 解析传入的 ELF 格式数据构造应用的地址空间 memory_set 并获得其他信息
-        let (memory_set, user_sp, user_heap, entry_point) = MemorySet::load_elf(elf_file, &mut auxs);
+        let (memory_set, user_sp, user_heap, entry_point) = MemorySet::load_elf(initproc.clone(), &mut auxs);
+        initproc.delete();
         // 从地址空间 memory_set 中查多级页表找到应用地址空间中的 Trap 上下文实际被放在哪个物理页帧
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
         // 为进程分配 PID 以及内核栈，并记录下内核栈在内核地址空间的位置

@@ -9,7 +9,6 @@
 /// pub fn current_add_signal()
 /// ```
 //
-
 mod aux;
 mod context; // 任务上下文模块
 mod info; // 系统信息模块
@@ -22,8 +21,7 @@ mod switch; // 任务上下文切换模块
 #[allow(clippy::module_inception)]
 mod task; // 进程控制块
 
-use alloc::sync::Arc;
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 use lazy_static::*;
 use manager::fetch_task;
 use manager::remove_from_pid2task;
@@ -33,22 +31,22 @@ use task::{TaskControlBlock, TaskStatus};
 pub use aux::*;
 pub use context::TaskContext;
 pub use info::{CloneFlags, RUsage, Utsname, UTSNAME};
-pub use manager::{add_task, pid2task, debug_show_ready_queue};
+pub use manager::{add_task, debug_show_ready_queue, pid2task};
 pub use pid::{pid_alloc, KernelStack, PidHandle};
 pub use processor::{current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task};
 pub use resource::*;
 pub use signal::*;
 pub use task::FD_LIMIT;
 
-use crate::fs::{OpenFlags, open};
+use crate::fs::{open, OpenFlags};
 
 /// 将当前任务置为就绪态，放回到进程管理器中的就绪队列中，重新选择一个进程运行
-pub fn suspend_current_and_run_next() -> isize{
+pub fn suspend_current_and_run_next() -> isize {
     // There must be an application running.
     // 取出当前正在执行的任务
     let task_cp = current_task().unwrap();
     let mut task_inner = task_cp.inner_exclusive_access();
-    if task_inner.signals.contains(SignalFlags::SIGKILL){
+    if task_inner.signals.contains(SignalFlags::SIGKILL) {
         let exit_code = task_inner.exit_code;
         drop(task_inner);
         drop(task_cp);

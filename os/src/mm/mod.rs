@@ -31,6 +31,7 @@ pub fn init() {
     KERNEL_SPACE.lock().activate();
 }
 
+#[allow(unused)]
 pub fn memory_usage(){
     println!("---------------------Memory usage---------------------");
     frame_allocator::frame_usage();
