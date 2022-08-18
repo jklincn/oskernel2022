@@ -1,3 +1,6 @@
+use alloc::collections::BTreeMap;
+use lazy_static::*;
+
 const SYSCALL_GETCWD:   usize = 17;
 const SYSCALL_DUP:      usize = 23;
 const SYSCALL_DUP3:     usize = 24;
@@ -49,7 +52,7 @@ const SYSCALL_GETPGID:  usize = 155;
 const SYSCALL_UNAME:    usize = 160;
 const SYSCALL_GETRUSAGE:usize = 165;
 const SYSCALL_UMASK:    usize = 166;
-const SYSCALL_GET_TIME: usize = 169;
+const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID:   usize = 172;
 const SYSCALL_GETPPID:  usize = 173;
 const SYSCALL_GETUID:   usize = 174;
@@ -144,7 +147,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_UNAME =>    sys_uname(args[0] as *const u8),
         SYSCALL_GETRUSAGE=> sys_getrusage(args[0] as isize, args[1] as *mut u8),
         SYSCALL_UMASK =>    sys_umask(),
-        SYSCALL_GET_TIME => sys_get_time(args[0] as *const u8),
+        SYSCALL_GETTIMEOFDAY => sys_gettimeofday(args[0] as *const u8),
         SYSCALL_GETPID =>   sys_getpid(),
         SYSCALL_GETPPID =>  sys_getppid(),
         SYSCALL_GETUID =>   sys_getuid(),
@@ -177,3 +180,88 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
     }
 }
 
+lazy_static! {
+    pub static ref SYSCALL_NAME: BTreeMap<usize,&'static str> = {
+        let mut tmp = BTreeMap::new();
+        tmp.insert(SYSCALL_GETCWD, "getcwd");
+        tmp.insert(SYSCALL_DUP, "dup");
+        tmp.insert(SYSCALL_DUP3, "dup3");
+        tmp.insert(SYSCALL_FCNTL, "fcntl");
+        tmp.insert(SYSCALL_IOCTL, "ioctl");
+        tmp.insert(SYSCALL_MKDIRAT, "mkdirat");
+        tmp.insert(SYSCALL_UNLINKAT, "unlinkat");
+        tmp.insert(SYSCALL_UMOUNT2, "umount2");
+        tmp.insert(SYSCALL_MOUNT, "mount");
+        tmp.insert(SYSCALL_STATFS, "statfs");
+        tmp.insert(SYSCALL_FACCESSAT, "faccessat");
+        tmp.insert(SYSCALL_CHDIR, "chdir");
+        tmp.insert(SYSCALL_OPENAT, "openat");
+        tmp.insert(SYSCALL_CLOSE, "close");
+        tmp.insert(SYSCALL_PIPE, "pipe");
+        tmp.insert(SYSCALL_GETDENTS64, "getdents64");
+        tmp.insert(SYSCALL_LSEEK, "lseek");
+        tmp.insert(SYSCALL_READ, "read");
+        tmp.insert(SYSCALL_WRITE, "write");
+        tmp.insert(SYSCALL_READV, "readv");
+        tmp.insert(SYSCALL_WRITEV, "writev");
+        tmp.insert(SYSCALL_PREAD64, "pread64");
+        tmp.insert(SYSCALL_SENDFILE, "sendfile");
+        tmp.insert(SYSCALL_PSELECT6, "pselect6");
+        tmp.insert(SYSCALL_PPOLL, "ppoll");
+        tmp.insert(SYSCALL_READLINKAT, "readlinkat");
+        tmp.insert(SYSCALL_NEWFSTATAT, "newfstatat");
+        tmp.insert(SYSCALL_FSTAT, "fstat");
+        tmp.insert(SYSCALL_FSYNC, "fsync");
+        tmp.insert(SYSCALL_UTIMENSAT, "utimensat");
+        tmp.insert(SYSCALL_EXIT, "exit");
+        tmp.insert(SYSCALL_EXIT_GROUP, "exit_group");
+        tmp.insert(SYSCALL_SET_TID_ADDRESS, "set_tid_address");
+        tmp.insert(SYSCALL_FUTEX, "futex");
+        tmp.insert(SYSCALL_NANOSLEEP, "nanosleep");
+        tmp.insert(SYSCALL_SETITIMER, "setitimer");
+        tmp.insert(SYSCALL_CLOCK_GETTIME, "clock_gettime");
+        tmp.insert(SYSCALL_SYSLOG, "syslog");
+        tmp.insert(SYSCALL_YIELD, "yield");
+        tmp.insert(SYSCALL_KILL, "kill");
+        tmp.insert(SYSCALL_TGKILL, "tgkill");
+        tmp.insert(SYSCALL_RT_SIGACTION, "rt_sigaction");
+        tmp.insert(SYSCALL_RT_SIGPROCMASK, "rt_sigprocmask");
+        tmp.insert(SYSCALL_RT_SIGTIMEDWAIT, "rt_sigtimedwait");
+        tmp.insert(SYSCALL_RT_SIGRETURN, "rt_sigreturn");
+        tmp.insert(SYSCALL_TIMES, "times");
+        tmp.insert(SYSCALL_SETPGID, "setpgid");
+        tmp.insert(SYSCALL_GETPGID, "getpgid");
+        tmp.insert(SYSCALL_UNAME, "uname");
+        tmp.insert(SYSCALL_GETRUSAGE, "getrusage");
+        tmp.insert(SYSCALL_UMASK, "umask");
+        tmp.insert(SYSCALL_GETTIMEOFDAY, "gettimeofday");
+        tmp.insert(SYSCALL_GETPID, "getpid");
+        tmp.insert(SYSCALL_GETPPID, "getppid");
+        tmp.insert(SYSCALL_GETUID, "getuid");
+        tmp.insert(SYSCALL_GETEUID, "geteuid");
+        tmp.insert(SYSCALL_GETEGID, "getegid");
+        tmp.insert(SYSCALL_GETTID, "gettid");
+        tmp.insert(SYSCALL_SYSINFO, "sysinfo");
+        tmp.insert(SYSCALL_SOCKET, "socket");
+        tmp.insert(SYSCALL_BIND, "bind");
+        tmp.insert(SYSCALL_LISTEN, "listen");
+        tmp.insert(SYSCALL_ACCEPT, "accept");
+        tmp.insert(SYSCALL_CONNECT, "connect");
+        tmp.insert(SYSCALL_GETSOCKNAME, "getsockname");
+        tmp.insert(SYSCALL_SENDTO, "sendto");
+        tmp.insert(SYSCALL_RECVFROM, "recvfrom");
+        tmp.insert(SYSCALL_SETSOCKOPT, "setsockopt");
+        tmp.insert(SYSCALL_BRK, "brk");
+        tmp.insert(SYSCALL_MUNMAP, "mummap");
+        tmp.insert(SYSCALL_FORK, "fork");
+        tmp.insert(SYSCALL_EXEC, "exec");
+        tmp.insert(SYSCALL_MMAP, "mmap");
+        tmp.insert(SYSCALL_MPROTECT, "mprotect");
+        tmp.insert(SYSCALL_MSYNC, "msync");
+        tmp.insert(SYSCALL_MADVISE, "madvise");
+        tmp.insert(SYSCALL_WAITPID, "waitpid");
+        tmp.insert(SYSCALL_PRLIMIT64, "prlimit64");
+        tmp.insert(SYSCALL_RENAMEAT2, "renameat2");
+        tmp
+    };
+}

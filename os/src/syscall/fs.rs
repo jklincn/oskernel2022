@@ -30,7 +30,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 
     // 文件描述符不合法
     if fd >= inner.fd_table.len() {
-        println!("[WARNING] sys_write: fd >= inner.fd_table.len, return -1");
+        warn!("[WARNING] sys_write: fd >= inner.fd_table.len, return -1");
         return -1;
     }
     if inner.memory_set.check_va_range(VirtAddr::from(buf as usize), len) == false {
@@ -39,17 +39,17 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     if let Some(file) = &inner.fd_table[fd] {
         // 文件不可写
         if !file.writable() {
-            println!("[WARNING] sys_write: file can't write, return -1");
+            warn!("[WARNING] sys_write: file can't write, return -1");
             return -1;
         }
         let file = file.clone();
         drop(inner);
         drop(task); // 需要及时释放减少引用数
         let write_size = file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize;
-        // println!("[DEBUG] sys_write: return write_size: {}",write_size);
+        // debug!("[DEBUG] sys_write: return write_size: {}",write_size);
         write_size
     } else {
-        // println!("[WARNING] sys_write: fd {} is none, return -1", fd);
+        // warn!("[WARNING] sys_write: fd {} is none, return -1", fd);
         -1
     }
 }
@@ -69,13 +69,13 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     let inner = task.inner_exclusive_access();
     // 文件描述符不合法
     if fd >= inner.fd_table.len() {
-        println!("[WARNING] sys_read: fd >= inner.fd_table.len, return -1");
+        warn!("[WARNING] sys_read: fd >= inner.fd_table.len, return -1");
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
         // 文件不可读
         if !file.readable() {
-            println!("[WARNING] sys_read: file can't read, return -1");
+            warn!("[WARNING] sys_read: file can't read, return -1");
             return -1;
         }
         let file = file.clone();
@@ -93,14 +93,14 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
 
         let file_size = file.file_size();
         if file_size == 0 {
-            println!("[WARNING] sys_read: file_size is zero!");
+            warn!("[WARNING] sys_read: file_size is zero!");
         }
         let len = file_size.min(len);
         let readsize = file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize;
         // println!("[DEBUG] sys_read: return readsize: {}",readsize);
         readsize
     } else {
-        println!("[WARNING] sys_read: fd {} is none, return -1", fd);
+        warn!("[WARNING] sys_read: fd {} is none, return -1", fd);
         -1
     }
 }
@@ -149,12 +149,12 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 // println!("[DEBUG] sys_openat return new fd:{}", fd);
                 fd as isize
             } else {
-                println!("[WARNING] sys_openat: can't open file:{}, return -1", path);
+                warn!("[WARNING] sys_openat: can't open file:{}, return -1", path);
                 -1
             }
         } else {
             // dirfd 对应条目为 None
-            println!("[WARNING] sys_read: fd {} is none, return -1", dirfd);
+            warn!("[WARNING] sys_read: fd {} is none, return -1", dirfd);
             -1
         }
     }
@@ -671,7 +671,7 @@ pub fn sys_readv(fd: usize, iovp: *const usize, iovcnt: usize) -> isize {
         let file = file.clone();
         let file_size = file.file_size();
         if file_size == 0 {
-            println!("[WARNING] sys_readv: file_size is zero!");
+            warn!("[WARNING] sys_readv: file_size is zero!");
         }
         let mut addr = iovp_buf.as_ptr() as *const _ as usize;
         let mut total_read_len = 0;

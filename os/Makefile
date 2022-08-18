@@ -5,6 +5,7 @@ KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 
 BOARD ?= qemu
+debug ?= 0
 
 STAGE ?= final/stage2
 
@@ -29,7 +30,7 @@ kernel:
     # @cargo clean
 	@echo Platform: $(BOARD)
 	@cp src/linker-$(BOARD).ld src/linker.ld
-	@cargo build --release --offline --features "board_$(BOARD)"
+	@cargo build --release --offline --features "board_$(BOARD)" --features "debug_$(debug)"
 	@rm src/linker.ld
 
 run: build

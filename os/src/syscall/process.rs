@@ -57,7 +57,7 @@ pub fn sys_nanosleep(buf: *const u8) -> isize {
 ///     - `tz`：表示时区，这里无需考虑，始终为0
 /// - 功能：内核根据时钟周期数和时钟频率换算系统运行时间，并写入到用户地址空间
 /// - 返回值：正确执行返回 0，出现错误返回 -1。
-pub fn sys_get_time(buf: *const u8) -> isize {
+pub fn sys_gettimeofday(buf: *const u8) -> isize {
     let token = current_user_token();
     let buffers = translated_byte_buffer(token, buf, core::mem::size_of::<TimeVal>());
     let mut userbuf = UserBuffer::new(buffers);
