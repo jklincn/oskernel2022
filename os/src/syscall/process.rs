@@ -1,6 +1,6 @@
 use crate::config::CLOCK_FREQ;
 use crate::fs::{open, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, MmapProts, MmapFlags};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next, pid2task, suspend_current_and_run_next, RLimit, RUsage,
     SignalFlags,
@@ -286,41 +286,25 @@ pub fn sys_uname(buf: *const u8) -> isize {
     0
 }
 
-/// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
-/// - 参数
-///     - `start`, `len`：映射空间起始地址及长度，起始地址必须4k对齐
-///     - `prot`：映射空间读写权限
-///         ```c
-///         #define PROT_NONE  0b0000
-///         #define PROT_READ  0b0001
-///         #define PROT_WRITE 0b0010
-///         #define PROT_EXEC  0b0100
-///         ```
-///     - `flags`：映射方式
-///         ```rust
-///         const MAP_FILE = 0;
-///         const MAP_SHARED  = 0x01;
-///         const MAP_PRIVATE = 0x02;
-///         const MAP_FIXED   = 0x10;
-///         const MAP_ANONYMOUS = 0x20;
-///         ```
-///     - `fd`：映射文件描述符
-///     - `off`: 从文件的哪个位置开始映射
-/// - 返回值：mmap映射空间的起始地址
-/// - syscall_id:222
-pub fn sys_mmap(start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> isize {
-    let task = current_task().unwrap();
-    // println!("[KERNEL syscall] enter mmap:start:0x{:x},len:{},prot:{},flags:0b{:b},fd:{},off:{}", start, len, prot, flags, fd, off);
-    if len == 0 {
+// 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
+pub fn sys_mmap(addr: usize, length: usize, prot: usize, flags: usize, fd: isize, offset: usize) -> isize {
+    if length == 0 {
         panic!("mmap:len == 0");
     }
-    let result_addr = task.mmap(start, len, prot, flags, fd, off);
+    let prot = MmapProts::from_bits(prot).expect("unsupported mmap prot");
+    let flags = MmapFlags::from_bits(flags).expect("unsupported mmap flags");
+
+    // info!("[KERNEL syscall] enter mmap: addr:0x{:x}, length:0x{:x}, prot:{:?}, flags:{:?},fd:{}, offset:0x{:x}", addr, length, prot, flags, fd, offset);
+    
+    let task = current_task().unwrap();
+    let result_addr = task.mmap(addr, length, prot, flags, fd, offset);
+    // info!("[DEBUG] sys_mmap return: 0x{:x}", result_addr);
     return result_addr as isize;
 }
 
-pub fn sys_munmap(start: usize, len: usize) -> isize {
+pub fn sys_munmap(addr: usize, length: usize) -> isize {
     let task = current_task().unwrap();
-    let ret = task.munmap(start, len);
+    let ret = task.munmap(addr, length);
     ret
 }
 
@@ -330,9 +314,9 @@ pub fn sys_sbrk(grow_size: isize, _is_shrink: usize) -> isize {
 }
 
 pub fn sys_brk(brk_addr: usize) -> isize {
-    // println!("[DEBUG] enter sys_brk: brk_addr:0x{:x}",brk_addr);
-    #[allow(unused_assignments)]
+    // info!("[DEBUG] enter sys_brk: brk_addr:0x{:x}",brk_addr);
     let mut addr_new = 0;
+    _ = addr_new;
     if brk_addr == 0 {
         addr_new = sys_sbrk(0, 0) as usize;
     } else {
@@ -340,7 +324,7 @@ pub fn sys_brk(brk_addr: usize) -> isize {
         let grow_size: isize = (brk_addr - former_addr) as isize;
         addr_new = current_task().unwrap().grow_proc(grow_size);
     }
-    // println!("[DEBUG] sys_brk return: 0x{:x}",addr_new);
+    // info!("[DEBUG] sys_brk return: 0x{:x}",addr_new);
     addr_new as isize
 }
 

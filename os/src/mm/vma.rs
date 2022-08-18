@@ -8,7 +8,7 @@ use alloc::sync::Arc;
 
 bitflags! {
     pub struct MmapProts: usize {
-        const PROT_NONE = 0;
+        const PROT_NONE = 0;  // 不可读不可写不可执行，用于实现防范攻击的guard page等
         const PROT_READ = 1;
         const PROT_WRITE = 1 << 1;
         const PROT_EXEC  = 1 << 2;
@@ -21,10 +21,11 @@ bitflags! {
     /// |名称|值|映射方式|
     /// |--|--|--|
     /// |MAP_FILE|0|文件映射，使用文件内容初始化内存|
-    /// |MAP_SHARED|0x01|共享映射，多进程间数据共享，修改反应到磁盘实际文件中。|
-    /// |MAP_PRIVATE|0x02|私有映射，多进程间数据共享，修改不反应到磁盘实际文件，|
-    /// |MAP_FIXED|0x10||
+    /// |MAP_SHARED|0x01|共享映射，修改对所有进程可见，多进程读写同一个文件需要调用者提供互斥机制|
+    /// |MAP_PRIVATE|0x02|私有映射，进程A的修改对进程B不可见的，利用 COW 机制，修改只会存在于内存中，不会同步到外部的磁盘文件上|
+    /// |MAP_FIXED|0x10|| 将mmap空间放在addr指定的内存地址上，若与现有映射页面重叠，则丢弃重叠部分。如果指定的地址不能使用，mmap将失败。
     /// |MAP_ANONYMOUS|0x20|匿名映射，初始化全为0的内存空间|
+
     pub struct MmapFlags: usize {
         const MAP_FILE = 0;
         const MAP_SHARED= 0x01;
@@ -32,6 +33,13 @@ bitflags! {
         const MAP_FIXED = 0x10;
         const MAP_ANONYMOUS = 0x20;
     }
+
+    // 应用场景：
+    // MAP_FILE | MAP_SHARED: 两个进程共同读写一个文本文件
+    // MAP_FILE | MAP_PRIVATE: 进程对动态链接库的使用
+    // MAP_ANONYMOUS | MAP_SHARED: 作为进程间通信机制的POSIX共享内存(Linux 中共享内存对应tmpfs的一个文件，也可视为共享文件映射)
+    // MAP_ANONYMOUS | MAP_PRIVATE: 常见的是 malloc()
+
 }
 
 /// ### mmap 块管理器
@@ -109,9 +117,10 @@ impl MmapArea {
 
     pub fn reduce_mmap_range(&mut self, addr:usize, len:usize) {
         for space in self.mmap_set.iter_mut() {
-            if addr == space.oaddr.0 + space.length - len {
-                // 缩减右边界
-                space.new_len(space.length - len);
+            // 实际上不止这一种情况，todo
+            if addr == space.oaddr.0{
+                space.oaddr = VirtAddr::from(addr + len);
+                space.length = space.length - len;
                 if self.mmap_top.0 == space.oaddr.0 + space.length + len {
                     self.mmap_top.0 -= len;
                 }

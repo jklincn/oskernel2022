@@ -53,6 +53,10 @@ pub struct MemorySet {
     areas: Vec<MapArea>,
     heap_chunk: ChunkArea,
     mmap_chunks: Vec<ChunkArea>,
+
+    pub heap_start: usize,
+    pub heap_pt: usize,
+    pub stack_top: usize,
 }
 
 impl MemorySet {
@@ -68,6 +72,9 @@ impl MemorySet {
                 0.into(),
             ),
             mmap_chunks: Vec::new(),
+            heap_start:0,
+            heap_pt:0,
+            stack_top:0,
         }
     }
 
@@ -215,7 +222,7 @@ impl MemorySet {
     }
 
     /// ### 从 ELF 格式可执行文件解析出各数据段并对应生成应用的地址空间
-    pub fn load_elf(elf_file: Arc<OSInode>, auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize, usize) {
+    pub fn load_elf(elf_file: Arc<OSInode>, auxs: &mut Vec<AuxEntry>) -> (Self, usize, usize) {
         let mut memory_set = Self::new_bare();
         // 将跳板插入到应用地址空间
         memory_set.map_trampoline();
@@ -350,10 +357,14 @@ impl MemorySet {
             user_heap_top.into(),
         );
 
+        memory_set.heap_pt = user_heap_bottom;
+        memory_set.heap_start= user_heap_bottom;
+        memory_set.stack_top= user_stack_top;
+        
         if elf_interpreter {
-            (memory_set, user_stack_top, user_heap_bottom, interp_entry_point)
+            (memory_set, user_stack_top, interp_entry_point)
         } else {
-            (memory_set, user_stack_top, user_heap_bottom, elf.header.pt2.entry_point() as usize)
+            (memory_set, user_stack_top, elf.header.pt2.entry_point() as usize)
         }
     }
 
@@ -446,6 +457,9 @@ impl MemorySet {
             new_memory_set.heap_chunk.data_frames.push(FrameTracker::from_ppn(src_ppn));
         }
         // new_memory_set.debug_show_layout();
+        new_memory_set.heap_start = user_space.heap_start;
+        new_memory_set.heap_pt = user_space.heap_pt;
+        new_memory_set.stack_top = user_space.stack_top;
         new_memory_set
     }
 
@@ -568,10 +582,15 @@ impl MemorySet {
         return false;
     }
 
-    /// ### 缩减 mmap逻辑段范围
-    /// 注意：缩减的部分必须使逻辑段的边界(目前只支持右边界)
+    // 检查mmap是否有重叠区域
     pub fn reduce_chunk_range(&mut self, addr: usize, new_len: usize) {
+        // 检查是否与堆空间重合
+        if self.heap_chunk.start_va.0 == addr {
+            self.heap_chunk.set_mmap_range(VirtAddr::from(self.heap_chunk.start_va.0 + new_len), self.heap_chunk.end_va);
+            self.heap_start = addr+ new_len;
+        }
         for chunk in self.mmap_chunks.iter_mut() {
+            // 实际上不止这一种情况，todo
             if chunk.start_va.0 == addr || addr + new_len == chunk.end_va.0 {
                 chunk.set_mmap_range(chunk.start_va.into(), (chunk.end_va.0 - new_len).into());
             }

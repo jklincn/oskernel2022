@@ -3,7 +3,7 @@ use super::{aux, RLimit, TaskContext, AT_RANDOM, RESOURCE_KIND_NUMBER};
 use super::{pid_alloc, KernelStack, PidHandle, SignalFlags};
 use crate::config::*;
 use crate::fs::{File, Stdin, Stdout, OSInode};
-use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry};
+use crate::mm::{translated_refmut, MapPermission, MemorySet, MmapArea, PhysPageNum, VirtAddr, KERNEL_SPACE, VirtPageNum, PageTableEntry, MmapFlags, MmapProts};
 use spin::{Mutex, MutexGuard};
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
@@ -46,9 +46,6 @@ pub struct TaskControlBlockInner {
     pub memory_set: MemorySet,
     // 虚拟内存地址映射空间
     pub mmap_area: MmapArea,
-    pub heap_start: usize,
-    pub heap_pt: usize,
-    pub stack_top: usize,
 
     // 文件
     /// 文件描述符表
@@ -120,7 +117,7 @@ impl TaskControlBlock {
     pub fn new(initproc: Arc<OSInode>) -> Self {
         let mut auxs = aux::new();
         // 解析传入的 ELF 格式数据构造应用的地址空间 memory_set 并获得其他信息
-        let (memory_set, user_sp, user_heap, entry_point) = MemorySet::load_elf(initproc.clone(), &mut auxs);
+        let (memory_set, user_sp, entry_point) = MemorySet::load_elf(initproc.clone(), &mut auxs);
         initproc.delete();
         // 从地址空间 memory_set 中查多级页表找到应用地址空间中的 Trap 上下文实际被放在哪个物理页帧
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
@@ -137,8 +134,6 @@ impl TaskControlBlock {
             inner:Mutex::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: user_sp,
-                    heap_start: user_heap,
-                    heap_pt: user_heap,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
                     memory_set,
@@ -158,7 +153,6 @@ impl TaskControlBlock {
                     mmap_area: MmapArea::new(VirtAddr::from(MMAP_BASE), VirtAddr::from(MMAP_BASE)),
                     sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
-                    stack_top: user_sp,
                 })
             ,
         };
@@ -179,7 +173,7 @@ impl TaskControlBlock {
     pub fn exec(&self, elf_file: Arc<OSInode>, args: Vec<String>, envs: Vec<String>) {
         let mut auxs = aux::new();
         // 从 ELF 文件生成一个全新的地址空间并直接替换
-        let (memory_set, mut user_sp, user_heap, entry_point) = MemorySet::load_elf(elf_file, &mut auxs);
+        let (memory_set, mut user_sp, entry_point) = MemorySet::load_elf(elf_file, &mut auxs);
         let trap_cx_ppn = memory_set.translate(VirtAddr::from(TRAP_CONTEXT).into()).unwrap().ppn();
 
         // 计算对齐位置
@@ -260,8 +254,6 @@ impl TaskControlBlock {
         let mut inner = self.inner_exclusive_access();
 
         inner.memory_set = memory_set; // 这将导致原有的地址空间生命周期结束，里面包含的全部物理页帧都会被回收
-        inner.heap_start = user_heap;
-        inner.heap_pt = user_heap;
         inner.trap_cx_ppn = trap_cx_ppn;
         let trap_cx = inner.get_trap_cx();
 
@@ -325,8 +317,6 @@ impl TaskControlBlock {
             inner: Mutex::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: parent_inner.base_size,
-                    heap_start: parent_inner.heap_start,
-                    heap_pt: parent_inner.heap_pt,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
                     memory_set,
@@ -339,7 +329,6 @@ impl TaskControlBlock {
                     mmap_area,
                     sigset: SigSet::new(),
                     resource: [RLimit { rlim_cur: 0, rlim_max: 1 }; RESOURCE_KIND_NUMBER],
-                    stack_top: parent_inner.stack_top,
                 })
             ,
         });
@@ -363,8 +352,8 @@ impl TaskControlBlock {
         let inner = self.inner_exclusive_access();
         let mmap_start = inner.mmap_area.mmap_start;
         let mmap_end = inner.mmap_area.mmap_top;
-        let heap_start = VirtAddr::from(inner.heap_start);
-        let heap_end = VirtAddr::from(inner.heap_start + USER_HEAP_SIZE);
+        let heap_start = VirtAddr::from(inner.memory_set.heap_start);
+        let heap_end = VirtAddr::from(inner.memory_set.heap_start + USER_HEAP_SIZE);
         drop(inner);
 
         let vpn: VirtPageNum = va.floor();
@@ -387,6 +376,8 @@ impl TaskControlBlock {
             println!("[check_lazy] {:?}", va);
             println!("[check_lazy] mmap_start: 0x{:x}", mmap_start.0);
             println!("[check_lazy] mmap_end: 0x{:x}", mmap_end.0);
+            println!("[check_lazy] heap_start: 0x{:x}", heap_start.0);
+            println!("[check_lazy] heap_end: 0x{:x}", heap_end.0);
             println!("[check_lazy] current vma layout:");
             self.inner_exclusive_access().memory_set.debug_show_layout();
             -2
@@ -412,70 +403,59 @@ impl TaskControlBlock {
         return lazy_result;
     }
 
-    /// ### 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
-    /// - 参数
-    ///     - `start`, `len`：映射空间起始地址及长度，起始地址必须4k对齐
-    ///     - `prot`：映射空间读写权限
-    ///         ```c
-    ///         #define PROT_NONE  0b0000
-    ///         #define PROT_READ  0b0001
-    ///         #define PROT_WRITE 0b0010
-    ///         #define PROT_EXEC  0b0100
-    ///         ```
-    ///     - `flags`：映射方式
-    ///         ```rust
-    ///         const MAP_FILE = 0;
-    ///         const MAP_SHARED= 0x01;
-    ///         const MAP_PRIVATE = 0x02;
-    ///         const MAP_FIXED = 0x10;
-    ///         const MAP_ANONYMOUS = 0x20;
-    ///         ```
-    ///     - `fd`：映射文件描述符
-    ///     - `off`: 偏移量
-    /// - 返回值：从文件的哪个位置开始映射
-    pub fn mmap(&self, start: usize, len: usize, prot: usize, flags: usize, fd: isize, off: usize) -> usize {
-        // println!("[DEBUG] mmap start: 0x{:x}, len: 0x{:x}, port: 0b{:b}, flags: 0x{:x}, fd:{}, off:0x{:x}", start, len, prot, flags, fd, off);
-        if start % PAGE_SIZE != 0 {
-            panic!("mmap: start_va not aligned");
+    // 在进程虚拟地址空间中分配创建一片虚拟内存地址映射
+    pub fn mmap(&self, addr: usize, length: usize, prot: MmapProts, flags: MmapFlags, fd: isize, offset: usize) -> usize {
+
+        if addr % PAGE_SIZE != 0 {
+            panic!("mmap: addr not aligned");
         }
 
         let mut inner = self.inner_exclusive_access();
         let fd_table = inner.fd_table.clone();
         let token = inner.get_user_token();
 
+        let mut start_va = VirtAddr::from(0);
+        let mut end_va = VirtAddr::from(0);
         // "prot<<1" 右移一位以符合 MapPermission 的权限定义
         // "1<<4" 增加 MapPermission::U 权限
-        let map_flags = (((prot & 0b111) << 1) + (1 << 4)) as u8;
-        if flags & 0x10 == 0x10 { // 处理 MAP_FIXED
-            inner.memory_set.reduce_chunk_range(start, len);
-            inner.mmap_area.reduce_mmap_range(start, len);
+        let map_flags = (((prot.bits() & 0b111) << 1) + (1 << 4)) as u8;
+
+        // inner.memory_set.debug_show_layout();
+
+        if addr != 0{
+            if flags.contains(MmapFlags::MAP_FIXED) { // 处理 MAP_FIXED
+                inner.memory_set.reduce_chunk_range(addr, length);
+                inner.mmap_area.reduce_mmap_range(addr, length);
+                start_va = VirtAddr::from(addr);
+                end_va = VirtAddr::from(addr+length);
+            }
+        } else{
+            start_va = inner.mmap_area.get_mmap_top();
+            end_va = VirtAddr::from(start_va.0 + length);
         }
 
-        let va_top = inner.mmap_area.get_mmap_top();
-        let end_va = VirtAddr::from(va_top.0 + len);
-        
         inner
             .memory_set
-            .insert_mmap_area(va_top, end_va, MapPermission::from_bits(map_flags).unwrap());
+            .insert_mmap_area(start_va, end_va, MapPermission::from_bits(map_flags).unwrap());
         
-        inner.mmap_area.push(va_top.0, len, prot, flags, fd, off, fd_table, token);
+        inner.mmap_area.push(start_va.0, length, prot.bits(), flags.bits(), fd, offset, fd_table, token);
         drop(inner);
 
-        va_top.0
+        start_va.0
     }
 
-    pub fn munmap(&self, start: usize, len: usize) -> isize {
+    pub fn munmap(&self, addr: usize, length: usize) -> isize {
         let mut inner = self.inner_exclusive_access();
 
         // println!("[Kernel munmap] start munmap start: 0x{:x} len: 0x{:x};", start, len);
         // inner.memory_set.debug_show_layout();
         
-        inner.memory_set.remove_area_with_start_vpn(VirtAddr::from(start).into());
+        inner.memory_set.remove_area_with_start_vpn(VirtAddr::from(addr).into());
 
         // println!("[Kernel munmap] after munmap;");
         // inner.memory_set.debug_show_layout();
 
-        inner.mmap_area.remove(start, len)
+        inner.mmap_area.remove(addr, length)
     }
 
     pub fn getpid(&self) -> usize {
@@ -489,26 +469,26 @@ impl TaskControlBlock {
 
     pub fn grow_proc(&self, grow_size: isize) -> usize {
         if grow_size > 0 {
-            let growed_addr: usize = self.inner.lock().heap_pt + grow_size as usize;
-            let limit = self.inner.lock().heap_start + USER_HEAP_SIZE;
+            let growed_addr: usize = self.inner.lock().memory_set.heap_pt + grow_size as usize;
+            let limit = self.inner.lock().memory_set.heap_start + USER_HEAP_SIZE;
             if growed_addr > limit {
                 panic!(
                     "process doesn't have enough memsize to grow! limit:0x{:x}, heap_pt:0x{:x}, growed_addr:0x{:x}, pid:{}",
                     limit,
-                    self.inner.lock().heap_pt,
+                    self.inner.lock().memory_set.heap_pt,
                     growed_addr,
                     self.pid.0
                 );
             }
-            self.inner.lock().heap_pt = growed_addr;
+            self.inner.lock().memory_set.heap_pt = growed_addr;
         } else {
-            let shrinked_addr: usize = self.inner.lock().heap_pt + grow_size as usize;
-            if shrinked_addr < self.inner.lock().heap_start {
+            let shrinked_addr: usize = self.inner.lock().memory_set.heap_pt + grow_size as usize;
+            if shrinked_addr < self.inner.lock().memory_set.heap_start {
                 panic!("Memory shrinked to the lowest boundary!")
             }
-            self.inner.lock().heap_pt = shrinked_addr;
+            self.inner.lock().memory_set.heap_pt = shrinked_addr;
         }
-        return self.inner.lock().heap_pt;
+        return self.inner.lock().memory_set.heap_pt;
     }
 }
 
