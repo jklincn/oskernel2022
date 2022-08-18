@@ -65,7 +65,6 @@ impl BlockCache {
     /// 将缓冲区中的内容写回到磁盘块中
     fn sync(&mut self) {
         if self.modified {
-            //println!("drop cache, id = {}", self.block_id);
             self.modified = false;
             self.block_device.write_block(self.block_id, &self.cache);
         }

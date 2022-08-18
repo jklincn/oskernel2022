@@ -2,6 +2,7 @@ use super::{
     stat::{S_IFCHR, S_IFDIR, S_IFREG},
     Dirent, File, Kstat, Timespec,
 };
+#[allow(unused)]
 use crate::{
     drivers::BLOCK_DEVICE,
     mm::{memory_usage, UserBuffer},
@@ -75,8 +76,9 @@ impl OSInode {
         }
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
-        if len == 96 * 4096{    // 防止 v 占用空间过度扩大
-            v.reserve(96 * 4096); 
+        if len == 96 * 4096 {
+            // 防止 v 占用空间过度扩大
+            v.reserve(96 * 4096);
         }
         loop {
             let read_size = inner.inode.read_at(inner.offset, &mut buffer);
@@ -176,8 +178,8 @@ static mut LAYER: usize = 0;
 pub fn list_apps(dir: Arc<VFile>) {
     for app in dir.ls().unwrap() {
         // 不打印initproc，事实上它也在task::new之后删除了
-        unsafe{
-            if LAYER == 0 && app.0 == "initproc"{
+        unsafe {
+            if LAYER == 0 && app.0 == "initproc" {
                 continue;
             }
         }

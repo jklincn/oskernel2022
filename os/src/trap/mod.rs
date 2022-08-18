@@ -159,19 +159,20 @@ pub fn trap_handler() -> ! {
             panic!("Unsupported trap {:?}, stval = {:#x}!", scause.cause(), stval);
         }
     }
-    // check signals
-    if let Some((errno, msg)) = check_signals_of_current() {
-        // println!("[kernel] {}", msg);
-        exit_current_and_run_next(errno);
-    }
     trap_return();
 }
 
 /// 通过在Rust语言中加入宏命令调用 `__restore` 汇编函数
 #[no_mangle]
 pub fn trap_return() -> ! {
+    
+    // check signals
+    if let Some((errno, _msg)) = check_signals_of_current() {
+        // println!("[kernel] {}", _msg);
+        exit_current_and_run_next(errno);
+    }
+
     set_user_trap_entry();
-    // println!("[trap retrun]");
     let trap_cx_ptr = TRAP_CONTEXT;
     let user_satp = current_user_token();
     extern "C" {

@@ -1,20 +1,7 @@
-use core::arch::asm;
-/// # 时间模块
-/// `os/src/timer.rs`
-/// ## 实现功能
-/// ```
-/// pub struct  TimeVal
-/// pub fn get_time() -> usize
-/// pub fn get_time_ms() -> usize
-/// pub fn get_timeval() -> TimeVal
-/// pub fn set_next_trigger()
-/// ```
-//
 use core::ops::{Add, Sub};
 
 use crate::config::CLOCK_FREQ;
 use crate::sbi::set_timer;
-use riscv::register::time;
 
 pub const TICKS_PER_SEC: usize = 100;
 pub const MSEC_PER_SEC: usize = 1000;
@@ -27,10 +14,8 @@ pub const NSEC_PER_SEC: usize = 1000_000_000;
 /// - 两个值相加的结果是结构体表示的时间
 #[derive(Copy, Clone, Debug)]
 pub struct TimeVal {
-    /// 单位：秒
-    pub sec: usize,
-    /// 单位：微秒
-    pub usec: usize,
+    pub sec: usize,     // 秒
+    pub usec: usize,    // 微秒
 }
 
 impl Add for TimeVal {
@@ -118,9 +103,9 @@ impl tms {
 // }
 
 pub fn get_time() -> usize {
-    let mut time:usize = 0;
-    unsafe{
-        asm!(
+    let mut time: usize = 0;
+    unsafe {
+        core::arch::asm!(
             "rdtime a0",
             inout("a0") time
         );

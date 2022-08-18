@@ -1,14 +1,3 @@
-/// # 任务管理模块
-/// `os/src/task/mod.rs`
-/// ## 实现功能
-/// ```
-/// pub fn suspend_current_and_run_next()
-/// pub fn exit_current_and_run_next()
-/// pub fn add_initproc()
-/// pub fn check_signals_of_current()
-/// pub fn current_add_signal()
-/// ```
-//
 mod aux;
 mod context; // 任务上下文模块
 mod info; // 系统信息模块
