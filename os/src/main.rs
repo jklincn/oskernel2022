@@ -66,7 +66,6 @@ pub fn rust_main() -> ! {
         fs::init();
         task::add_initproc();
         println!("[kernel] Initialization succeeded");
-        memory_usage();
         task::run_tasks();
         panic!("Unreachable in rust_main!");
     } else {
