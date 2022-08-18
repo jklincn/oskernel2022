@@ -7,7 +7,7 @@ KERNEL_BIN := $(KERNEL_ELF).bin
 BOARD ?= qemu
 debug ?= 0
 
-STAGE ?= final/stage2
+file ?= final/stage2
 
 # Binutils
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
@@ -49,7 +49,7 @@ copy-to-fs:
 	&& sudo rm -rf fs \
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
-	&& sudo cp -r ../test_program/$(STAGE)/sdcard_content/* fs/ \
+	&& sudo cp -r ../test_program/$(file)/sdcard_content/* fs/ \
 	&& sleep 1 \
 	&& sudo umount fs \
 	&& sudo rmdir fs
