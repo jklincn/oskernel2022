@@ -115,7 +115,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
     // todo
     _ = mode;
     let oflags = OpenFlags::from_bits(flags).expect("[DEBUG] sys_openat: unsupported open flag!");
-    // println!(
+    // info!(
     //     "[DEBUG] enter sys_openat: dirfd:{}, path:{}, flags:{:?}, mode:{:o}",
     //     dirfd, path, oflags, mode
     // );
@@ -127,7 +127,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                 return -EMFILE;
             }
             inner.fd_table[fd] = Some(inode);
-            // println!("[DEBUG] sys_openat return new fd:{}", fd);
+            // info!("[DEBUG] sys_openat return new fd:{}", fd);
             fd as isize
         } else {
             // println!("[WARNING] sys_openat: can't open file:{}, return -1", path);
@@ -146,7 +146,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> isize
                     return -EMFILE;
                 }
                 inner.fd_table[fd] = Some(tar_f);
-                // println!("[DEBUG] sys_openat return new fd:{}", fd);
+                // info!("[DEBUG] sys_openat return new fd:{}", fd);
                 fd as isize
             } else {
                 warn!("[WARNING] sys_openat: can't open file:{}, return -1", path);
@@ -177,6 +177,7 @@ pub fn sys_close(fd: usize) -> isize {
     }
     // 把 fd 对应的值取走，变为 None
     inner.fd_table[fd].take();
+    // info!("[DEBUG] sys_close return 0");
     0
 }
 
@@ -381,7 +382,7 @@ pub fn sys_chdir(path: *const u8) -> isize {
 }
 
 pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
-    // println!("[DEBUG] enter sys_fstat: fd:{}, buf:0x{:x}", fd, buf as usize);
+    // info!("[DEBUG] enter sys_fstat: fd:{}, buf:0x{:x}", fd, buf as usize);
     let token = current_user_token();
     let task = current_task().unwrap();
     let buf_vec = translated_byte_buffer(token, buf, size_of::<Kstat>());
@@ -396,6 +397,7 @@ pub fn sys_fstat(fd: isize, buf: *mut u8) -> isize {
     }
     if let Some(file) = &inner.fd_table[dirfd] {
         file.get_fstat(&mut kstat);
+        // println!("kstat:{:?}",kstat);
         userbuf.write(kstat.as_bytes());
         0
     } else {
