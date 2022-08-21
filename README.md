@@ -8,4 +8,4 @@
 
 指导老师：章复嘉
 
-项目文档路径：[doc/RongOS设计与实现文档.pdf](https://gitlab.eduxiji.net/19061120/oskernel2022-segmentfault/-/blob/jk_final_2/doc/RongOS%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E6%96%87%E6%A1%A3.pdf)
+项目文档路径：[doc/RongOS设计与实现文档.pdf](https://github.com/jklinCN/oskernel2022/blob/master/doc/RongOS%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E6%96%87%E6%A1%A3.pdf)
